@@ -1,0 +1,18 @@
+[
+  {
+    "id": "pencmi",
+    "name": "Péncmi",
+    "slug": "pencmi",
+    "type": "platform",
+    "shortDescription": "Portail sénégalais pour immobilier, hébergements, voitures et voyages interurbains.",
+    "relatedPageUrls": [
+      "/",
+      "/immobilier",
+      "/hotels",
+      "/voitures",
+      "/voyages"
+    ],
+    "isPublic": true,
+    "isIndexable": true
+  }
+]

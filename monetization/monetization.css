@@ -1,0 +1,176 @@
+@import url("../design-system/design-system.css");
+
+.billing-shell,
+.monetization-admin-shell {
+  min-height: 100vh;
+  background: var(--ds-color-background);
+}
+
+.billing-main,
+.monetization-admin-main {
+  width: min(1280px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: clamp(22px, 4vw, 42px) 0 56px;
+}
+
+.billing-header,
+.monetization-admin-header,
+.billing-card,
+.billing-empty-state,
+.billing-form-card,
+.monetization-card,
+.monetization-table-shell {
+  background: var(--ds-color-surface);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-shadow-sm);
+}
+
+.billing-header,
+.monetization-admin-header,
+.billing-card,
+.billing-empty-state,
+.billing-form-card,
+.monetization-card,
+.monetization-table-shell {
+  padding: clamp(16px, 3vw, 24px);
+}
+
+.billing-header,
+.monetization-admin-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.billing-header h1,
+.monetization-admin-header h1,
+.billing-card h2,
+.billing-empty-state h2,
+.monetization-card h2 {
+  margin: 0;
+  color: var(--ds-color-primary-dark);
+  letter-spacing: 0;
+}
+
+.billing-header p,
+.monetization-admin-header p,
+.billing-card p,
+.billing-empty-state p,
+.monetization-card p {
+  color: var(--ds-color-text-muted);
+  line-height: 1.6;
+}
+
+.billing-grid,
+.monetization-grid,
+.billing-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.billing-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.billing-status-badge,
+.monetization-status-badge {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.billing-status-active,
+.billing-status-paid,
+.monetization-status-active {
+  color: #166534;
+  background: var(--ds-color-success-light);
+}
+
+.billing-status-draft,
+.billing-status-pending,
+.billing-status-pending_payment,
+.billing-status-scheduled,
+.monetization-status-draft {
+  color: #92400e;
+  background: var(--ds-color-warning-light);
+}
+
+.billing-status-refused,
+.billing-status-failed,
+.billing-status-suspended,
+.billing-status-cancelled {
+  color: #991b1b;
+  background: var(--ds-color-danger-light);
+}
+
+.billing-status-ended,
+.billing-status-refunded,
+.billing-status-archived,
+.monetization-status-inactive,
+.monetization-status-archived {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.sponsored-badge {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 9px;
+  color: #075985;
+  background: var(--ds-color-info-light);
+  border: 1px solid #bae6fd;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.monetization-table-shell {
+  overflow-x: auto;
+}
+
+.monetization-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.monetization-table th,
+.monetization-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--ds-color-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.monetization-table th {
+  color: #334155;
+  background: #f8fafc;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+@media (max-width: 900px) {
+  .billing-grid,
+  .monetization-grid,
+  .billing-plan-grid,
+  .billing-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .billing-header,
+  .monetization-admin-header {
+    display: grid;
+  }
+}

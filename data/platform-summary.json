@@ -1,0 +1,34 @@
+{
+  "name": "Péncmi",
+  "shortDescription": "Portail sénégalais pour immobilier, hébergements, voitures et voyages interurbains.",
+  "country": "Sénégal",
+  "modules": [
+    "immobilier",
+    "hôtels et auberges",
+    "voitures",
+    "voyages interurbains"
+  ],
+  "publicPages": [
+    "/",
+    "/immobilier",
+    "/hotels",
+    "/voitures",
+    "/voyages",
+    "/aide",
+    "/securite",
+    "/conseils-anti-arnaque",
+    "/regles-publication",
+    "/conditions",
+    "/confidentialite",
+    "/mentions-legales",
+    "/contact"
+  ],
+  "privatePagesExcluded": [
+    "/admin",
+    "/dashboard",
+    "/compte",
+    "/login",
+    "/register"
+  ],
+  "updatedAt": "2026-06-25"
+}

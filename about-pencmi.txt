@@ -1,0 +1,5 @@
+Péncmi est un portail sénégalais permettant de rechercher des offres locales dans plusieurs domaines : immobilier, hébergements, véhicules et voyages interurbains.
+
+La plateforme est pensée pour aider les utilisateurs à consulter des offres, comparer les informations disponibles et contacter les annonceurs lorsque les moyens de contact sont activés.
+
+Les contenus publics de Péncmi sont structurés pour être lisibles par les utilisateurs, les moteurs de recherche et les moteurs IA. Les contenus éditoriaux et GEO sont prévus comme administrables.

@@ -1,0 +1,156 @@
+.alerts-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 30px clamp(16px, 5vw, 58px) 82px;
+}
+
+.alerts-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.alerts-head h1 {
+  margin: 0;
+  color: var(--blue-dark);
+  font-size: clamp(2rem, 4vw, 3.2rem);
+}
+
+.alerts-head p {
+  max-width: 680px;
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.alerts-list,
+.alerts-empty,
+.alert-form-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.alerts-list {
+  overflow: hidden;
+}
+
+.alerts-list table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.alerts-list th,
+.alerts-list td {
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.alerts-list th {
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 0.84rem;
+}
+
+.alerts-empty {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+  padding: 28px;
+  text-align: center;
+}
+
+.alerts-empty div {
+  max-width: 540px;
+}
+
+.alerts-empty h2 {
+  margin: 0;
+  color: var(--blue-dark);
+}
+
+.alerts-empty p {
+  color: var(--muted);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: none;
+  padding: 18px;
+  overflow-y: auto;
+  background: rgba(11, 35, 57, 0.34);
+}
+
+.modal-backdrop.is-open {
+  display: grid;
+  place-items: center;
+}
+
+.alert-form-card {
+  width: min(760px, 100%);
+  padding: 22px;
+}
+
+.alert-form-card h2 {
+  margin: 0;
+  color: var(--blue-dark);
+}
+
+.alert-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.alert-form-grid label {
+  display: grid;
+  gap: 7px;
+  color: #314960;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.alert-form-grid input,
+.alert-form-grid select {
+  min-height: 44px;
+  padding: 10px 12px;
+  color: var(--text);
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.alert-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+@media (max-width: 720px) {
+  .alerts-page {
+    padding: 22px 14px 72px;
+  }
+
+  .alerts-head {
+    display: grid;
+  }
+
+  .alerts-head .btn {
+    width: 100%;
+  }
+
+  .alert-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .alert-form-actions {
+    display: grid;
+  }
+}

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Péncmi - Tout trouver au Sénégal</title>
+    <meta
+      name="description"
+      content="Péncmi est un portail sénégalais pour trouver un logement, un hôtel, une voiture ou un trajet interurbain."
+    >
+    <link rel="stylesheet" href="./styles.css">
+  
+    <meta name="robots" content="index,follow">
+    <link rel="canonical" href="https://www.pencmi.com">
+      <link rel="stylesheet" href="geo/geo.css">
+  </head>
+  <body data-seo-path="/">
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Accueil Péncmi">
+        <span class="brand-mark">P</span>
+        <span>
+          <strong>Péncmi</strong>
+          <small>Tout trouver au Sénégal</small>
+        </span>
+      </a>
+
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-menu" aria-label="Ouvrir le menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
+      <div class="header-panel" id="main-menu">
+        <nav class="main-nav" aria-label="Navigation principale">
+          <a href="./immobilier/">Immobilier</a>
+          <a href="./hotels/">Hôtels</a>
+          <a href="./voitures/">Voitures</a>
+          <a href="./voyages/">Voyages interurbains</a>
+        </nav>
+
+        <div class="header-actions">
+          <a class="btn btn-ghost" href="./login/">Se connecter</a>
+          <a class="btn btn-light" href="./register/">Créer mon espace</a>
+          <a class="btn btn-primary" href="./publier/?category=immobilier">Publier une annonce</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-content">
+          <h1>Trouvez un logement, un hôtel, une voiture ou un trajet au Sénégal</h1>
+          <p class="hero-subtitle">
+            Trouvez rapidement des offres de logement, d’hébergement, de voiture et de voyage partout au Sénégal.
+          </p>
+
+          <form class="search-card" id="hero-search">
+            <label class="sr-only" for="search-input">Que recherchez-vous ?</label>
+            <input
+              id="search-input"
+              name="query"
+              type="search"
+              autocomplete="off"
+              placeholder="Que recherchez-vous ? Exemple : hôtel 5 étoiles, Toyota Prado, appartement à Dakar, Dakar Touba"
+            >
+            <button class="btn btn-primary search-button" type="submit">Rechercher</button>
+          </form>
+
+          <div class="quick-suggestions" aria-label="Suggestions rapides">
+            <button type="button" data-query="Appartement à Dakar">Appartement à Dakar</button>
+            <button type="button" data-query="Hôtel à Saly">Hôtel à Saly</button>
+            <button type="button" data-query="Toyota Prado">Toyota Prado</button>
+            <button type="button" data-query="Dakar Touba">Dakar → Touba</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="category-area" aria-label="Univers Péncmi">
+        <div class="category-grid" id="category-grid"></div>
+      </section>
+
+      <div class="listing-sections" id="listing-sections"></div>
+
+      <section class="advantages" id="advantages-section"></section>
+
+      <section class="professional-cta" id="professional-cta"></section>
+    </main>
+
+    <footer class="site-footer" id="site-footer"></footer>
+
+    <script src="./app.js" defer></script>
+      <script src="seo/seo.js" defer></script>
+      <script src="geo/geo.js" defer></script>
+  </body>
+</html>

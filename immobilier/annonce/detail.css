@@ -1,0 +1,290 @@
+.listing-detail-page {
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 28px clamp(16px, 5vw, 64px) 54px;
+}
+
+.detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  gap: 18px;
+  align-items: start;
+}
+
+.detail-main {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-card,
+.contact-card,
+.not-found-card,
+.mobile-contact-bar,
+.modal-panel {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.detail-card {
+  padding: clamp(18px, 3vw, 26px);
+}
+
+.detail-card h2,
+.contact-card h2,
+.not-found-card h1 {
+  margin: 0;
+  color: var(--blue-dark);
+}
+
+.detail-card p {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.photo-gallery {
+  display: grid;
+  gap: 10px;
+}
+
+.photo-placeholder {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+  color: var(--muted);
+  background: var(--surface-soft);
+  border: 1px dashed #a9c9ee;
+  border-radius: var(--radius);
+  font-weight: 750;
+}
+
+.gallery-thumbnails {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.gallery-thumb {
+  width: 88px;
+  height: 64px;
+  flex: 0 0 auto;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.main-info {
+  display: grid;
+  gap: 14px;
+}
+
+.main-info h1 {
+  margin: 0;
+  color: var(--blue-dark);
+  font-size: clamp(1.7rem, 3vw, 2.6rem);
+  line-height: 1.12;
+}
+
+.badge-row,
+.action-row,
+.contact-actions,
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+  border: 1px solid #d5e7fb;
+  border-radius: 999px;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.price {
+  color: var(--blue-dark);
+  font-size: 1.6rem;
+  font-weight: 850;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.detail-item {
+  min-height: 72px;
+  padding: 12px;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.detail-item span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.detail-item strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--text);
+}
+
+.contact-card {
+  position: sticky;
+  top: 84px;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.advertiser-avatar {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  color: #fff;
+  background: var(--blue-dark);
+  border-radius: var(--radius);
+  font-weight: 850;
+}
+
+.contact-card p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.contact-actions {
+  display: grid;
+}
+
+.contact-actions .btn,
+.mobile-contact-bar .btn {
+  width: 100%;
+}
+
+.map-placeholder {
+  display: grid;
+  min-height: 220px;
+  place-items: center;
+  margin-top: 14px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  border: 1px dashed #a9c9ee;
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.not-found-card {
+  max-width: 720px;
+  margin: 60px auto;
+  padding: clamp(24px, 5vw, 42px);
+  text-align: center;
+}
+
+.not-found-card p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.mobile-contact-bar {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  z-index: 25;
+  display: none;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(13, 35, 64, 0.46);
+}
+
+.modal-panel {
+  width: min(560px, 100%);
+  padding: 20px;
+}
+
+.modal-panel h2 {
+  margin: 0;
+  color: var(--blue-dark);
+}
+
+.modal-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.modal-form input,
+.modal-form textarea,
+.modal-form select {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 11px;
+  color: var(--text);
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.modal-form textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+
+.similar-empty {
+  margin: 0;
+  color: var(--muted);
+}
+
+@media (max-width: 980px) {
+  .detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-card {
+    position: static;
+  }
+
+  .detail-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .listing-detail-page {
+    padding: 18px 14px 92px;
+  }
+
+  .photo-placeholder {
+    min-height: 220px;
+  }
+
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mobile-contact-bar {
+    display: grid;
+  }
+}

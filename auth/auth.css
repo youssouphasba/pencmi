@@ -1,0 +1,365 @@
+@import url("../design-system/design-system.css");
+
+.auth-page {
+  min-height: 100vh;
+  color: var(--text);
+  background:
+    linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0) 48%),
+    var(--bg);
+}
+
+.auth-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px clamp(16px, 5vw, 64px);
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom: 1px solid var(--line);
+}
+
+.auth-main,
+.account-main {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: clamp(28px, 5vw, 56px) 0;
+}
+
+.auth-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 22px;
+  align-items: start;
+}
+
+.auth-intro,
+.auth-card,
+.account-card,
+.account-empty-state,
+.dashboard-entry-card,
+.unauthorized-state {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.auth-intro,
+.auth-card,
+.account-card,
+.account-empty-state,
+.dashboard-entry-card,
+.unauthorized-state {
+  padding: clamp(18px, 3vw, 28px);
+}
+
+.auth-intro h1,
+.auth-card h1,
+.account-card h1,
+.dashboard-entry-card h2,
+.unauthorized-state h1 {
+  margin: 0;
+  color: var(--blue-dark);
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+  letter-spacing: 0;
+}
+
+.auth-intro p,
+.auth-card p,
+.account-card p,
+.dashboard-entry-card p,
+.unauthorized-state p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.auth-form,
+.account-form,
+.settings-section,
+.register-step {
+  display: grid;
+  gap: 14px;
+}
+
+.auth-field,
+.auth-choice,
+.settings-option {
+  display: grid;
+  gap: 7px;
+}
+
+.auth-field span,
+.auth-choice span {
+  color: #314960;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.auth-field input,
+.auth-field select,
+.auth-field textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text);
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.auth-field textarea {
+  min-height: 98px;
+  padding-top: 10px;
+  resize: vertical;
+}
+
+.auth-actions,
+.account-actions,
+.settings-actions,
+.dashboard-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--blue-dark);
+  font-weight: 750;
+}
+
+.role-selector {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.role-option {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.role-option:has(input:checked) {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(23, 105, 209, 0.12);
+}
+
+.role-option input {
+  width: 18px;
+  height: 18px;
+}
+
+.role-option strong {
+  color: var(--blue-dark);
+}
+
+.role-option small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.auth-message {
+  display: none;
+  padding: 12px;
+  color: #0d5c30;
+  background: var(--success-soft);
+  border: 1px solid #bfe8cf;
+  border-radius: var(--radius);
+  font-weight: 750;
+}
+
+.auth-message.is-visible {
+  display: block;
+}
+
+.auth-error {
+  display: none;
+  padding: 12px;
+  color: #8b1d1d;
+  background: #fff0f0;
+  border: 1px solid #f0c8c8;
+  border-radius: var(--radius);
+  font-weight: 750;
+}
+
+.auth-error.is-visible {
+  display: block;
+}
+
+.account-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.account-sidebar {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+  padding: 16px;
+  background: #0d2340;
+  border-radius: var(--radius);
+}
+
+.account-sidebar .dashboard-brand {
+  margin-bottom: 16px;
+}
+
+.account-nav {
+  display: grid;
+  gap: 7px;
+}
+
+.account-nav a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 12px;
+  color: #dbe8f6;
+  border-radius: var(--radius);
+}
+
+.account-nav a[aria-current="page"],
+.account-nav a:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.account-grid,
+.dashboard-entry-grid,
+.verification-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dashboard-entry-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dashboard-entry-card {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-entry-card h2 {
+  font-size: 1.15rem;
+}
+
+.role-badge,
+.verification-badge {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  min-height: 28px;
+  padding: 0 10px;
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+  border: 1px solid #d5e7fb;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.verification-badge.is-muted {
+  color: var(--muted);
+  background: #f4f7fb;
+  border-color: var(--line);
+}
+
+.settings-section {
+  padding: 16px;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.settings-section h2 {
+  margin: 0;
+  color: var(--blue-dark);
+  font-size: 1.1rem;
+}
+
+.settings-option {
+  grid-template-columns: 20px 1fr;
+  align-items: start;
+  color: #314960;
+}
+
+.danger-button {
+  color: #8b1d1d;
+  background: #fff0f0;
+  border-color: #f0c8c8;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(16, 32, 51, 0.44);
+}
+
+.modal-backdrop.is-open {
+  display: flex;
+}
+
+.auth-modal {
+  width: min(460px, 100%);
+  padding: 22px;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.auth-modal h2 {
+  margin: 0;
+  color: var(--blue-dark);
+}
+
+@media (max-width: 980px) {
+  .auth-shell,
+  .account-layout,
+  .dashboard-entry-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .role-selector,
+  .account-grid,
+  .verification-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .account-sidebar {
+    position: static;
+  }
+}
+
+@media (max-width: 680px) {
+  .auth-header,
+  .auth-actions,
+  .account-actions,
+  .settings-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .auth-header .btn,
+  .auth-actions .btn,
+  .account-actions .btn,
+  .settings-actions .btn {
+    width: 100%;
+  }
+}

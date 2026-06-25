@@ -1,0 +1,279 @@
+@import url("../design-system/design-system.css");
+
+.content-page {
+  min-height: 100vh;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.content-header,
+.content-footer {
+  padding: 16px clamp(16px, 5vw, 64px);
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+}
+
+.content-footer {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+
+.content-main {
+  width: min(1160px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: clamp(28px, 5vw, 56px) 0;
+}
+
+.legal-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 22px;
+}
+
+.legal-toc,
+.content-card,
+.content-empty-state,
+.support-card,
+.admin-content-card,
+.content-table-shell {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.legal-toc,
+.content-card,
+.content-empty-state,
+.support-card,
+.admin-content-card,
+.content-table-shell {
+  padding: 16px;
+}
+
+.legal-toc {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+}
+
+.legal-toc nav,
+.content-admin-nav {
+  display: grid;
+  gap: 8px;
+}
+
+.legal-toc a,
+.content-admin-nav a {
+  color: var(--blue-dark);
+  font-weight: 750;
+}
+
+.content-hero {
+  margin-bottom: 18px;
+}
+
+.content-hero h1,
+.content-card h2,
+.content-empty-state h2,
+.support-card h2,
+.admin-content-card h2 {
+  margin: 0;
+  color: var(--blue-dark);
+  letter-spacing: 0;
+}
+
+.content-hero h1 {
+  font-size: clamp(2rem, 4vw, 3.4rem);
+}
+
+.content-hero p,
+.content-card p,
+.content-empty-state p,
+.support-card p,
+.admin-content-card p {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.content-section-list {
+  display: grid;
+  gap: 14px;
+}
+
+.content-warning {
+  padding: 12px;
+  color: #6f4b00;
+  background: #fff7de;
+  border: 1px solid #f0d68b;
+  border-radius: var(--radius);
+  font-weight: 750;
+}
+
+.help-grid,
+.admin-content-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.help-search,
+.content-form,
+.admin-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.content-field {
+  display: grid;
+  gap: 7px;
+}
+
+.content-field span {
+  color: #314960;
+  font-weight: 800;
+  font-size: 0.86rem;
+}
+
+.content-field input,
+.content-field select,
+.content-field textarea,
+.help-search input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text);
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.content-field textarea {
+  min-height: 120px;
+  padding-top: 10px;
+  resize: vertical;
+}
+
+.content-actions,
+.support-actions,
+.admin-content-actions,
+.content-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+}
+
+.content-message {
+  display: none;
+  padding: 12px;
+  color: #0d5c30;
+  background: var(--success-soft);
+  border: 1px solid #bfe8cf;
+  border-radius: var(--radius);
+  font-weight: 750;
+}
+
+.content-message.is-visible {
+  display: block;
+}
+
+.content-admin-shell {
+  display: grid;
+  grid-template-columns: 286px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.content-admin-main {
+  min-width: 0;
+  padding: 22px clamp(16px, 4vw, 42px) 52px;
+}
+
+.content-admin-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.content-admin-header h1 {
+  margin: 0;
+  color: var(--blue-dark);
+}
+
+.content-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+}
+
+.content-table th,
+.content-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.content-table th {
+  color: #314960;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.content-scroll {
+  overflow-x: auto;
+}
+
+.content-status-badge,
+.support-status-badge,
+.support-priority-badge {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.content-status-badge,
+.support-status-badge {
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+}
+
+.support-priority-badge {
+  color: #8b1d1d;
+  background: #fff0f0;
+  border: 1px solid #f0c8c8;
+}
+
+@media (max-width: 960px) {
+  .legal-layout,
+  .content-admin-shell,
+  .help-grid,
+  .admin-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .legal-toc {
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .content-admin-header,
+  .content-actions,
+  .support-actions,
+  .admin-content-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .content-actions .btn,
+  .support-actions .btn,
+  .admin-content-actions .btn {
+    width: 100%;
+  }
+}

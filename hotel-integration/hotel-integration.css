@@ -1,0 +1,215 @@
+.hotel-integration-shell,
+.admin-hotel-integration-shell {
+  min-height: 100vh;
+  background: var(--bg, #f8fafc);
+}
+
+.hotel-integration-layout,
+.admin-hotel-integration-layout {
+  display: grid;
+  grid-template-columns: 286px minmax(0, 1fr);
+  gap: 24px;
+  width: min(1440px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 24px 0;
+}
+
+.hotel-integration-main,
+.admin-hotel-integration-main {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.hotel-integration-header,
+.admin-hotel-integration-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 22px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.hotel-integration-header h1,
+.admin-hotel-integration-header h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(1.45rem, 3vw, 2.1rem);
+}
+
+.hotel-integration-header p,
+.admin-hotel-integration-header p {
+  margin: 8px 0 0;
+  color: #64748b;
+}
+
+.hotel-integration-card,
+.admin-hotel-integration-card {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.hotel-integration-grid,
+.admin-hotel-integration-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.hotel-integration-kpi {
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.hotel-integration-kpi span {
+  color: #64748b;
+  font-size: 0.86rem;
+}
+
+.hotel-integration-kpi strong {
+  display: block;
+  margin-top: 8px;
+  color: #0f172a;
+  font-size: 1.6rem;
+}
+
+.hotel-integration-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.hotel-integration-badge.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.hotel-integration-badge.danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.hotel-integration-badge.success {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.hotel-integration-notice {
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  border: 1px solid #bfdbfe;
+}
+
+.hotel-integration-table-wrap {
+  overflow-x: auto;
+}
+
+.hotel-integration-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+.hotel-integration-table th,
+.hotel-integration-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.hotel-integration-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.hotel-integration-field {
+  display: grid;
+  gap: 6px;
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.hotel-integration-field input,
+.hotel-integration-field select,
+.hotel-integration-field textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 11px 12px;
+}
+
+.hotel-integration-field textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+
+.hotel-integration-code {
+  overflow-x: auto;
+  padding: 16px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 0.9rem;
+}
+
+.hotel-public-sync-badge {
+  display: inline-flex;
+  width: fit-content;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.hotel-public-sync-badge.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+@media (max-width: 1080px) {
+  .hotel-integration-layout,
+  .admin-hotel-integration-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .hotel-integration-grid,
+  .admin-hotel-integration-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .hotel-integration-header,
+  .admin-hotel-integration-header {
+    flex-direction: column;
+  }
+
+  .hotel-integration-grid,
+  .admin-hotel-integration-grid,
+  .hotel-integration-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,125 @@
+.page-panel,
+.empty-panel,
+.modal-panel {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.filter-strip {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.status-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+  overflow-x: auto;
+}
+
+.status-tabs button,
+.page-actions button,
+.page-actions a {
+  min-height: 38px;
+  padding: 0 12px;
+  color: var(--blue-dark);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.status-tabs button.is-active {
+  color: #fff;
+  background: var(--blue);
+  border-color: var(--blue);
+}
+
+.filter-strip input {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.empty-panel {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  padding: 28px;
+  text-align: center;
+}
+
+.empty-panel h2 {
+  margin: 0;
+  color: var(--blue-dark);
+}
+
+.empty-panel p {
+  color: var(--muted);
+}
+
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.cards-list {
+  display: grid;
+  gap: 12px;
+}
+
+.visit-card {
+  padding: 14px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(13, 35, 64, 0.46);
+}
+
+.modal-panel {
+  width: min(560px, 100%);
+  padding: 20px;
+}
+
+.modal-panel h2 {
+  margin: 0;
+  color: var(--blue-dark);
+}
+
+.modal-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.modal-form input,
+.modal-form textarea {
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.modal-form textarea {
+  min-height: 110px;
+}
+
+@media (max-width: 720px) {
+  .filter-strip {
+    grid-template-columns: 1fr;
+  }
+}

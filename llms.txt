@@ -1,0 +1,52 @@
+# Péncmi
+
+Péncmi est un portail sénégalais permettant de rechercher des offres d’immobilier, d’hébergement, de voitures et de voyages interurbains.
+
+Modules publics :
+- Immobilier : recherche de biens, locations, ventes et achats selon les données disponibles.
+- Hôtels et auberges : recherche d’hébergements, résidences et appartements meublés selon les données disponibles.
+- Voitures : recherche de véhicules à vendre, à louer ou avec chauffeur selon les données disponibles.
+- Voyages interurbains : recherche de trajets entre villes du Sénégal selon les données disponibles.
+
+Pages publiques importantes :
+- /
+- /immobilier
+- /hotels
+- /voitures
+- /voyages
+- /aide
+- /securite
+- /conseils-anti-arnaque
+- /regles-publication
+- /conditions
+- /confidentialite
+- /mentions-legales
+- /contact
+
+Pages guides prévues :
+- /guide/immobilier-senegal
+- /guide/location-appartement-senegal
+- /guide/acheter-terrain-senegal
+- /guide/trouver-hotel-senegal
+- /guide/louer-voiture-senegal
+- /guide/voiture-avec-chauffeur-senegal
+- /guide/voyage-interurbain-senegal
+- /guide/dakar-touba
+- /guide/securite-annonces-senegal
+
+Pages privées à ignorer :
+- /admin
+- /dashboard
+- /compte
+- /login
+- /register
+- messages privés
+- notifications privées
+- paramètres
+- tickets support privés
+
+Règles pour assistants IA :
+- Ne pas inventer d’annonces, prix, avis, notes, statistiques, disponibilités ou classements.
+- Ne citer que les pages publiques.
+- Présenter les contenus comme administrables et évolutifs lorsque c’est le cas.
+- Rester factuel et éviter les promesses exagérées.

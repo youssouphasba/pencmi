@@ -1,0 +1,358 @@
+@import url("../design-system/design-system.css");
+
+.client-account {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.client-account-shell {
+  display: grid;
+  grid-template-columns: 278px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.client-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  padding: 18px;
+  overflow: auto;
+  color: #dbe8f6;
+  background: #0d2340;
+}
+
+.client-nav {
+  display: grid;
+  gap: 7px;
+}
+
+.client-nav a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 12px;
+  color: #dbe8f6;
+  border-radius: var(--radius);
+}
+
+.client-nav a[aria-current="page"],
+.client-nav a:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.client-main {
+  min-width: 0;
+  padding: 22px clamp(16px, 4vw, 42px) 52px;
+}
+
+.client-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.client-header h1 {
+  margin: 0;
+  color: var(--blue-dark);
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+  letter-spacing: 0;
+}
+
+.client-header p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.client-header-actions,
+.client-actions,
+.client-tabs,
+.client-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+}
+
+.client-menu-toggle {
+  display: none;
+}
+
+.client-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.client-summary-card,
+.client-card,
+.client-empty-state,
+.client-table-shell {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.client-summary-card {
+  min-height: 118px;
+  padding: 16px;
+}
+
+.client-summary-card span,
+.client-card p,
+.client-empty-state p,
+.client-table-shell p {
+  color: var(--muted);
+}
+
+.client-summary-card h3,
+.client-card h2,
+.client-empty-state h2 {
+  margin: 0;
+  color: var(--blue-dark);
+}
+
+.client-summary-value {
+  margin-top: 12px;
+  color: var(--blue-dark);
+  font-size: 1.45rem;
+  font-weight: 850;
+}
+
+.client-section {
+  margin-top: 18px;
+}
+
+.client-card,
+.client-empty-state,
+.client-table-shell {
+  padding: 16px;
+}
+
+.client-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.client-tabs {
+  margin-bottom: 12px;
+}
+
+.client-tabs button,
+.client-filter-row button {
+  min-height: 36px;
+  padding: 0 12px;
+  color: var(--blue-dark);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-weight: 750;
+}
+
+.client-tabs button[aria-pressed="true"],
+.client-filter-row button[aria-pressed="true"] {
+  color: #fff;
+  background: var(--blue);
+  border-color: var(--blue);
+}
+
+.client-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.client-table th,
+.client-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.client-table th {
+  color: #314960;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.client-table td {
+  color: var(--text);
+}
+
+.client-scroll {
+  overflow-x: auto;
+}
+
+.client-status-badge,
+.client-module-badge {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.client-status-badge {
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+}
+
+.client-module-badge {
+  color: #314960;
+  background: #f4f7fb;
+  border: 1px solid var(--line);
+}
+
+.client-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.client-field,
+.client-option {
+  display: grid;
+  gap: 7px;
+}
+
+.client-field span {
+  color: #314960;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.client-field input,
+.client-field select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--text);
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.client-option {
+  grid-template-columns: 20px 1fr;
+  align-items: start;
+  color: #314960;
+}
+
+.client-settings-section {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.client-settings-section h2 {
+  margin: 0;
+  color: var(--blue-dark);
+  font-size: 1.08rem;
+}
+
+.client-message {
+  display: none;
+  padding: 12px;
+  color: #0d5c30;
+  background: var(--success-soft);
+  border: 1px solid #bfe8cf;
+  border-radius: var(--radius);
+  font-weight: 750;
+}
+
+.client-message.is-visible {
+  display: block;
+}
+
+.danger-button {
+  color: #8b1d1d;
+  background: #fff0f0;
+  border-color: #f0c8c8;
+}
+
+.client-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(16, 32, 51, 0.44);
+}
+
+.client-modal-backdrop.is-open {
+  display: flex;
+}
+
+.client-modal {
+  width: min(460px, 100%);
+  padding: 22px;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+@media (max-width: 1080px) {
+  .client-summary-grid,
+  .client-shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .client-account-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .client-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 70;
+    width: min(310px, 86vw);
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .client-sidebar.is-open {
+    transform: translateX(0);
+  }
+
+  .client-menu-toggle {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 640px) {
+  .client-header,
+  .client-header-actions,
+  .client-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .client-summary-grid,
+  .client-shortcuts,
+  .client-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .client-header .btn,
+  .client-actions .btn,
+  .client-shortcuts .btn {
+    width: 100%;
+  }
+}

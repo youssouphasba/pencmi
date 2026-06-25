@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /compte
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /publier
+Disallow: /favoris
+Disallow: /api
+
+Sitemap: https://www.pencmi.com/sitemap.xml
+
+AI-Content: https://www.pencmi.com/llms.txt
+AI-Summary: https://www.pencmi.com/data/platform-summary.json

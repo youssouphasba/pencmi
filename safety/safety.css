@@ -1,0 +1,254 @@
+@import url("../design-system/design-system.css");
+
+.safety-page {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.safety-main {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: clamp(28px, 5vw, 56px) 0;
+}
+
+.safety-shell,
+.moderation-shell {
+  display: grid;
+  grid-template-columns: 278px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.safety-content,
+.moderation-main {
+  min-width: 0;
+  padding: 22px clamp(16px, 4vw, 42px) 52px;
+}
+
+.safety-card,
+.safety-empty-state,
+.safety-table-shell,
+.safety-tips-box {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.safety-card,
+.safety-empty-state,
+.safety-table-shell,
+.safety-tips-box {
+  padding: 16px;
+}
+
+.safety-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.safety-header h1,
+.safety-card h2,
+.safety-empty-state h2,
+.safety-tips-box h2 {
+  margin: 0;
+  color: var(--blue-dark);
+}
+
+.safety-header h1 {
+  font-size: clamp(1.8rem, 3vw, 2.65rem);
+  letter-spacing: 0;
+}
+
+.safety-header p,
+.safety-card p,
+.safety-empty-state p,
+.safety-tips-box p,
+.safety-tips-box li {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.safety-actions,
+.safety-filter-row,
+.safety-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+}
+
+.safety-filter-row {
+  margin-bottom: 14px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.safety-filter-row label,
+.report-modal label,
+.moderation-modal label {
+  display: grid;
+  gap: 6px;
+  min-width: 170px;
+  color: #314960;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.safety-filter-row select,
+.safety-filter-row input,
+.report-modal select,
+.report-modal textarea,
+.moderation-modal select,
+.moderation-modal textarea {
+  min-height: 40px;
+  padding: 0 11px;
+  color: var(--text);
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.report-modal textarea,
+.moderation-modal textarea {
+  min-height: 104px;
+  padding-top: 10px;
+  resize: vertical;
+}
+
+.safety-scroll {
+  overflow-x: auto;
+}
+
+.safety-table {
+  width: 100%;
+  min-width: 820px;
+  border-collapse: collapse;
+}
+
+.safety-table th,
+.safety-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.safety-table th {
+  color: #314960;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.report-status-badge,
+.report-priority-badge {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 850;
+}
+
+.report-status-badge {
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+}
+
+.report-priority-badge {
+  color: #8b1d1d;
+  background: #fff0f0;
+  border: 1px solid #f0c8c8;
+}
+
+.report-modal-backdrop,
+.moderation-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(16, 32, 51, 0.44);
+}
+
+.report-modal-backdrop.is-open,
+.moderation-modal-backdrop.is-open {
+  display: flex;
+}
+
+.report-modal,
+.moderation-modal {
+  width: min(520px, 100%);
+  padding: 22px;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.report-message,
+.moderation-message {
+  display: none;
+  padding: 12px;
+  color: #0d5c30;
+  background: var(--success-soft);
+  border: 1px solid #bfe8cf;
+  border-radius: var(--radius);
+  font-weight: 750;
+}
+
+.report-message.is-visible,
+.moderation-message.is-visible {
+  display: block;
+}
+
+.safety-tips-box ul {
+  margin: 12px 0;
+  padding-left: 20px;
+}
+
+.moderation-timeline {
+  display: grid;
+  gap: 10px;
+}
+
+.moderation-timeline-item {
+  padding: 12px;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+@media (max-width: 900px) {
+  .safety-shell,
+  .moderation-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .safety-shell .dashboard-sidebar,
+  .moderation-shell .admin-sidebar {
+    position: static;
+    height: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .safety-header,
+  .safety-header-actions,
+  .safety-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .safety-actions .btn,
+  .safety-header-actions .btn {
+    width: 100%;
+  }
+}

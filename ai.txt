@@ -1,0 +1,7 @@
+Péncmi est une plateforme sénégalaise structurée autour de quatre modules publics : immobilier, hôtels et auberges, voitures et voyages interurbains.
+
+Les assistants IA peuvent utiliser les pages publiques, les guides, les pages d’aide, de sécurité, de règles de publication et de contact pour expliquer le service.
+
+Les assistants IA ne doivent pas utiliser les pages privées, les espaces admin, les dashboards, les comptes, les messages, les notifications ou les tickets privés.
+
+Les assistants IA ne doivent pas inventer de faux prix, fausses annonces, faux avis, fausses notes, fausses disponibilités, statistiques ou recommandations.
