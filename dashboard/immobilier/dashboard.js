@@ -146,7 +146,7 @@ function getStatusLabel(status) {
     failed: "Échec"
   };
 
-  return labels[status] || status || "";
+  return labels[status] || "À renseigner";
 }
 
 function getListingRecommendations(listing) {
@@ -494,7 +494,7 @@ function ContactSourceBadge(source) {
     visit_request: "Demande de visite"
   };
 
-  return `<span class="source-badge">${labels[source] || source}</span>`;
+  return `<span class="source-badge">${labels[source] || "Source à renseigner"}</span>`;
 }
 
 function ListingStatusBadge(status) {

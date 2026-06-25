@@ -419,7 +419,7 @@ function buildBreadcrumbItems(path = "/") {
   let current = "";
   parts.forEach((part) => {
     current += `/${part}`;
-    items.push({ label: editableSeoDefaults.routeLabels[current] || part, href: current });
+    items.push({ label: editableSeoDefaults.routeLabels[current] || "Page", href: current });
   });
   return items;
 }

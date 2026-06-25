@@ -83,7 +83,7 @@ function getListingStatusLabel(status) {
     deleted: "Supprimée"
   };
 
-  return labels[status] || status || "";
+  return labels[status] || "À renseigner";
 }
 
 function getCompletionLabel(score) {

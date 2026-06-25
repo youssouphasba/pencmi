@@ -52,7 +52,7 @@ function DashboardSidebar() {
 
 function VisitStatusBadge(status) {
   const labels = { new: "Nouvelle", proposed: "Visite proposée", confirmed: "Confirmée", cancelled: "Annulée", completed: "Terminée" };
-  return `<span class="status-badge">${labels[status] || status}</span>`;
+  return `<span class="status-badge">${labels[status] || "À renseigner"}</span>`;
 }
 
 function VisitRequestCard(visit) {

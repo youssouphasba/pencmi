@@ -182,7 +182,7 @@ function generateGeoShortAnswer(question = {}) {
 function buildGeoRelatedLinks(page = {}) {
   return (page.links || []).map((href) => ({
     href,
-    label: editableGeoDefaults.routeLabels[href] || href
+    label: editableGeoDefaults.routeLabels[href] || "Lien à renseigner"
   }));
 }
 
@@ -288,7 +288,7 @@ function GeoPublicFilePreview({ path = "", content = "" } = {}) {
 }
 
 function GeoStatusBadge(status = "draft") {
-  return `<span class="geo-status-badge geo-status-${status}">${geoEscape(editableGeoDefaults.statusLabels[status] || status)}</span>`;
+  return `<span class="geo-status-badge geo-status-${status}">${geoEscape(editableGeoDefaults.statusLabels[status] || "À renseigner")}</span>`;
 }
 
 function GeoTemplatePreview(template = {}) {
