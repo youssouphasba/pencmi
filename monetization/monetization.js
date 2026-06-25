@@ -118,11 +118,11 @@ function getBillingPlanLabel(plan = {}) {
 }
 
 function getBillingStatusLabel(status = "none") {
-  return editableMonetizationDefaults.statusLabels[status] || status;
+  return editableMonetizationDefaults.statusLabels[status] || editableMonetizationDefaults.statusLabels.none;
 }
 
 function getPaymentStatusLabel(status = "pending") {
-  return editableMonetizationDefaults.statusLabels[status] || status;
+  return editableMonetizationDefaults.statusLabels[status] || editableMonetizationDefaults.statusLabels.pending;
 }
 
 function formatCurrency(amount, currency = "XOF") {

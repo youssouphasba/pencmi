@@ -139,17 +139,17 @@ function ContactModal(moduleKey = "real_estate") {
 }
 
 function ContactSourceBadge(source) {
-  return `<span class="contact-source-badge">${contactChannels[source] || source}</span>`;
+  return `<span class="contact-source-badge">${contactChannels[source] || "Canal à renseigner"}</span>`;
 }
 
 function ContactStatusBadge(status) {
   const labels = { new: "Nouveau", read: "Lu", replied: "Répondu", closed: "Clôturé" };
-  return `<span class="contact-status-badge">${labels[status] || status}</span>`;
+  return `<span class="contact-status-badge">${labels[status] || "À renseigner"}</span>`;
 }
 
 function EmailStatusBadge(status) {
   const labels = { pending: "En attente", sent: "Envoyé", failed: "Échec", cancelled: "Annulé" };
-  return `<span class="email-status-badge">${labels[status] || status}</span>`;
+  return `<span class="email-status-badge">${labels[status] || "À renseigner"}</span>`;
 }
 
 function ContactHistoryTable() {

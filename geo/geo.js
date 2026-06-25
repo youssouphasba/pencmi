@@ -98,7 +98,33 @@ const editableGeoDefaults = {
     "/data/platform-summary.json",
     "/data/public-entities.json",
     "/data/public-routes.json"
-  ]
+  ],
+  routeLabels: {
+    "/": "Accueil",
+    "/immobilier": "Immobilier",
+    "/hotels": "Hôtels et auberges",
+    "/voitures": "Voitures",
+    "/voyages": "Voyages interurbains",
+    "/aide": "Aide",
+    "/securite": "Sécurité",
+    "/conseils-anti-arnaque": "Conseils anti-arnaque",
+    "/regles-publication": "Règles de publication",
+    "/conditions": "Conditions d’utilisation",
+    "/confidentialite": "Confidentialité",
+    "/mentions-legales": "Mentions légales",
+    "/contact": "Contact",
+    "/signaler": "Signaler un problème",
+    "/publier": "Publier une annonce",
+    "/guide/immobilier-senegal": "Guide immobilier Sénégal",
+    "/guide/location-appartement-senegal": "Guide location appartement Sénégal",
+    "/guide/acheter-terrain-senegal": "Guide achat terrain Sénégal",
+    "/guide/trouver-hotel-senegal": "Guide hôtels au Sénégal",
+    "/guide/louer-voiture-senegal": "Guide location voiture Sénégal",
+    "/guide/voiture-avec-chauffeur-senegal": "Guide voiture avec chauffeur Sénégal",
+    "/guide/voyage-interurbain-senegal": "Guide voyage interurbain Sénégal",
+    "/guide/dakar-touba": "Guide Dakar Touba",
+    "/guide/securite-annonces-senegal": "Guide sécurité annonces Sénégal"
+  }
 };
 
 function geoEscape(value = "") {
@@ -154,7 +180,10 @@ function generateGeoShortAnswer(question = {}) {
 }
 
 function buildGeoRelatedLinks(page = {}) {
-  return (page.links || []).map((href) => ({ href, label: href.replace(/^\//, "").replace(/-/g, " ") || "Accueil" }));
+  return (page.links || []).map((href) => ({
+    href,
+    label: editableGeoDefaults.routeLabels[href] || href
+  }));
 }
 
 function buildLlmsTxt() {

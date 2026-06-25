@@ -103,7 +103,7 @@ function AvailabilityStatusBadge(status) {
     maintenance: "Maintenance",
     on_request: "Sur demande"
   };
-  return `<span class="hotel-status-badge">${labels[status] || status || "À renseigner"}</span>`;
+  return `<span class="hotel-status-badge">${labels[status] || "À renseigner"}</span>`;
 }
 
 function HotelAvailabilityDashboard() {

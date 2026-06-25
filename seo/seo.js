@@ -277,7 +277,86 @@ Sitemap: https://www.pencmi.com/sitemap.xml`,
     ["Redirections", "/admin/seo/redirects"],
     ["Robots.txt", "/admin/seo/robots"],
     ["Schema.org", "/admin/seo/schema"]
-  ]
+  ],
+  routeLabels: {
+    "/": "Accueil",
+    "/immobilier": "Immobilier",
+    "/immobilier/location": "Location immobilière",
+    "/immobilier/vente": "Vente immobilière",
+    "/immobilier/achat": "Achat immobilier",
+    "/immobilier/terrains": "Terrains",
+    "/immobilier/appartements": "Appartements",
+    "/immobilier/maisons": "Maisons",
+    "/immobilier/villas": "Villas",
+    "/immobilier/studios": "Studios",
+    "/immobilier/chambres": "Chambres",
+    "/immobilier/bureaux": "Bureaux",
+    "/immobilier/commerces": "Commerces",
+    "/immobilier/meubles": "Meublés",
+    "/immobilier/agences": "Agences immobilières",
+    "/hotels": "Hôtels",
+    "/hotels/hotel": "Hôtels",
+    "/hotels/auberge": "Auberges",
+    "/hotels/residence": "Résidences",
+    "/hotels/appartement-meuble": "Appartements meublés",
+    "/hotels/chambre": "Chambres",
+    "/hotels/avec-piscine": "Hébergements avec piscine",
+    "/hotels/pas-cher": "Hébergements pas chers",
+    "/hotels/luxe": "Hébergements de luxe",
+    "/hotels/famille": "Hébergements famille",
+    "/hotels/proche-plage": "Hébergements proches de la plage",
+    "/hotels/proche-aeroport": "Hébergements proches de l’aéroport",
+    "/voitures": "Voitures",
+    "/voitures/achat": "Achat voiture",
+    "/voitures/vente": "Vente voiture",
+    "/voitures/location": "Location voiture",
+    "/voitures/avec-chauffeur": "Voiture avec chauffeur",
+    "/voitures/neuves": "Voitures neuves",
+    "/voitures/occasion": "Voitures d’occasion",
+    "/voitures/importees": "Voitures importées",
+    "/voitures/automatiques": "Voitures automatiques",
+    "/voitures/manuelles": "Voitures manuelles",
+    "/voitures/essence": "Voitures essence",
+    "/voitures/diesel": "Voitures diesel",
+    "/voitures/hybrides": "Voitures hybrides",
+    "/voitures/electriques": "Voitures électriques",
+    "/voitures/suv": "SUV",
+    "/voitures/4x4": "4x4",
+    "/voitures/citadines": "Citadines",
+    "/voitures/berlines": "Berlines",
+    "/voitures/pick-up": "Pick-up",
+    "/voitures/utilitaires": "Utilitaires",
+    "/voitures/bus": "Bus",
+    "/voitures/minibus": "Minibus",
+    "/voitures/motos": "Motos",
+    "/voyages": "Voyages",
+    "/voyages/bus": "Voyages en bus",
+    "/voyages/car": "Voyages en car",
+    "/voyages/minibus": "Voyages en minibus",
+    "/voyages/sept-places": "Voyages en 7 places",
+    "/voyages/covoiturage": "Covoiturage",
+    "/voyages/voiture-particuliere": "Voiture particulière",
+    "/voyages/vehicule-avec-chauffeur": "Véhicule avec chauffeur",
+    "/aide": "Aide",
+    "/conditions": "Conditions d’utilisation",
+    "/confidentialite": "Confidentialité",
+    "/mentions-legales": "Mentions légales",
+    "/contact": "Contact",
+    "/securite": "Sécurité",
+    "/regles-publication": "Règles de publication",
+    "/conseils-anti-arnaque": "Conseils anti-arnaque",
+    "/support": "Support",
+    "/guide": "Guides",
+    "/guide/immobilier-senegal": "Guide immobilier Sénégal",
+    "/guide/location-appartement-senegal": "Guide location appartement Sénégal",
+    "/guide/acheter-terrain-senegal": "Guide achat terrain Sénégal",
+    "/guide/trouver-hotel-senegal": "Guide hôtels au Sénégal",
+    "/guide/louer-voiture-senegal": "Guide location voiture Sénégal",
+    "/guide/voiture-avec-chauffeur-senegal": "Guide voiture avec chauffeur Sénégal",
+    "/guide/voyage-interurbain-senegal": "Guide voyage interurbain Sénégal",
+    "/guide/dakar-touba": "Guide Dakar Touba",
+    "/guide/securite-annonces-senegal": "Guide sécurité annonces Sénégal"
+  }
 };
 
 function seoEscape(value = "") {
@@ -336,12 +415,11 @@ function shouldIndexPage(page = {}) {
 function buildBreadcrumbItems(path = "/") {
   const cleanPath = cleanSeoPath(path);
   const parts = cleanPath.split("/").filter(Boolean);
-  const labels = { immobilier: "Immobilier", hotels: "Hôtels", voitures: "Voitures", voyages: "Voyages", aide: "Aide", conditions: "Conditions", confidentialite: "Confidentialité", "mentions-legales": "Mentions légales", securite: "Sécurité", "regles-publication": "Règles de publication", "conseils-anti-arnaque": "Conseils anti-arnaque", support: "Support" };
   const items = [{ label: "Accueil", href: "/" }];
   let current = "";
   parts.forEach((part) => {
     current += `/${part}`;
-    items.push({ label: labels[part] || part.replace(/-/g, " "), href: current });
+    items.push({ label: editableSeoDefaults.routeLabels[current] || part, href: current });
   });
   return items;
 }
