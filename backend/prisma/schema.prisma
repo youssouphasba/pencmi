@@ -1,0 +1,962 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  client
+  advertiser_individual
+  real_estate_agency
+  hotel_manager
+  vehicle_renter
+  vehicle_dealer
+  chauffeur
+  transport_provider
+  admin
+}
+
+enum AccountStatus {
+  active
+  pending_verification
+  suspended
+  deleted
+}
+
+enum ProfessionalType {
+  real_estate_agency
+  hotel
+  auberge
+  residence
+  vehicle_renter
+  vehicle_dealer
+  chauffeur
+  transport_provider
+  other
+}
+
+enum PencmiModule {
+  real_estate
+  hotels
+  vehicles
+  trips
+  messages
+  users
+  content
+  support
+  system
+}
+
+enum ListingStatus {
+  draft
+  pending_review
+  active
+  refused
+  suspended
+  expired
+  deleted
+}
+
+enum RequestStatus {
+  new
+  pending
+  accepted
+  refused
+  cancelled
+  expired
+  completed
+  requires_more_info
+}
+
+enum ContactSource {
+  whatsapp
+  phone
+  email
+  internal_message
+  form
+  visit_request
+  reservation_request
+  rental_request
+  chauffeur_request
+  seat_request
+}
+
+enum NotificationStatus {
+  unread
+  read
+  archived
+}
+
+enum NotificationPriority {
+  low
+  normal
+  important
+  urgent
+}
+
+enum ReportStatus {
+  new
+  in_progress
+  correction_requested
+  resolved
+  rejected
+  archived
+}
+
+enum ReportPriority {
+  low
+  normal
+  important
+  urgent
+}
+
+enum TargetType {
+  listing
+  user
+  advertiser
+  message
+  conversation
+  document
+  other
+}
+
+enum FileVisibility {
+  public
+  private
+}
+
+enum EmailStatus {
+  pending
+  sent
+  failed
+  cancelled
+}
+
+enum SupportTicketStatus {
+  open
+  pending
+  resolved
+  closed
+}
+
+model User {
+  id                       String                @id @default(cuid())
+  role                     UserRole
+  status                   AccountStatus         @default(active)
+  firstName                String?
+  lastName                 String?
+  email                    String?               @unique
+  phone                    String?               @unique
+  passwordHash             String?
+  city                     String?
+  avatarUrl                String?
+  emailVerified            Boolean               @default(false)
+  phoneVerified            Boolean               @default(false)
+  identityVerified         Boolean               @default(false)
+  professionalVerified     Boolean               @default(false)
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  deletedAt                DateTime?
+  professionalProfile      ProfessionalProfile?
+  sessions                 UserSession[]
+  refreshTokens            RefreshToken[]
+  auditLogs                AuditLog[]            @relation("ActorAuditLogs")
+  files                    FileAsset[]
+  hotelProperties          HotelProperty[]
+  realEstateListings       RealEstateListing[]
+  vehicleListings          VehicleListing[]
+  tripListings             TripListing[]
+  conversationParticipants ConversationParticipant[]
+  messages                 Message[]
+  notifications            Notification[]
+  reports                  Report[]              @relation("ReporterReports")
+  supportTickets           SupportTicket[]
+  favorites                Favorite[]
+  savedAlerts              SavedAlert[]
+
+  @@index([role, status])
+  @@index([createdAt])
+}
+
+model UserSession {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent    String?
+  ipAddress    String?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  lastUsedAt    DateTime?
+  refreshTokens RefreshToken[]
+
+  @@index([userId, revokedAt])
+}
+
+model RefreshToken {
+  id          String      @id @default(cuid())
+  userId      String
+  sessionId   String
+  tokenHash   String      @unique
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime    @default(now())
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session     UserSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([sessionId, revokedAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, expiresAt])
+}
+
+model ProfessionalProfile {
+  id                String           @id @default(cuid())
+  userId            String           @unique
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  professionalType  ProfessionalType
+  businessName      String
+  city              String?
+  address           String?
+  description       String?
+  logoUrl           String?
+  professionalPhone String?
+  professionalEmail String?
+  whatsappNumber    String?
+  website           String?
+  verified          Boolean          @default(false)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+}
+
+model AuditLog {
+  id          String       @id @default(cuid())
+  actorUserId String?
+  actor       User?        @relation("ActorAuditLogs", fields: [actorUserId], references: [id])
+  action      String
+  module      PencmiModule
+  targetType  TargetType?
+  targetId    String?
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime     @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([module, targetType, targetId])
+}
+
+model FileAsset {
+  id          String         @id @default(cuid())
+  ownerUserId String?
+  owner       User?          @relation(fields: [ownerUserId], references: [id])
+  module      PencmiModule
+  visibility  FileVisibility @default(private)
+  mimeType    String
+  sizeBytes   Int
+  storageKey  String
+  publicUrl   String?
+  metadata    Json?
+  deletedAt   DateTime?
+  createdAt   DateTime       @default(now())
+  usages      FileUsage[]
+
+  @@index([ownerUserId, module])
+}
+
+model FileUsage {
+  id        String     @id @default(cuid())
+  fileId    String
+  file      FileAsset  @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  targetType TargetType
+  targetId   String
+  createdAt DateTime   @default(now())
+
+  @@index([targetType, targetId])
+}
+
+model HotelProperty {
+  id              String      @id @default(cuid())
+  ownerUserId     String
+  owner           User        @relation(fields: [ownerUserId], references: [id])
+  status          ListingStatus @default(draft)
+  slug            String      @unique
+  name            String
+  propertyType    String
+  city            String
+  region          String?
+  address         String?
+  description     String?
+  contactSettings Json?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  deletedAt       DateTime?
+  rooms           HotelRoom[]
+  reservationRequests HotelReservationRequest[]
+  integration     HotelIntegration?
+
+  @@index([ownerUserId, status])
+  @@index([city, status])
+}
+
+model HotelRoom {
+  id         String        @id @default(cuid())
+  propertyId String
+  property   HotelProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name       String
+  roomType   String?
+  capacity   Int?
+  status     ListingStatus @default(active)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  rates      HotelRoomRate[]
+  availability HotelRoomAvailability[]
+  restrictions HotelRestriction[]
+
+  @@index([propertyId, status])
+}
+
+model HotelRoomRate {
+  id        String    @id @default(cuid())
+  roomId    String
+  room      HotelRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  date      DateTime
+  ratePlan  String
+  price     Int
+  currency  String    @default("FCFA")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([roomId, date, ratePlan])
+}
+
+model HotelRoomAvailability {
+  id        String    @id @default(cuid())
+  roomId    String
+  room      HotelRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  date      DateTime
+  available Int
+  reliableUntil DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([roomId, date])
+}
+
+model HotelRestriction {
+  id        String    @id @default(cuid())
+  roomId    String
+  room      HotelRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  date      DateTime
+  stopSell  Boolean   @default(false)
+  minStay   Int?
+  maxStay   Int?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([roomId, date])
+}
+
+model HotelReservationRequest {
+  id          String        @id @default(cuid())
+  propertyId  String
+  property    HotelProperty @relation(fields: [propertyId], references: [id])
+  clientUserId String?
+  clientName  String?
+  clientPhone String?
+  clientEmail String?
+  checkIn     DateTime?
+  checkOut    DateTime?
+  guests      Int?
+  message     String?
+  status      RequestStatus @default(new)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([propertyId, status, createdAt])
+}
+
+model HotelIntegration {
+  id         String        @id @default(cuid())
+  propertyId String        @unique
+  property   HotelProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  status     String        @default("inactive")
+  sourceOfTruth String     @default("external_system")
+  lastSyncAt DateTime?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  apiKeys    HotelApiKey[]
+  webhooks   HotelWebhook[]
+  syncLogs   HotelSyncLog[]
+  conflicts  HotelSyncConflict[]
+  externalMappings HotelExternalMapping[]
+  fieldMappings HotelFieldMapping[]
+}
+
+model HotelApiKey {
+  id            String           @id @default(cuid())
+  integrationId String
+  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  name          String
+  keyHash       String           @unique
+  permissions   String[]
+  revokedAt     DateTime?
+  lastUsedAt    DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@index([integrationId, revokedAt])
+}
+
+model HotelWebhook {
+  id            String           @id @default(cuid())
+  integrationId String
+  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  url           String
+  secretHash    String
+  events        String[]
+  active        Boolean          @default(true)
+  createdAt     DateTime         @default(now())
+  deliveries    HotelWebhookDelivery[]
+}
+
+model HotelWebhookDelivery {
+  id          String       @id @default(cuid())
+  webhookId   String
+  webhook     HotelWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  eventId     String       @unique
+  eventType   String
+  payload     Json
+  status      String       @default("pending")
+  attempts    Int          @default(0)
+  lastError   String?
+  createdAt   DateTime     @default(now())
+  sentAt      DateTime?
+}
+
+model HotelSyncLog {
+  id            String           @id @default(cuid())
+  integrationId String
+  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  direction     String
+  entityType    String
+  status        String
+  metadata      Json?
+  createdAt     DateTime         @default(now())
+
+  @@index([integrationId, createdAt])
+}
+
+model HotelSyncConflict {
+  id            String           @id @default(cuid())
+  integrationId String
+  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  entityType    String
+  entityId      String
+  status        String           @default("open")
+  localValue    Json?
+  externalValue Json?
+  createdAt     DateTime         @default(now())
+  resolvedAt    DateTime?
+}
+
+model HotelExternalMapping {
+  id            String           @id @default(cuid())
+  integrationId String
+  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  entityType    String
+  internalId    String
+  externalId    String
+
+  @@unique([integrationId, entityType, externalId])
+  @@index([entityType, internalId])
+}
+
+model HotelFieldMapping {
+  id            String           @id @default(cuid())
+  integrationId String
+  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  externalField String
+  internalField String
+  transform     Json?
+
+  @@unique([integrationId, externalField, internalField])
+}
+
+model RealEstateListing {
+  id          String        @id @default(cuid())
+  ownerUserId String
+  owner       User          @relation(fields: [ownerUserId], references: [id])
+  status      ListingStatus @default(draft)
+  slug        String        @unique
+  title       String
+  description String?
+  transaction String?
+  propertyType String?
+  city        String
+  neighborhood String?
+  price       Int?
+  currency    String        @default("FCFA")
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+  visitRequests RealEstateVisitRequest[]
+
+  @@index([ownerUserId, status])
+  @@index([city, status])
+}
+
+model RealEstateVisitRequest {
+  id        String             @id @default(cuid())
+  listingId String
+  listing   RealEstateListing  @relation(fields: [listingId], references: [id])
+  clientUserId String?
+  clientName String?
+  clientPhone String?
+  clientEmail String?
+  preferredDate DateTime?
+  message   String?
+  status    RequestStatus      @default(new)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@index([listingId, status, createdAt])
+}
+
+model VehicleListing {
+  id          String        @id @default(cuid())
+  ownerUserId String
+  owner       User          @relation(fields: [ownerUserId], references: [id])
+  status      ListingStatus @default(draft)
+  slug        String        @unique
+  title       String
+  description String?
+  vehicleMode String
+  city        String
+  price       Int?
+  currency    String        @default("FCFA")
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  deletedAt   DateTime?
+  rentalRequests VehicleRentalRequest[]
+  chauffeurRequests VehicleChauffeurRequest[]
+
+  @@index([ownerUserId, status])
+  @@index([vehicleMode, city, status])
+}
+
+model VehicleRentalRequest {
+  id        String         @id @default(cuid())
+  listingId String
+  listing   VehicleListing @relation(fields: [listingId], references: [id])
+  clientUserId String?
+  clientName String?
+  clientPhone String?
+  clientEmail String?
+  startDate DateTime?
+  endDate   DateTime?
+  message   String?
+  status    RequestStatus  @default(new)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model VehicleChauffeurRequest {
+  id        String         @id @default(cuid())
+  listingId String
+  listing   VehicleListing @relation(fields: [listingId], references: [id])
+  clientUserId String?
+  clientName String?
+  clientPhone String?
+  clientEmail String?
+  pickupCity String?
+  destinationCity String?
+  serviceDate DateTime?
+  message   String?
+  status    RequestStatus  @default(new)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+}
+
+model TripListing {
+  id          String        @id @default(cuid())
+  ownerUserId String
+  owner       User          @relation(fields: [ownerUserId], references: [id])
+  status      ListingStatus @default(draft)
+  slug        String        @unique
+  title       String
+  vehicleType String
+  departureCity String
+  arrivalCity String
+  departurePoint String?
+  arrivalPoint String?
+  departureDate DateTime?
+  departureTime String?
+  pricePerSeat Int?
+  currency     String       @default("FCFA")
+  availableSeats Int?
+  metadata     Json?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+  seatRequests TripSeatRequest[]
+
+  @@index([ownerUserId, status])
+  @@index([departureCity, arrivalCity, status])
+}
+
+model TripSeatRequest {
+  id        String      @id @default(cuid())
+  tripId    String
+  trip      TripListing @relation(fields: [tripId], references: [id])
+  clientUserId String?
+  clientName String?
+  clientPhone String?
+  clientEmail String?
+  requestedSeats Int
+  luggage   Boolean?
+  message   String?
+  status    RequestStatus @default(new)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([tripId, status, createdAt])
+}
+
+model Conversation {
+  id          String                    @id @default(cuid())
+  module      PencmiModule
+  targetType  TargetType?
+  targetId    String?
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  participants ConversationParticipant[]
+  messages    Message[]
+
+  @@index([module, targetType, targetId])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderUserId   String
+  sender         User         @relation(fields: [senderUserId], references: [id])
+  body           String
+  attachmentIds  String[]
+  hiddenAt       DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([senderUserId, createdAt])
+}
+
+model ContactEvent {
+  id        String        @id @default(cuid())
+  module    PencmiModule
+  source    ContactSource
+  targetType TargetType?
+  targetId  String?
+  ownerUserId String?
+  clientUserId String?
+  metadata  Json?
+  createdAt DateTime      @default(now())
+
+  @@index([module, targetId, createdAt])
+  @@index([ownerUserId, createdAt])
+}
+
+model Notification {
+  id        String               @id @default(cuid())
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module    PencmiModule
+  type      String
+  priority  NotificationPriority @default(normal)
+  status    NotificationStatus   @default(unread)
+  title     String
+  message   String
+  targetUrl String?
+  metadata  Json?
+  createdAt DateTime             @default(now())
+  readAt    DateTime?
+
+  @@index([userId, status, createdAt])
+}
+
+model EmailTemplate {
+  id        String    @id @default(cuid())
+  key       String    @unique
+  subject   String
+  body      String
+  variables String[]
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model EmailLog {
+  id          String      @id @default(cuid())
+  templateKey String?
+  toEmail     String
+  subject     String
+  status      EmailStatus @default(pending)
+  payload     Json?
+  error       String?
+  createdAt   DateTime    @default(now())
+  sentAt      DateTime?
+
+  @@index([status, createdAt])
+}
+
+model Favorite {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module    PencmiModule
+  targetId  String
+  createdAt DateTime     @default(now())
+
+  @@unique([userId, module, targetId])
+}
+
+model SavedAlert {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  module    PencmiModule
+  criteria  Json
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model Report {
+  id             String         @id @default(cuid())
+  module         PencmiModule
+  targetType     TargetType
+  targetId       String
+  reporterUserId String?
+  reporter       User?          @relation("ReporterReports", fields: [reporterUserId], references: [id])
+  advertiserId   String?
+  reason         String
+  message        String?
+  priority       ReportPriority @default(normal)
+  status         ReportStatus   @default(new)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  decisions      ModerationDecision[]
+
+  @@index([module, status, priority])
+  @@index([targetType, targetId])
+}
+
+model ModerationDecision {
+  id            String     @id @default(cuid())
+  reportId      String?
+  report        Report?    @relation(fields: [reportId], references: [id])
+  adminUserId   String
+  targetType    TargetType
+  targetId      String
+  action        String
+  reason        String?
+  messageToUser String?
+  internalNote  String?
+  createdAt     DateTime   @default(now())
+
+  @@index([reportId, createdAt])
+}
+
+model VerificationRequest {
+  id        String        @id @default(cuid())
+  userId    String
+  type      String
+  status    RequestStatus @default(new)
+  reason    String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  documents VerificationDocument[]
+}
+
+model VerificationDocument {
+  id                    String              @id @default(cuid())
+  verificationRequestId  String
+  verificationRequest    VerificationRequest @relation(fields: [verificationRequestId], references: [id], onDelete: Cascade)
+  fileId                String
+  documentType          String
+  createdAt             DateTime            @default(now())
+}
+
+model SupportCategory {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  name      String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+}
+
+model SupportTicket {
+  id        String              @id @default(cuid())
+  userId    String?
+  user      User?               @relation(fields: [userId], references: [id])
+  categoryId String?
+  subject   String
+  status    SupportTicketStatus @default(open)
+  priority  NotificationPriority @default(normal)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  messages  SupportMessage[]
+}
+
+model SupportMessage {
+  id        String        @id @default(cuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderUserId String?
+  body      String
+  createdAt DateTime      @default(now())
+}
+
+model ContentPage {
+  id        String           @id @default(cuid())
+  slug      String           @unique
+  title     String
+  status    ListingStatus    @default(draft)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  sections  ContentSection[]
+  versions  ContentVersion[]
+}
+
+model ContentSection {
+  id        String      @id @default(cuid())
+  pageId    String
+  page      ContentPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  key       String
+  content   Json
+  position  Int         @default(0)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([pageId, key])
+}
+
+model ContentVersion {
+  id        String      @id @default(cuid())
+  pageId    String
+  page      ContentPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  snapshot  Json
+  createdBy String?
+  createdAt DateTime    @default(now())
+}
+
+model FaqItem {
+  id        String    @id @default(cuid())
+  module    PencmiModule?
+  question  String
+  answer    String
+  active    Boolean   @default(true)
+  position  Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model SeoMeta {
+  id        String    @id @default(cuid())
+  path      String    @unique
+  title     String?
+  description String?
+  noindex   Boolean   @default(false)
+  canonical String?
+  structuredData Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model SeoRedirect {
+  id        String    @id @default(cuid())
+  source    String    @unique
+  target    String
+  statusCode Int      @default(301)
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+}
+
+model GeoEntity {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  module    PencmiModule
+  name      String
+  data      Json
+  public    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model TrackingEvent {
+  id        String       @id @default(cuid())
+  module    PencmiModule
+  eventType String
+  targetType TargetType?
+  targetId  String?
+  userId    String?
+  metadata  Json?
+  createdAt DateTime     @default(now())
+
+  @@index([module, targetId, createdAt])
+  @@index([eventType, createdAt])
+}
+
+model BillingPlan {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  name      String
+  active    Boolean   @default(false)
+  price     Int?
+  currency  String    @default("FCFA")
+  features  Json?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model AdvertiserSubscription {
+  id        String    @id @default(cuid())
+  userId    String
+  planId    String
+  status    String    @default("inactive")
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model IdempotencyKey {
+  id        String    @id @default(cuid())
+  key       String    @unique
+  scope     String
+  response  Json?
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+}

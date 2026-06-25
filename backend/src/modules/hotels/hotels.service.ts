@@ -1,0 +1,81 @@
+import { Injectable } from '@nestjs/common';
+import { ContactSource, ListingStatus, PencmiModule, TargetType } from '@prisma/client';
+import { PrismaService } from '../../database/prisma/prisma.service';
+import { getPagination, PaginationDto } from '../../common/pagination/pagination.dto';
+import { CreateHotelDto, CreateHotelReservationRequestDto, HotelSearchDto, UpdateHotelDto } from './hotels.dto';
+
+@Injectable()
+export class HotelsService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async findPublic(query: HotelSearchDto) {
+    const pagination = getPagination(query);
+    const where = {
+      status: ListingStatus.active,
+      deletedAt: null,
+      city: query.city,
+      propertyType: query.propertyType,
+    };
+    const [data, total] = await Promise.all([
+      this.prisma.hotelProperty.findMany({ where, skip: pagination.skip, take: pagination.take, orderBy: { updatedAt: 'desc' } }),
+      this.prisma.hotelProperty.count({ where }),
+    ]);
+    return { data, meta: pagination.meta(total) };
+  }
+
+  findPublicOne(id: string) {
+    return this.prisma.hotelProperty.findFirstOrThrow({
+      where: { id, status: ListingStatus.active, deletedAt: null },
+      include: { rooms: true },
+    });
+  }
+
+  async createReservationRequest(propertyId: string, dto: CreateHotelReservationRequestDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const request = await tx.hotelReservationRequest.create({
+        data: {
+          propertyId,
+          clientName: dto.clientName,
+          clientPhone: dto.clientPhone,
+          clientEmail: dto.clientEmail,
+          checkIn: dto.checkIn ? new Date(dto.checkIn) : undefined,
+          checkOut: dto.checkOut ? new Date(dto.checkOut) : undefined,
+          guests: dto.guests,
+          message: dto.message,
+        },
+      });
+      await tx.contactEvent.create({
+        data: {
+          module: PencmiModule.hotels,
+          source: ContactSource.reservation_request,
+          targetType: TargetType.listing,
+          targetId: propertyId,
+          metadata: { requestId: request.id },
+        },
+      });
+      return request;
+    });
+  }
+
+  async findMine(ownerUserId: string, dto: PaginationDto) {
+    const pagination = getPagination(dto);
+    const where = { ownerUserId, deletedAt: null };
+    const [data, total] = await Promise.all([
+      this.prisma.hotelProperty.findMany({ where, skip: pagination.skip, take: pagination.take, orderBy: { updatedAt: 'desc' } }),
+      this.prisma.hotelProperty.count({ where }),
+    ]);
+    return { data, meta: pagination.meta(total) };
+  }
+
+  create(ownerUserId: string, dto: CreateHotelDto) {
+    return this.prisma.hotelProperty.create({ data: { ...dto, ownerUserId } });
+  }
+
+  update(ownerUserId: string, id: string, dto: UpdateHotelDto) {
+    return this.prisma.hotelProperty.updateMany({ where: { id, ownerUserId }, data: dto });
+  }
+
+  softDelete(ownerUserId: string, id: string) {
+    return this.prisma.hotelProperty.updateMany({ where: { id, ownerUserId }, data: { deletedAt: new Date() } });
+  }
+}
