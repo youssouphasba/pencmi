@@ -251,6 +251,16 @@
   color: var(--blue-dark);
 }
 
+.modal-feedback p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.modal-feedback.is-error p {
+  color: #991b1b;
+}
+
 .modal-form {
   display: grid;
   gap: 10px;

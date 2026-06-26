@@ -114,6 +114,7 @@ function mapListing(listing) {
     bedrooms: metadata.bedrooms,
     bathrooms: metadata.bathrooms,
     advertiser: {
+      id: listing.owner?.id || "",
       name: advertiserName,
       type: formatProfessionalType(profile.professionalType),
       city: profile.city || listing.owner?.city,
@@ -278,6 +279,17 @@ function VisitRequestModal() {
   `;
 }
 
+function VisitRequestFeedback(message, isError = false) {
+  return `
+    <div class="modal-feedback${isError ? " is-error" : ""}">
+      <p>${message}</p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" type="button" data-close-modal>Fermer</button>
+      </div>
+    </div>
+  `;
+}
+
 function ReportModal() {
   return `
     <div class="modal-backdrop" data-modal>
@@ -335,9 +347,12 @@ function bindDetailActions(listing) {
             message: form.get("message"),
           }),
         });
-        document.querySelector(".modal-panel").innerHTML = "<p>Votre demande de visite a été envoyée.</p>";
+        document.querySelector(".modal-panel").innerHTML = VisitRequestFeedback("Votre demande de visite a été envoyée.");
+        document.querySelectorAll("[data-close-modal]").forEach((button) => button.addEventListener("click", closeModal));
+        window.setTimeout(closeModal, 1800);
       } catch (error) {
-        document.querySelector(".modal-panel").innerHTML = `<p>${error instanceof Error ? error.message : "Envoi impossible."}</p>`;
+        document.querySelector(".modal-panel").innerHTML = VisitRequestFeedback(error instanceof Error ? error.message : "Envoi impossible.", true);
+        document.querySelectorAll("[data-close-modal]").forEach((button) => button.addEventListener("click", closeModal));
       }
     });
   });
