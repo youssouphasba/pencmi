@@ -106,7 +106,7 @@ function TripDetailPage() {
         ${typeof SafetyTipsBox === "function" ? SafetyTipsBox("trips") : ""}
         <section class="trip-detail-card"><h2>Description</h2></section>
       </div>
-      <aside class="trip-detail-card"><h2>Profil conducteur ou transporteur</h2><p>Nom, type, photo, badge vérifié, note future, nombre de trajets et délai moyen de réponse seront affichés ici.</p></aside>
+      <aside class="trip-detail-card"><h2>Profil conducteur ou transporteur</h2></aside>
     </div>
     ${TripReservationRequestModal()}
     ${TripContactModal()}

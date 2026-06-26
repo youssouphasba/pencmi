@@ -272,7 +272,7 @@ function LocationSection(listing) {
     <section class="detail-card">
       <h2>Localisation</h2>
       ${locationItems.length ? `<div class="detail-grid">${locationItems.map(([label, value]) => `<div class="detail-item"><span>${label}</span><strong>${value}</strong></div>`).join("")}</div>` : "<p>Aucune localisation détaillée disponible pour le moment.</p>"}
-      <div class="map-placeholder">Carte bientôt disponible</div>
+      <div class="map-placeholder"></div>
     </section>
   `;
 }

@@ -602,7 +602,7 @@ function RealEstateResultsLayout() {
       ${RealEstateFilters()}
       <div class="results-list">${realEstateListings.length ? listings : RealEstateEmptyState()}</div>
       <aside class="map-panel" id="map-panel" aria-label="Carte des biens">
-        <div class="map-placeholder">Zone carte prévue pour afficher la localisation des biens plus tard.</div>
+        <div class="map-placeholder"></div>
       </aside>
     </div>
   `;

@@ -43,7 +43,7 @@ const editableContentDefaults = {
     publicHeaderSubtitle: "Aide et informations",
     adminHeaderSubtitle: "Contenus admin",
     tableOfContents: "Sommaire",
-    emptyContent: "Contenu en cours de préparation.",
+    emptyContent: "",
     adminReady: "Interface admin prête pour une future gestion persistante.",
     contentUpdated: "Le contenu a été mis à jour.",
     messagePrepared: "Votre message a été préparé.",
@@ -52,8 +52,8 @@ const editableContentDefaults = {
     noSupportTicketLoaded: "Aucun ticket support n’est chargé pour le moment.",
     noAdminSupportTicketLoaded: "Aucun ticket support chargé pour le moment.",
     dashboardEmptyMetrics: "Éléments : 0. Publiés : 0. Brouillons : 0. Dernière modification : non disponible.",
-    questionsManagedByAdmin: "Questions administrables depuis le back-office.",
-    legalDraftNotice: "Cette page sera complétée avant la mise en production."
+    questionsManagedByAdmin: "Des réponses seront bientôt disponibles dans cette rubrique.",
+    legalDraftNotice: ""
   },
   actions: {
     add: "Ajouter",
@@ -135,10 +135,10 @@ const editableContentDefaults = {
     },
     "mentions-legales": {
       title: "Mentions légales",
-      subtitle: "Informations administrables relatives au site Péncmi.",
+      subtitle: "Informations relatives au site Péncmi.",
       adminUrl: "/admin/content/pages/mentions-legales/edit",
       sections: ["Éditeur du site", "Nom commercial", "Responsable de publication", "Contact", "Hébergement", "Propriété intellectuelle", "Signalement de contenu", "Données personnelles"],
-      warning: "Informations légales à compléter par l’administrateur."
+      warning: "Les informations légales complètes seront publiées avant la mise en production."
     },
     securite: {
       title: "Conseils de sécurité",
@@ -336,7 +336,7 @@ function LegalTableOfContents(sections = []) {
 function PublicDynamicPage(config) {
   const warning = config.warning || editableContentDefaults.labels.legalDraftNotice;
   const action = config.action ? `<div class="content-actions"><a class="btn btn-primary" href="${contentRouteHref(config.action.href)}">${config.action.label}</a></div>` : "";
-  return `<div class="content-section-list"><div class="content-warning">${warning}</div>${config.sections.map((section) => `<section class="content-card" id="${slugId(section)}"><h2>${section}</h2><p>${editableContentDefaults.labels.emptyContent}</p></section>`).join("")}${action}</div>`;
+  return `<div class="content-section-list">${warning ? `<div class="content-warning">${warning}</div>` : ""}${config.sections.map((section) => `<section class="content-card" id="${slugId(section)}"><h2>${section}</h2>${editableContentDefaults.labels.emptyContent ? `<p>${editableContentDefaults.labels.emptyContent}</p>` : ""}</section>`).join("")}${action}</div>`;
 }
 
 function TermsPage() {

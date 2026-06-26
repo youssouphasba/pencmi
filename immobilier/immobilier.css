@@ -715,6 +715,18 @@ h1 {
     padding-inline: 14px;
   }
 
+  .quick-tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    overflow: visible;
+  }
+
+  .quick-tabs a {
+    width: 100%;
+    min-width: 0;
+    text-align: center;
+  }
+
   .results-toolbar {
     align-items: flex-start;
     flex-direction: column;
@@ -722,10 +734,14 @@ h1 {
 
   .results-actions {
     width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
   }
 
   .results-actions .btn {
-    flex: 1;
+    width: 100%;
+    min-width: 0;
   }
 
   .advertiser-benefits {

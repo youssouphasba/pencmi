@@ -280,11 +280,27 @@
     min-height: 220px;
   }
 
+  .gallery-thumbnails {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: visible;
+  }
+
+  .gallery-thumb {
+    width: 100%;
+  }
+
   .detail-grid {
     grid-template-columns: 1fr;
   }
 
   .mobile-contact-bar {
     display: grid;
+  }
+}
+
+@media (max-width: 440px) {
+  .gallery-thumbnails {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

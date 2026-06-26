@@ -56,7 +56,7 @@ const editableGeoDefaults = {
     "/conseils-anti-arnaque": {
       module: "security",
       title: "Conseils anti-arnaque",
-      answer: "Péncmi prévoit des contenus de prévention pour aider les utilisateurs à repérer les annonces suspectes, les demandes de paiement douteuses et les comportements abusifs. Ces contenus sont administrables et doivent rester factuels.",
+      answer: "Péncmi propose des contenus de prévention pour aider les utilisateurs à repérer les annonces suspectes, les demandes de paiement douteuses et les comportements abusifs.",
       links: ["/securite", "/signaler", "/aide"]
     },
     "/regles-publication": {
@@ -264,7 +264,7 @@ function GeoEntitySummary(entity = {}) {
 }
 
 function GeoGuidePage(guide = {}) {
-  return `<main class="geo-guide-main"><header class="geo-guide-header"><div><h1>${geoEscape(guide.title || "Guide Péncmi")}</h1><p>${geoEscape(guide.intro || "Ce guide est un contenu administrable. Il sera complété avec des informations validées.")}</p></div></header>${(guide.sections || []).length ? guide.sections.map((section) => `<section class="geo-guide-card"><h2>${geoEscape(section.title)}</h2><p>${geoEscape(section.body)}</p></section>`).join("") : GeoEmptyState("Guide en cours de préparation.")}${GeoRelatedQuestions()}</main>`;
+  return `<main class="geo-guide-main"><header class="geo-guide-header"><div><h1>${geoEscape(guide.title || "Guide Péncmi")}</h1><p>${geoEscape(guide.intro || "")}</p></div></header>${(guide.sections || []).length ? guide.sections.map((section) => `<section class="geo-guide-card"><h2>${geoEscape(section.title)}</h2><p>${geoEscape(section.body)}</p></section>`).join("") : GeoEmptyState("")}${GeoRelatedQuestions()}</main>`;
 }
 
 function GeoRelatedQuestions(questions = geoQuestions) {
@@ -275,7 +275,7 @@ function GeoInternalLinks(links = []) {
   return links.length ? `<div class="geo-link-list">${links.map((link) => `<a href="${geoRouteHref(link.href)}">${geoEscape(link.label)}</a>`).join("")}</div>` : "";
 }
 
-function GeoComparisonBlock({ title = "Comparaison", body = "Contenu comparatif administrable à compléter." } = {}) {
+function GeoComparisonBlock({ title = "Comparaison", body = "" } = {}) {
   return `<section class="geo-comparison-block"><h2>${geoEscape(title)}</h2><p>${geoEscape(body)}</p></section>`;
 }
 
@@ -299,8 +299,8 @@ function GeoAuditIssueList(issues = detectGeoIssues()) {
   return issues.length ? `<section class="geo-admin-card"><h2>Problèmes GEO</h2>${issues.map((issue) => `<article><strong>${geoEscape(issue.issueType)}</strong><p>${geoEscape(issue.message)}</p></article>`).join("")}</section>` : GeoEmptyState("Aucun problème GEO détecté pour le moment.");
 }
 
-function GeoEmptyState(title = editableGeoDefaults.adminEmpty) {
-  return `<section class="geo-empty-state"><h2>${geoEscape(title)}</h2><p>Les données réelles et contenus publiés alimenteront cette section plus tard.</p></section>`;
+function GeoEmptyState(title = "") {
+  return `<section class="geo-empty-state">${title ? `<h2>${geoEscape(title)}</h2>` : ""}</section>`;
 }
 
 function adminGeoRouteHref(path) {
@@ -374,7 +374,7 @@ function renderGeoGuide() {
   if (!root) return;
   const title = document.body.dataset.geoGuideTitle || "Guide Péncmi";
   const module = document.body.dataset.geoGuideModule || "platform";
-  root.innerHTML = GeoGuidePage({ title, module, intro: "Cette page guide est administrable. Elle sera enrichie avec des contenus validés depuis le back-office GEO.", sections: [] });
+  root.innerHTML = GeoGuidePage({ title, module, intro: "", sections: [] });
 }
 
 function injectGeoAnswerBlock() {

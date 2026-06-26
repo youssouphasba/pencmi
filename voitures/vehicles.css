@@ -428,6 +428,18 @@
     padding-inline: 14px;
   }
 
+  .vehicle-quick-tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    overflow: visible;
+  }
+
+  .vehicle-quick-tabs a {
+    width: 100%;
+    min-width: 0;
+    text-align: center;
+  }
+
   .vehicle-search-card,
   .vehicle-form-grid,
   .vehicle-kpi-grid {

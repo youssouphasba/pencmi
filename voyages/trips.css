@@ -426,6 +426,18 @@
     padding-inline: 14px;
   }
 
+  .trip-quick-tabs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    overflow: visible;
+  }
+
+  .trip-quick-tabs a {
+    width: 100%;
+    min-width: 0;
+    text-align: center;
+  }
+
   .trip-search-card,
   .trip-form-grid,
   .trip-kpi-grid {
