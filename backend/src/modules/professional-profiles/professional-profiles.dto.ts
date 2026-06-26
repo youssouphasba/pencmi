@@ -1,4 +1,4 @@
-import { IsEmail, IsIn, IsOptional, IsString, IsUrl } from 'class-validator';
+import { IsDateString, IsEmail, IsIn, IsOptional, IsString, IsUrl } from 'class-validator';
 
 const professionalTypes = [
   'real_estate_agency',
@@ -30,6 +30,14 @@ export class UpsertProfessionalProfileDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsDateString()
+  openingDate?: string;
+
+  @IsOptional()
+  @IsString()
+  openingHours?: string;
 
   @IsOptional()
   @IsString()

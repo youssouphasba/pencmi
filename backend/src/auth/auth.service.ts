@@ -89,6 +89,7 @@ export class AuthService {
         email: true,
         phone: true,
         city: true,
+        avatarUrl: true,
         emailVerified: true,
         phoneVerified: true,
         identityVerified: true,

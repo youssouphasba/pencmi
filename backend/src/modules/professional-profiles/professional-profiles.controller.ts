@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Put } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Delete, Get, Post, Put, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
 import { UpsertProfessionalProfileDto } from './professional-profiles.dto';
@@ -19,5 +20,23 @@ export class ProfessionalProfilesController {
   @Put('me')
   upsertMine(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpsertProfessionalProfileDto) {
     return this.service.upsertMine(user.id, dto);
+  }
+
+  @Post('me/logo')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadLogo(
+    @CurrentUser() user: AuthenticatedUser,
+    @UploadedFile() file?: { buffer: Buffer; mimetype: string; originalname: string; size: number },
+  ) {
+    if (!file) {
+      throw new BadRequestException('Aucun fichier image n’a été envoyé.');
+    }
+    return this.service.uploadLogo(user.id, file);
+  }
+
+  @Delete('me/logo')
+  removeLogo(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.removeLogo(user.id);
   }
 }

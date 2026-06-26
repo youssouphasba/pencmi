@@ -231,6 +231,8 @@ model ProfessionalProfile {
   address           String?
   description       String?
   logoUrl           String?
+  openingDate       DateTime?
+  openingHours      String?
   professionalPhone String?
   professionalEmail String?
   whatsappNumber    String?

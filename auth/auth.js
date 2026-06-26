@@ -1,7 +1,11 @@
 const authState = {
   currentUser: null,
-  professionalProfile: null
+  professionalProfile: null,
 };
+
+const ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
+const REFRESH_TOKEN_STORAGE_KEY = "pencmi_refresh_token";
+const API_BASE_STORAGE_KEY = "pencmi_api_base_url";
 
 const authRoutes = {
   home: "/",
@@ -23,7 +27,7 @@ const authRoutes = {
   vehiclesDashboard: "/dashboard/voitures",
   tripsDashboard: "/dashboard/voyages",
   publish: "/publier",
-  admin: "/admin"
+  admin: "/admin",
 };
 
 const roleLabels = {
@@ -35,7 +39,7 @@ const roleLabels = {
   vehicle_dealer: "Garage automobile",
   chauffeur: "Chauffeur professionnel",
   transport_provider: "Transporteur",
-  admin: "Admin Péncmi"
+  admin: "Admin Péncmi",
 };
 
 const permissionsByRole = {
@@ -47,13 +51,13 @@ const permissionsByRole = {
   vehicle_dealer: ["publish_vehicle", "manage_vehicles", "manage_messages", "manage_contacts", "manage_notifications"],
   chauffeur: ["publish_vehicle", "manage_vehicles", "manage_messages", "manage_contacts", "manage_notifications"],
   transport_provider: ["publish_trip", "manage_trips", "manage_messages", "manage_contacts", "manage_notifications"],
-  admin: ["publish_real_estate", "publish_hotel", "publish_vehicle", "publish_trip", "manage_real_estate", "manage_hotels", "manage_vehicles", "manage_trips", "manage_messages", "manage_contacts", "manage_notifications", "access_admin"]
+  admin: ["publish_real_estate", "publish_hotel", "publish_vehicle", "publish_trip", "manage_real_estate", "manage_hotels", "manage_vehicles", "manage_trips", "manage_messages", "manage_contacts", "manage_notifications", "access_admin"],
 };
 
 const protectedRoutes = {
   client: ["/compte", "/compte/profil", "/compte/messages", "/compte/favoris", "/compte/alertes", "/compte/notifications", "/compte/reservations", "/compte/visites", "/compte/locations", "/compte/chauffeur", "/compte/trajets", "/compte/parametres", "/compte/signalements"],
   advertiser: ["/dashboard", "/dashboard/immobilier", "/dashboard/hotels", "/dashboard/voitures", "/dashboard/voyages", "/dashboard/reports"],
-  admin: ["/admin"]
+  admin: ["/admin"],
 };
 
 function authRouteHref(path) {
@@ -81,7 +85,7 @@ function authRouteHref(path) {
     "/dashboard/voitures": `${prefix}dashboard/voitures/`,
     "/dashboard/voyages": `${prefix}dashboard/voyages/`,
     "/publier": `${prefix}publier/`,
-    "/admin": `${prefix}admin/`
+    "/admin": `${prefix}admin/`,
   };
 
   if (path.startsWith("/login?")) return `${prefix}login/${path.slice("/login".length)}`;
@@ -107,7 +111,7 @@ function getDashboardRouteByRole(role) {
     vehicle_dealer: authRoutes.vehiclesDashboard,
     chauffeur: authRoutes.vehiclesDashboard,
     transport_provider: authRoutes.tripsDashboard,
-    admin: authRoutes.admin
+    admin: authRoutes.admin,
   };
 
   return routesByRole[role] || authRoutes.account;
@@ -121,25 +125,6 @@ function hasPermission(role, permission) {
   return getPermissionsForRole(role).includes(permission);
 }
 
-function getVisibleDashboardModules(role = "client") {
-  const modules = [
-    { module: "real_estate", label: "Immobilier", href: authRoutes.realEstateDashboard, permission: "manage_real_estate" },
-    { module: "hotels", label: "Hôtels & Auberges", href: authRoutes.hotelsDashboard, permission: "manage_hotels" },
-    { module: "vehicles", label: "Voitures", href: authRoutes.vehiclesDashboard, permission: "manage_vehicles" },
-    { module: "trips", label: "Voyages interurbains", href: authRoutes.tripsDashboard, permission: "manage_trips" }
-  ];
-
-  if (role === "advertiser_individual") {
-    return modules.filter((item) => ["real_estate", "vehicles", "trips"].includes(item.module));
-  }
-
-  if (role === "admin") {
-    return modules;
-  }
-
-  return modules.filter((item) => hasPermission(role, item.permission));
-}
-
 function buildLoginRedirect(path = window.location.pathname) {
   return `${authRoutes.login}?next=${encodeURIComponent(path)}`;
 }
@@ -151,20 +136,14 @@ function getRouteAccessType(path = window.location.pathname) {
   return "public";
 }
 
-function isRoleAllowedForRoute(role, path = window.location.pathname) {
-  const accessType = getRouteAccessType(path);
-  if (accessType === "public") return true;
-  if (accessType === "client") return role === "client" || role === "admin";
-  if (accessType === "advertiser") return role !== "client";
-  if (accessType === "admin") return role === "admin";
-  return false;
-}
-
 function canAccessRoute(user = authState.currentUser, path = window.location.pathname) {
   const accessType = getRouteAccessType(path);
   if (accessType === "public") return true;
   if (!user) return false;
-  return isRoleAllowedForRoute(user.role, path);
+  if (accessType === "client") return user.role === "client" || user.role === "admin";
+  if (accessType === "advertiser") return user.role !== "client";
+  if (accessType === "admin") return user.role === "admin";
+  return false;
 }
 
 function validateEmail(value) {
@@ -177,6 +156,159 @@ function validatePhoneNumber(value) {
 
 function validatePassword(value) {
   return String(value || "").length >= 8;
+}
+
+function getApiBaseUrl() {
+  const configuredBaseUrl =
+    document.body.dataset.apiBaseUrl ||
+    window.PencmiApiBaseUrl ||
+    window.localStorage.getItem(API_BASE_STORAGE_KEY) ||
+    "";
+
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/+$/, "");
+  }
+
+  if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+    return `${window.location.origin}/api/v1`;
+  }
+
+  return "";
+}
+
+function getStoredAccessToken() {
+  return window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) || "";
+}
+
+function setStoredTokens(tokens) {
+  if (tokens?.accessToken) {
+    window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, tokens.accessToken);
+  }
+  if (tokens?.refreshToken) {
+    window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, tokens.refreshToken);
+  }
+}
+
+function clearStoredTokens() {
+  window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+}
+
+async function apiRequest(path, options = {}) {
+  const baseUrl = getApiBaseUrl();
+  if (!baseUrl) {
+    throw new Error("API non configurée.");
+  }
+
+  const headers = new Headers(options.headers || {});
+  const token = getStoredAccessToken();
+  if (token && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const isFormData = options.body instanceof FormData;
+  if (!isFormData && options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
+    headers,
+  });
+
+  const isJson = response.headers.get("content-type")?.includes("application/json");
+  const payload = isJson ? await response.json() : null;
+  if (!response.ok) {
+    const message = payload?.error?.message || payload?.message || "Une erreur est survenue.";
+    throw new Error(Array.isArray(message) ? message.join(", ") : message);
+  }
+
+  return payload?.data ?? payload;
+}
+
+function showMessage(element, message, visible = true) {
+  if (!element) return;
+  if (message) {
+    element.textContent = message;
+  }
+  element.classList.toggle("is-visible", visible);
+}
+
+function getProfessionalTypeOptions() {
+  return [
+    ["real_estate_agency", "Agence immobilière"],
+    ["hotel", "Hôtel"],
+    ["auberge", "Auberge"],
+    ["residence", "Résidence"],
+    ["vehicle_renter", "Loueur de voitures"],
+    ["vehicle_dealer", "Garage automobile"],
+    ["chauffeur", "Chauffeur professionnel"],
+    ["transport_provider", "Transporteur"],
+    ["other", "Autre"],
+  ];
+}
+
+function getRoleOptions() {
+  return [
+    ["client", "Client"],
+    ["advertiser_individual", "Annonceur particulier"],
+    ["real_estate_agency", "Agence immobilière"],
+    ["hotel_manager", "Hôtel / Auberge / Résidence"],
+    ["vehicle_renter", "Loueur de voitures"],
+    ["vehicle_dealer", "Garage automobile"],
+    ["chauffeur", "Chauffeur professionnel"],
+    ["transport_provider", "Transporteur"],
+    ["admin", "Admin Péncmi"],
+  ];
+}
+
+function getProfessionalTypeForRole(role) {
+  const mapping = {
+    real_estate_agency: "real_estate_agency",
+    hotel_manager: "hotel",
+    vehicle_renter: "vehicle_renter",
+    vehicle_dealer: "vehicle_dealer",
+    chauffeur: "chauffeur",
+    transport_provider: "transport_provider",
+  };
+
+  return mapping[role] || "other";
+}
+
+function getRoleForProfessionalType(type) {
+  const mapping = {
+    real_estate_agency: "real_estate_agency",
+    hotel: "hotel_manager",
+    auberge: "hotel_manager",
+    residence: "hotel_manager",
+    vehicle_renter: "vehicle_renter",
+    vehicle_dealer: "vehicle_dealer",
+    chauffeur: "chauffeur",
+    transport_provider: "transport_provider",
+    other: "advertiser_individual",
+  };
+
+  return mapping[type] || "advertiser_individual";
+}
+
+async function loadCurrentSession() {
+  const token = getStoredAccessToken();
+  if (!token || !getApiBaseUrl()) {
+    return;
+  }
+
+  try {
+    authState.currentUser = await apiRequest("/auth/me");
+    if (authState.currentUser?.role !== "client" && authState.currentUser?.role !== "admin") {
+      authState.professionalProfile = await apiRequest("/professional-profiles/me").catch(() => null);
+    } else {
+      authState.professionalProfile = null;
+    }
+  } catch {
+    clearStoredTokens();
+    authState.currentUser = null;
+    authState.professionalProfile = null;
+  }
 }
 
 function AuthLayout(content, side = "") {
@@ -225,6 +357,7 @@ function RegisterPage() {
     <form class="auth-form" data-register-form>
       ${RoleSelector()}
       <div data-register-fields>${RegisterClientForm()}</div>
+      <div class="auth-error" data-auth-error></div>
       <div class="auth-message" data-auth-success>Votre compte a été créé avec succès.</div>
       <div class="auth-actions"><button class="btn btn-primary" type="submit">Créer mon compte</button></div>
     </form>
@@ -271,12 +404,12 @@ function RoleSelector() {
 function RegisterClientForm() {
   return `
     <section class="register-step">
-      <label class="auth-field"><span>Prénom</span><input type="text" autocomplete="given-name"></label>
-      <label class="auth-field"><span>Nom</span><input type="text" autocomplete="family-name"></label>
-      <label class="auth-field"><span>Téléphone</span><input type="tel" autocomplete="tel"></label>
-      <label class="auth-field"><span>Email</span><input type="email" autocomplete="email"></label>
-      <label class="auth-field"><span>Mot de passe</span><input type="password" autocomplete="new-password"></label>
-      <label class="auth-field"><span>Confirmation mot de passe</span><input type="password" autocomplete="new-password"></label>
+      <label class="auth-field"><span>Prénom</span><input type="text" name="clientFirstName" autocomplete="given-name"></label>
+      <label class="auth-field"><span>Nom</span><input type="text" name="clientLastName" autocomplete="family-name"></label>
+      <label class="auth-field"><span>Téléphone</span><input type="tel" name="clientPhone" autocomplete="tel"></label>
+      <label class="auth-field"><span>Email</span><input type="email" name="clientEmail" autocomplete="email"></label>
+      <label class="auth-field"><span>Mot de passe</span><input type="password" name="clientPassword" autocomplete="new-password"></label>
+      <label class="auth-field"><span>Confirmation mot de passe</span><input type="password" name="clientPasswordConfirmation" autocomplete="new-password"></label>
     </section>
   `;
 }
@@ -284,13 +417,13 @@ function RegisterClientForm() {
 function RegisterAdvertiserForm() {
   return `
     <section class="register-step">
-      <label class="auth-field"><span>Prénom</span><input type="text" autocomplete="given-name"></label>
-      <label class="auth-field"><span>Nom</span><input type="text" autocomplete="family-name"></label>
-      <label class="auth-field"><span>Téléphone</span><input type="tel" autocomplete="tel"></label>
-      <label class="auth-field"><span>Email</span><input type="email" autocomplete="email"></label>
-      <label class="auth-field"><span>Type d’annonce prévue</span><select><option>Immobilier</option><option>Voiture</option><option>Voyage</option></select></label>
-      <label class="auth-field"><span>Mot de passe</span><input type="password" autocomplete="new-password"></label>
-      <label class="auth-field"><span>Confirmation mot de passe</span><input type="password" autocomplete="new-password"></label>
+      <label class="auth-field"><span>Prénom</span><input type="text" name="advertiserFirstName" autocomplete="given-name"></label>
+      <label class="auth-field"><span>Nom</span><input type="text" name="advertiserLastName" autocomplete="family-name"></label>
+      <label class="auth-field"><span>Téléphone</span><input type="tel" name="advertiserPhone" autocomplete="tel"></label>
+      <label class="auth-field"><span>Email</span><input type="email" name="advertiserEmail" autocomplete="email"></label>
+      <label class="auth-field"><span>Type d’annonce prévue</span><select name="plannedListingType"><option>Immobilier</option><option>Voiture</option><option>Voyage</option></select></label>
+      <label class="auth-field"><span>Mot de passe</span><input type="password" name="advertiserPassword" autocomplete="new-password"></label>
+      <label class="auth-field"><span>Confirmation mot de passe</span><input type="password" name="advertiserPasswordConfirmation" autocomplete="new-password"></label>
     </section>
   `;
 }
@@ -298,29 +431,17 @@ function RegisterAdvertiserForm() {
 function RegisterProfessionalForm() {
   return `
     <section class="register-step">
-      <label class="auth-field"><span>Nom de l’entreprise</span><input type="text" autocomplete="organization"></label>
-      <label class="auth-field"><span>Type professionnel</span><select><option>Agence immobilière</option><option>Hôtel / Auberge / Résidence</option><option>Loueur de voitures</option><option>Garage automobile</option><option>Chauffeur professionnel</option><option>Transporteur</option><option>Autre</option></select></label>
-      <label class="auth-field"><span>Prénom du responsable</span><input type="text" autocomplete="given-name"></label>
-      <label class="auth-field"><span>Nom du responsable</span><input type="text" autocomplete="family-name"></label>
-      <label class="auth-field"><span>Téléphone</span><input type="tel" autocomplete="tel"></label>
-      <label class="auth-field"><span>Email</span><input type="email" autocomplete="email"></label>
-      <label class="auth-field"><span>Ville</span><input type="text" autocomplete="address-level2"></label>
-      <label class="auth-field"><span>Mot de passe</span><input type="password" autocomplete="new-password"></label>
-      <label class="auth-field"><span>Confirmation mot de passe</span><input type="password" autocomplete="new-password"></label>
+      <label class="auth-field"><span>Nom de l’entreprise</span><input type="text" name="businessName" autocomplete="organization"></label>
+      <label class="auth-field"><span>Type professionnel</span><select name="professionalType">${getProfessionalTypeOptions().map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label>
+      <label class="auth-field"><span>Prénom du responsable</span><input type="text" name="professionalOwnerFirstName" autocomplete="given-name"></label>
+      <label class="auth-field"><span>Nom du responsable</span><input type="text" name="professionalOwnerLastName" autocomplete="family-name"></label>
+      <label class="auth-field"><span>Téléphone</span><input type="tel" name="professionalPhone" autocomplete="tel"></label>
+      <label class="auth-field"><span>Email</span><input type="email" name="professionalEmail" autocomplete="email"></label>
+      <label class="auth-field"><span>Ville</span><input type="text" name="professionalCity" autocomplete="address-level2"></label>
+      <label class="auth-field"><span>Mot de passe</span><input type="password" name="professionalPassword" autocomplete="new-password"></label>
+      <label class="auth-field"><span>Confirmation mot de passe</span><input type="password" name="professionalPasswordConfirmation" autocomplete="new-password"></label>
     </section>
   `;
-}
-
-function ProtectedRoute(content, allowedRoles = []) {
-  if (!authState.currentUser) {
-    return UnauthorizedState("Connexion requise", "Connectez-vous pour accéder à cette page.", buildLoginRedirect(window.location.pathname));
-  }
-
-  if (allowedRoles.length && !allowedRoles.includes(authState.currentUser.role)) {
-    return UnauthorizedState("Accès non autorisé", "Votre rôle ne permet pas d’accéder à cette page.", authRoutes.home);
-  }
-
-  return content;
 }
 
 function UnauthorizedState(title = "Accès non autorisé", message = "Votre rôle ne permet pas d’accéder à cette page.", href = authRoutes.home) {
@@ -339,13 +460,13 @@ function AccountLayout(content, currentPage = "overview", mode = "client") {
         ["Tableau de bord", authRoutes.dashboard, "dashboard"],
         ["Profil", authRoutes.dashboardProfile, "profile"],
         ["Paramètres", authRoutes.dashboardSettings, "settings"],
-        ["Notifications", authRoutes.dashboardNotifications, "notifications"]
+        ["Notifications", authRoutes.dashboardNotifications, "notifications"],
       ]
     : [
         ["Mon compte", authRoutes.account, "overview"],
         ["Profil", authRoutes.accountProfile, "profile"],
         ["Paramètres", authRoutes.accountSettings, "settings"],
-        ["Notifications", authRoutes.accountNotifications, "notifications"]
+        ["Notifications", authRoutes.accountNotifications, "notifications"],
       ];
 
   return `
@@ -366,7 +487,7 @@ function AccountHomePage() {
     <section class="account-card">
       <h1>Mon compte</h1>
       <p>Gérez vos favoris, alertes, messages, demandes et notifications depuis votre espace client.</p>
-      ${RoleBadge("Client")}
+      ${RoleBadge(authState.currentUser ? roleLabels[authState.currentUser.role] : "Client")}
     </section>
     <section class="account-empty-state">
       <h2>Aucune activité pour le moment.</h2>
@@ -381,7 +502,7 @@ function DashboardEntryPage() {
     ["Hôtels & Auberges", "Gérez vos hébergements, disponibilités et réservations.", authRoutes.hotelsDashboard],
     ["Voitures", "Gérez vos véhicules, messages, contacts et performances.", authRoutes.vehiclesDashboard],
     ["Voyages interurbains", "Gérez vos trajets, demandes de place et messages.", authRoutes.tripsDashboard],
-    ["Vérification", "Suivez vos documents, badges et score de confiance.", authRoutes.dashboardVerification]
+    ["Vérification", "Suivez vos documents, badges et score de confiance.", authRoutes.dashboardVerification],
   ];
 
   return AccountLayout(`
@@ -399,22 +520,29 @@ function DashboardEntryPage() {
   `, "dashboard", "dashboard");
 }
 
+function shouldShowProfessionalProfile(mode) {
+  if (mode === "dashboard") return true;
+  if (!authState.currentUser) return false;
+  return authState.currentUser.role !== "client" && authState.currentUser.role !== "admin";
+}
+
 function AccountProfilePage(mode = "client") {
   return AccountLayout(`
     <section class="account-card">
       <h1>Profil utilisateur</h1>
-      <form class="account-form" data-success-form>
+      <form class="account-form" data-profile-form data-profile-mode="${mode}">
         <div class="account-grid">
-          <label class="auth-field"><span>Prénom</span><input type="text" autocomplete="given-name"></label>
-          <label class="auth-field"><span>Nom</span><input type="text" autocomplete="family-name"></label>
-          <label class="auth-field"><span>Téléphone</span><input type="tel" autocomplete="tel"></label>
-          <label class="auth-field"><span>Email</span><input type="email" autocomplete="email"></label>
-          <label class="auth-field"><span>Photo de profil</span><input type="file" accept="image/*"></label>
-          <label class="auth-field"><span>Ville</span><input type="text" autocomplete="address-level2"></label>
-          <label class="auth-field"><span>Langue préférée</span><select><option>Français</option><option>Wolof</option><option>Anglais</option></select></label>
-          <label class="auth-field"><span>Type de compte</span><select><option>Client</option><option>Annonceur particulier</option><option>Professionnel</option></select></label>
+          <label class="auth-field"><span>Prénom</span><input type="text" name="firstName" autocomplete="given-name"></label>
+          <label class="auth-field"><span>Nom</span><input type="text" name="lastName" autocomplete="family-name"></label>
+          <label class="auth-field"><span>Téléphone</span><input type="tel" name="phone" autocomplete="tel"></label>
+          <label class="auth-field"><span>Email</span><input type="email" name="email" autocomplete="email"></label>
+          <label class="auth-field"><span>Photo de profil</span><input type="file" name="avatarFile" accept="image/*"></label>
+          <label class="auth-field"><span>Ville</span><input type="text" name="city" autocomplete="address-level2"></label>
+          <label class="auth-field"><span>Langue préférée</span><select name="preferredLanguage"><option>Français</option><option>Wolof</option><option>Anglais</option></select></label>
+          <label class="auth-field"><span>Type de compte</span><select name="accountRole" disabled>${getRoleOptions().map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label>
         </div>
-        ${ProfessionalProfileForm()}
+        ${shouldShowProfessionalProfile(mode) ? ProfessionalProfileForm() : ""}
+        <div class="auth-error" data-auth-error></div>
         <div class="auth-message" data-auth-success>Votre profil a été mis à jour.</div>
         <div class="account-actions"><button class="btn btn-primary" type="submit">Enregistrer les modifications</button></div>
       </form>
@@ -424,19 +552,21 @@ function AccountProfilePage(mode = "client") {
 
 function ProfessionalProfileForm() {
   return `
-    <section class="settings-section">
+    <section class="settings-section" data-professional-profile-section>
       <h2>Profil professionnel</h2>
       <div class="account-grid">
-        <label class="auth-field"><span>Nom de l’entreprise</span><input type="text" autocomplete="organization"></label>
-        <label class="auth-field"><span>Type professionnel</span><select><option>Agence immobilière</option><option>Hôtel / Auberge / Résidence</option><option>Loueur de voitures</option><option>Garage automobile</option><option>Chauffeur professionnel</option><option>Transporteur</option><option>Autre</option></select></label>
-        <label class="auth-field"><span>Adresse</span><input type="text" autocomplete="street-address"></label>
-        <label class="auth-field"><span>Ville</span><input type="text" autocomplete="address-level2"></label>
-        <label class="auth-field"><span>Logo</span><input type="file" accept="image/*"></label>
-        <label class="auth-field"><span>Numéro de téléphone professionnel</span><input type="tel" autocomplete="tel"></label>
-        <label class="auth-field"><span>Email professionnel</span><input type="email" autocomplete="email"></label>
-        <label class="auth-field"><span>WhatsApp</span><input type="tel"></label>
-        <label class="auth-field"><span>Site web</span><input type="url"></label>
-        <label class="auth-field"><span>Description</span><textarea></textarea></label>
+        <label class="auth-field"><span>Nom de l’entreprise</span><input type="text" name="businessName" autocomplete="organization"></label>
+        <label class="auth-field"><span>Type professionnel</span><select name="profileProfessionalType">${getProfessionalTypeOptions().map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label>
+        <label class="auth-field"><span>Adresse</span><input type="text" name="businessAddress" autocomplete="street-address"></label>
+        <label class="auth-field"><span>Ville</span><input type="text" name="businessCity" autocomplete="address-level2"></label>
+        <label class="auth-field"><span>Logo</span><input type="file" name="logoFile" accept="image/*"></label>
+        <label class="auth-field"><span>Numéro de téléphone professionnel</span><input type="tel" name="professionalPhoneProfile" autocomplete="tel"></label>
+        <label class="auth-field"><span>Email professionnel</span><input type="email" name="professionalEmailProfile" autocomplete="email"></label>
+        <label class="auth-field"><span>WhatsApp</span><input type="tel" name="professionalWhatsapp"></label>
+        <label class="auth-field"><span>Site web</span><input type="url" name="professionalWebsite"></label>
+        <label class="auth-field"><span>Date d’ouverture</span><input type="date" name="openingDate"></label>
+        <label class="auth-field"><span>Horaires d’ouverture</span><input type="text" name="openingHours" placeholder="Lun-Sam 08:00 - 20:00"></label>
+        <label class="auth-field"><span>Description</span><textarea name="professionalDescription"></textarea></label>
       </div>
     </section>
   `;
@@ -487,27 +617,263 @@ function RoleBadge(label) {
   return `<span class="role-badge">${label}</span>`;
 }
 
-function bindAuthForms() {
-  document.querySelector("[data-login-form]")?.addEventListener("submit", (event) => {
+function collectRegisterPayload(form) {
+  const accountType = form.querySelector('input[name="accountType"]:checked')?.value || "client";
+
+  if (accountType === "client") {
+    return {
+      role: "client",
+      firstName: form.querySelector('[name="clientFirstName"]')?.value.trim(),
+      lastName: form.querySelector('[name="clientLastName"]')?.value.trim(),
+      phone: form.querySelector('[name="clientPhone"]')?.value.trim(),
+      email: form.querySelector('[name="clientEmail"]')?.value.trim(),
+      password: form.querySelector('[name="clientPassword"]')?.value || "",
+    };
+  }
+
+  if (accountType === "advertiser") {
+    return {
+      role: "advertiser_individual",
+      firstName: form.querySelector('[name="advertiserFirstName"]')?.value.trim(),
+      lastName: form.querySelector('[name="advertiserLastName"]')?.value.trim(),
+      phone: form.querySelector('[name="advertiserPhone"]')?.value.trim(),
+      email: form.querySelector('[name="advertiserEmail"]')?.value.trim(),
+      password: form.querySelector('[name="advertiserPassword"]')?.value || "",
+    };
+  }
+
+  const professionalType = form.querySelector('[name="professionalType"]')?.value || "other";
+  return {
+    role: getRoleForProfessionalType(professionalType),
+    firstName: form.querySelector('[name="professionalOwnerFirstName"]')?.value.trim(),
+    lastName: form.querySelector('[name="professionalOwnerLastName"]')?.value.trim(),
+    phone: form.querySelector('[name="professionalPhone"]')?.value.trim(),
+    email: form.querySelector('[name="professionalEmail"]')?.value.trim(),
+    password: form.querySelector('[name="professionalPassword"]')?.value || "",
+  };
+}
+
+function collectProfessionalRegisterProfilePayload(form) {
+  return {
+    businessName: form.querySelector('[name="businessName"]')?.value.trim(),
+    professionalType: form.querySelector('[name="professionalType"]')?.value || "other",
+    city: form.querySelector('[name="professionalCity"]')?.value.trim() || undefined,
+  };
+}
+
+function collectProfessionalProfilePayload(form) {
+  const businessName = form.querySelector('[name="businessName"]')?.value.trim();
+  if (!businessName) {
+    return null;
+  }
+
+  return {
+    businessName,
+    professionalType: form.querySelector('[name="profileProfessionalType"]')?.value || getProfessionalTypeForRole(authState.currentUser?.role),
+    address: form.querySelector('[name="businessAddress"]')?.value.trim() || undefined,
+    city: form.querySelector('[name="businessCity"]')?.value.trim() || undefined,
+    professionalPhone: form.querySelector('[name="professionalPhoneProfile"]')?.value.trim() || undefined,
+    professionalEmail: form.querySelector('[name="professionalEmailProfile"]')?.value.trim() || undefined,
+    whatsappNumber: form.querySelector('[name="professionalWhatsapp"]')?.value.trim() || undefined,
+    website: form.querySelector('[name="professionalWebsite"]')?.value.trim() || undefined,
+    description: form.querySelector('[name="professionalDescription"]')?.value.trim() || undefined,
+    openingDate: form.querySelector('[name="openingDate"]')?.value || undefined,
+    openingHours: form.querySelector('[name="openingHours"]')?.value.trim() || undefined,
+  };
+}
+
+function fillUserProfileForm(form, user) {
+  if (!form || !user) return;
+  const setValue = (name, value) => {
+    const field = form.querySelector(`[name="${name}"]`);
+    if (field) field.value = value || "";
+  };
+
+  setValue("firstName", user.firstName);
+  setValue("lastName", user.lastName);
+  setValue("phone", user.phone);
+  setValue("email", user.email);
+  setValue("city", user.city);
+  setValue("accountRole", user.role || "client");
+}
+
+function fillProfessionalProfileForm(form, profile) {
+  if (!form || !profile) return;
+  const setValue = (name, value) => {
+    const field = form.querySelector(`[name="${name}"]`);
+    if (field) field.value = value || "";
+  };
+
+  setValue("businessName", profile.businessName);
+  setValue("profileProfessionalType", profile.professionalType);
+  setValue("businessAddress", profile.address);
+  setValue("businessCity", profile.city);
+  setValue("professionalPhoneProfile", profile.professionalPhone);
+  setValue("professionalEmailProfile", profile.professionalEmail);
+  setValue("professionalWhatsapp", profile.whatsappNumber);
+  setValue("professionalWebsite", profile.website);
+  setValue("professionalDescription", profile.description);
+  setValue("openingDate", profile.openingDate ? String(profile.openingDate).slice(0, 10) : "");
+  setValue("openingHours", profile.openingHours);
+}
+
+async function uploadProfileAsset(path, input) {
+  if (!input?.files?.length) return;
+  const formData = new FormData();
+  formData.append("file", input.files[0]);
+  await apiRequest(path, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+async function bindProfileForm(form) {
+  const success = form.querySelector("[data-auth-success]");
+  const error = form.querySelector("[data-auth-error]");
+
+  fillUserProfileForm(form, authState.currentUser);
+  fillProfessionalProfileForm(form, authState.professionalProfile);
+
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const target = getRedirectAfterLogin("client", getNextParam());
-    window.location.href = authRouteHref(target);
+    showMessage(error, "", false);
+    showMessage(success, "", false);
+
+    if (!getApiBaseUrl() || !getStoredAccessToken()) {
+      showMessage(success, "Le formulaire de profil est prêt, mais l’API n’est pas encore connectée dans ce navigateur.");
+      return;
+    }
+
+    try {
+      const userPayload = {
+        firstName: form.querySelector('[name="firstName"]')?.value.trim() || undefined,
+        lastName: form.querySelector('[name="lastName"]')?.value.trim() || undefined,
+        phone: form.querySelector('[name="phone"]')?.value.trim() || undefined,
+        email: form.querySelector('[name="email"]')?.value.trim() || undefined,
+        city: form.querySelector('[name="city"]')?.value.trim() || undefined,
+      };
+
+      authState.currentUser = await apiRequest("/users/me", {
+        method: "PATCH",
+        body: JSON.stringify(userPayload),
+      });
+
+      if (shouldShowProfessionalProfile(form.dataset.profileMode)) {
+        const professionalPayload = collectProfessionalProfilePayload(form);
+        if (professionalPayload) {
+          authState.professionalProfile = await apiRequest("/professional-profiles/me", {
+            method: "PUT",
+            body: JSON.stringify(professionalPayload),
+          });
+        }
+      }
+
+      await uploadProfileAsset("/users/me/avatar", form.querySelector('[name="avatarFile"]'));
+      if (shouldShowProfessionalProfile(form.dataset.profileMode)) {
+        await uploadProfileAsset("/professional-profiles/me/logo", form.querySelector('[name="logoFile"]'));
+      }
+
+      await loadCurrentSession();
+      fillUserProfileForm(form, authState.currentUser);
+      fillProfessionalProfileForm(form, authState.professionalProfile);
+      showMessage(success, "Votre profil a été mis à jour.");
+    } catch (apiError) {
+      showMessage(error, apiError.message || "La mise à jour du profil a échoué.");
+    }
+  });
+}
+
+function bindAuthForms() {
+  const loginForm = document.querySelector("[data-login-form]");
+  loginForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const error = loginForm.querySelector("[data-auth-error]");
+    showMessage(error, "", false);
+
+    const identifier = loginForm.querySelector('[name="identifier"]')?.value.trim();
+    const password = loginForm.querySelector('[name="password"]')?.value || "";
+    if (!identifier || !password) {
+      showMessage(error, "Veuillez renseigner vos identifiants.");
+      return;
+    }
+
+    if (!getApiBaseUrl()) {
+      const target = getRedirectAfterLogin("client", getNextParam());
+      window.location.href = authRouteHref(target);
+      return;
+    }
+
+    try {
+      const tokens = await apiRequest("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ identifier, password }),
+      });
+      setStoredTokens(tokens);
+      await loadCurrentSession();
+      const target = getRedirectAfterLogin(authState.currentUser?.role || "client", getNextParam());
+      window.location.href = authRouteHref(target);
+    } catch (apiError) {
+      showMessage(error, apiError.message || "Identifiants incorrects. Veuillez réessayer.");
+    }
   });
 
-  document.querySelector("[data-register-form]")?.addEventListener("change", (event) => {
+  const registerForm = document.querySelector("[data-register-form]");
+  registerForm?.addEventListener("change", (event) => {
     if (event.target.name !== "accountType") return;
     const container = document.querySelector("[data-register-fields]");
     const forms = {
       client: RegisterClientForm,
       advertiser: RegisterAdvertiserForm,
-      professional: RegisterProfessionalForm
+      professional: RegisterProfessionalForm,
     };
     container.innerHTML = forms[event.target.value]();
   });
 
-  document.querySelector("[data-register-form]")?.addEventListener("submit", (event) => {
+  registerForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    document.querySelector("[data-auth-success]")?.classList.add("is-visible");
+    const success = registerForm.querySelector("[data-auth-success]");
+    const error = registerForm.querySelector("[data-auth-error]");
+    showMessage(error, "", false);
+    showMessage(success, "", false);
+
+    const payload = collectRegisterPayload(registerForm);
+    if (!validatePassword(payload.password)) {
+      showMessage(error, "Le mot de passe doit contenir au moins 8 caractères.");
+      return;
+    }
+
+    if (!getApiBaseUrl()) {
+      showMessage(success, "Le formulaire d’inscription est prêt. Configurez l’API pour activer l’inscription réelle.");
+      return;
+    }
+
+    try {
+      const tokens = await apiRequest("/auth/register", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setStoredTokens(tokens);
+      await loadCurrentSession();
+
+      const accountType = registerForm.querySelector('input[name="accountType"]:checked')?.value;
+      if (accountType === "professional") {
+        const professionalPayload = collectProfessionalRegisterProfilePayload(registerForm);
+        if (professionalPayload.businessName) {
+          authState.professionalProfile = await apiRequest("/professional-profiles/me", {
+            method: "PUT",
+            body: JSON.stringify(professionalPayload),
+          });
+        }
+      }
+
+      showMessage(success, "Votre compte a été créé avec succès.");
+      const target = getRedirectAfterLogin(authState.currentUser?.role || payload.role);
+      window.setTimeout(() => {
+        window.location.href = authRouteHref(target);
+      }, 400);
+    } catch (apiError) {
+      showMessage(error, apiError.message || "La création du compte a échoué.");
+    }
   });
 
   document.querySelectorAll("[data-success-form], [data-settings-form]").forEach((form) => {
@@ -516,6 +882,11 @@ function bindAuthForms() {
       form.querySelector("[data-auth-success]")?.classList.add("is-visible");
     });
   });
+
+  const profileForm = document.querySelector("[data-profile-form]");
+  if (profileForm) {
+    void bindProfileForm(profileForm);
+  }
 
   document.querySelector("[data-open-delete-modal]")?.addEventListener("click", () => {
     document.querySelector("[data-delete-modal]")?.classList.add("is-open");
@@ -526,11 +897,18 @@ function bindAuthForms() {
   });
 }
 
-function renderAuthPage() {
+async function renderAuthPage() {
   const root = document.querySelector("[data-auth-root]");
   if (!root) return;
 
+  await loadCurrentSession();
+
   const page = document.body.dataset.authPage;
+  if (!canAccessRoute() && getRouteAccessType(window.location.pathname) !== "public" && getApiBaseUrl()) {
+    root.innerHTML = UnauthorizedState("Connexion requise", "Connectez-vous pour accéder à cette page.", buildLoginRedirect(window.location.pathname));
+    return;
+  }
+
   const pages = {
     login: LoginPage,
     register: RegisterPage,
@@ -541,11 +919,13 @@ function renderAuthPage() {
     accountSettings: () => AccountSettingsPage("client"),
     dashboard: DashboardEntryPage,
     dashboardProfile: () => AccountProfilePage("dashboard"),
-    dashboardSettings: () => AccountSettingsPage("dashboard")
+    dashboardSettings: () => AccountSettingsPage("dashboard"),
   };
 
   root.innerHTML = (pages[page] || LoginPage)();
   bindAuthForms();
 }
 
-document.addEventListener("DOMContentLoaded", renderAuthPage);
+document.addEventListener("DOMContentLoaded", () => {
+  void renderAuthPage();
+});

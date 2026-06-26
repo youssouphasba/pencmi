@@ -20,4 +20,8 @@ export class UpdateUserProfileDto {
   @IsOptional()
   @IsString()
   city?: string;
+
+  @IsOptional()
+  @IsString()
+  avatarUrl?: string;
 }

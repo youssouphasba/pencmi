@@ -42,6 +42,8 @@ type ProfessionalProfile = {
   address?: string;
   description?: string;
   logoUrl?: string;
+  openingDate?: string;
+  openingHours?: string;
   professionalPhone?: string;
   professionalEmail?: string;
   whatsappNumber?: string;
