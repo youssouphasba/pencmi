@@ -148,6 +148,78 @@ function advertiserSection(title, moduleKey, listings) {
   `;
 }
 
+function advertiserEscapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function advertiserRatingStars(value) {
+  const rating = Math.round(Number(value || 0));
+  return [1, 2, 3, 4, 5].map((item) => (item <= rating ? "★" : "☆")).join("");
+}
+
+function advertiserReviewsSection(payload) {
+  const reviewsPayload = payload?.reviewsPayload || {};
+  const summary = reviewsPayload.summary || payload?.reviewSummary || {};
+  const reviews = Array.isArray(reviewsPayload.reviews) ? reviewsPayload.reviews : [];
+  const average = summary.averageRating;
+  const count = Number(summary.reviewCount || 0);
+
+  return `
+    <section class="advertiser-section-card advertiser-reviews-card">
+      <div class="advertiser-reviews-heading">
+        <div>
+          <h2>Notes et avis</h2>
+          <p>${count ? `${count} avis publié${count > 1 ? "s" : ""}` : "Aucun avis publié pour le moment."}</p>
+        </div>
+        <div class="advertiser-rating-summary">
+          <strong>${average ? average.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "-"}</strong>
+          <span>${advertiserRatingStars(average)}</span>
+        </div>
+      </div>
+      ${
+        reviews.length
+          ? `<div class="advertiser-reviews-list">
+              ${reviews
+                .map(
+                  (review) => `
+                    <article class="advertiser-review-item">
+                      <div>
+                        <strong>${advertiserRatingStars(review.rating)}</strong>
+                        <span>${pencmiFormatDate(review.publishedAt || review.createdAt)}</span>
+                      </div>
+                      ${review.comment ? `<p>${advertiserEscapeHtml(review.comment)}</p>` : ""}
+                    </article>
+                  `,
+                )
+                .join("")}
+            </div>`
+          : `<div class="advertiser-empty-review">Les avis validés seront affichés ici.</div>`
+      }
+      <form class="advertiser-review-form" id="advertiser-review-form">
+        <h3>Noter cet annonceur</h3>
+        <label for="advertiser-review-rating">Note</label>
+        <select id="advertiser-review-rating" name="rating" required>
+          <option value="">Choisir une note</option>
+          <option value="5">5 - Excellent</option>
+          <option value="4">4 - Très bien</option>
+          <option value="3">3 - Correct</option>
+          <option value="2">2 - Insuffisant</option>
+          <option value="1">1 - Mauvaise expérience</option>
+        </select>
+        <label for="advertiser-review-comment">Avis</label>
+        <textarea id="advertiser-review-comment" name="comment" rows="4" maxlength="1200" placeholder="Décrivez votre expérience avec cet annonceur."></textarea>
+        <button class="btn btn-primary" type="submit">Envoyer l’avis</button>
+        <p class="advertiser-review-feedback" id="advertiser-review-feedback" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+  `;
+}
+
 function advertiserPageContent(payload) {
   const user = payload?.user;
   const profile = user?.professionalProfile || {};
@@ -195,6 +267,7 @@ function advertiserPageContent(payload) {
     </section>
     <div class="advertiser-grid">
       <div>
+        ${advertiserReviewsSection(payload)}
         ${advertiserSection("Annonces immobilières", "realEstate", listings.realEstate || [])}
         ${advertiserSection("Hébergements", "hotels", listings.hotels || [])}
         ${advertiserSection("Véhicules", "vehicles", listings.vehicles || [])}
@@ -210,6 +283,35 @@ function advertiserPageContent(payload) {
       </aside>
     </div>
   `;
+}
+
+function bindAdvertiserReviewForm(advertiserId) {
+  const form = document.querySelector("#advertiser-review-form");
+  const feedback = document.querySelector("#advertiser-review-feedback");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (feedback) {
+      feedback.textContent = "";
+    }
+    const formData = new FormData(form);
+    const rating = Number(formData.get("rating"));
+    const comment = String(formData.get("comment") || "").trim();
+
+    try {
+      await pencmiApiRequest(`/professional-profiles/public/${encodeURIComponent(advertiserId)}/reviews`, {
+        method: "POST",
+        body: JSON.stringify({ rating, comment: comment || undefined }),
+      });
+      form.reset();
+      if (feedback) {
+        feedback.textContent = "Votre avis a été envoyé et sera vérifié avant publication.";
+      }
+    } catch (error) {
+      if (feedback) {
+        feedback.textContent = error.message || "L’avis n’a pas pu être envoyé.";
+      }
+    }
+  });
 }
 
 function advertiserNotFound() {
@@ -232,8 +334,13 @@ async function loadAdvertiserPage() {
   }
 
   try {
-    const payload = await pencmiApiRequest(`/professional-profiles/public/${encodeURIComponent(advertiserId)}`);
+    const [payload, reviewsPayload] = await Promise.all([
+      pencmiApiRequest(`/professional-profiles/public/${encodeURIComponent(advertiserId)}`),
+      pencmiApiRequest(`/professional-profiles/public/${encodeURIComponent(advertiserId)}/reviews`).catch(() => null),
+    ]);
+    payload.reviewsPayload = reviewsPayload;
     root.innerHTML = advertiserPageContent(payload);
+    bindAdvertiserReviewForm(advertiserId);
   } catch {
     root.innerHTML = advertiserNotFound();
   }

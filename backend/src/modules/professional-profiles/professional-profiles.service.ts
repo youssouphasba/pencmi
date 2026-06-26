@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ListingStatus, ProfessionalType } from '@prisma/client';
+import { AdvertiserReviewStatus, ListingStatus, ProfessionalType } from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { FilesService } from '../../files/files.service';
 import { UpsertProfessionalProfileDto } from './professional-profiles.dto';
@@ -23,7 +23,7 @@ export class ProfessionalProfilesService {
   }
 
   async findPublic(userId: string) {
-    const [user, realEstateListings, hotelListings, vehicleListings, tripListings] = await Promise.all([
+    const [user, realEstateListings, hotelListings, vehicleListings, tripListings, reviewSummary] = await Promise.all([
       this.prisma.user.findUniqueOrThrow({
         where: { id: userId, deletedAt: null },
         select: {
@@ -58,6 +58,7 @@ export class ProfessionalProfilesService {
         orderBy: { updatedAt: 'desc' },
         take: 12,
       }),
+      this.getReviewSummary(userId),
     ]);
 
     return {
@@ -74,6 +75,7 @@ export class ProfessionalProfilesService {
         vehicles: vehicleListings,
         trips: tripListings,
       },
+      reviewSummary,
     };
   }
 
@@ -144,5 +146,30 @@ export class ProfessionalProfilesService {
     });
     await this.filesService.softDeleteByPublicUrl(userId, current.logoUrl);
     return { removed: true };
+  }
+
+  private async getReviewSummary(userId: string) {
+    const where = { advertiserUserId: userId, status: AdvertiserReviewStatus.published };
+    const [aggregate, distribution] = await Promise.all([
+      this.prisma.advertiserReview.aggregate({
+        where,
+        _avg: { rating: true },
+        _count: { _all: true },
+      }),
+      this.prisma.advertiserReview.groupBy({
+        by: ['rating'],
+        where,
+        _count: { rating: true },
+      }),
+    ]);
+
+    return {
+      averageRating: aggregate._avg.rating ? Number(aggregate._avg.rating.toFixed(1)) : null,
+      reviewCount: aggregate._count._all,
+      ratingDistribution: [5, 4, 3, 2, 1].map((rating) => ({
+        rating,
+        count: distribution.find((item) => item.rating === rating)?._count.rating || 0,
+      })),
+    };
   }
 }

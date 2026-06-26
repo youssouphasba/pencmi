@@ -8,6 +8,7 @@ import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { ProfessionalProfilesModule } from './modules/professional-profiles/professional-profiles.module';
+import { AdvertiserReviewsModule } from './modules/advertiser-reviews/advertiser-reviews.module';
 import { FilesModule } from './files/files.module';
 import { ContentModule } from './modules/content/content.module';
 import { HotelsModule } from './modules/hotels/hotels.module';
@@ -43,6 +44,7 @@ import { PermissionsGuard } from './auth/guards/permissions.guard';
     AuthModule,
     UsersModule,
     ProfessionalProfilesModule,
+    AdvertiserReviewsModule,
     FilesModule,
     ContentModule,
     HotelsModule,

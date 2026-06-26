@@ -142,6 +142,13 @@ enum SupportTicketStatus {
   closed
 }
 
+enum AdvertiserReviewStatus {
+  pending_review
+  published
+  rejected
+  archived
+}
+
 model User {
   id                       String                @id @default(cuid())
   role                     UserRole
@@ -176,6 +183,8 @@ model User {
   supportTickets           SupportTicket[]
   favorites                Favorite[]
   savedAlerts              SavedAlert[]
+  advertiserReviewsReceived AdvertiserReview[]    @relation("AdvertiserReviewsReceived")
+  advertiserReviewsWritten  AdvertiserReview[]    @relation("AdvertiserReviewsWritten")
 
   @@index([role, status])
   @@index([createdAt])
@@ -240,6 +249,28 @@ model ProfessionalProfile {
   verified          Boolean          @default(false)
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
+}
+
+model AdvertiserReview {
+  id               String                 @id @default(cuid())
+  advertiserUserId String
+  advertiser       User                   @relation("AdvertiserReviewsReceived", fields: [advertiserUserId], references: [id], onDelete: Cascade)
+  reviewerUserId   String?
+  reviewer         User?                  @relation("AdvertiserReviewsWritten", fields: [reviewerUserId], references: [id], onDelete: SetNull)
+  rating           Int
+  comment          String?
+  module           PencmiModule?
+  targetType       TargetType?
+  targetId         String?
+  status           AdvertiserReviewStatus @default(pending_review)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  publishedAt      DateTime?
+  moderatedAt      DateTime?
+
+  @@index([advertiserUserId, status, createdAt])
+  @@index([reviewerUserId, createdAt])
+  @@index([module, targetType, targetId])
 }
 
 model AuditLog {
