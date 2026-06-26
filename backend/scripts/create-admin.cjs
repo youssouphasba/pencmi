@@ -65,7 +65,7 @@ function printUsage() {
 }
 
 function isValidEmail(value) {
-  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(String(value || "").trim());
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || "").trim());
 }
 
 async function main() {
