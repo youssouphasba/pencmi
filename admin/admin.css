@@ -23,7 +23,22 @@
 
 .admin-nav {
   display: grid;
+  gap: 14px;
+}
+
+.admin-nav-group {
+  display: grid;
   gap: 7px;
+}
+
+.admin-nav-group h2 {
+  margin: 8px 0 2px;
+  padding: 0 12px;
+  color: rgba(219, 232, 246, 0.72);
+  font-size: 0.74rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
 }
 
 .admin-nav a {

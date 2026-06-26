@@ -6,6 +6,7 @@ const authState = {
 const ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
 const REFRESH_TOKEN_STORAGE_KEY = "pencmi_refresh_token";
 const API_BASE_STORAGE_KEY = "pencmi_api_base_url";
+const SESSION_STORAGE_KEY = "pencmi_current_session";
 
 const authRoutes = {
   home: "/",
@@ -174,6 +175,8 @@ function getApiBaseUrl() {
   const configuredBaseUrl =
     document.body.dataset.apiBaseUrl ||
     window.PencmiConfig?.apiBaseUrl ||
+    window.PencmiRuntimeConfig?.apiBaseUrl ||
+    (window.PencmiRuntimeConfig?.backendUrl ? `${window.PencmiRuntimeConfig.backendUrl}/api/v1` : "") ||
     window.PencmiApiBaseUrl ||
     window.localStorage.getItem(API_BASE_STORAGE_KEY) ||
     "";
@@ -196,6 +199,10 @@ function getStoredAccessToken() {
   return window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) || "";
 }
 
+function getStoredRefreshToken() {
+  return window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || "";
+}
+
 function setStoredTokens(tokens) {
   if (tokens?.accessToken) {
     window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, tokens.accessToken);
@@ -210,7 +217,48 @@ function clearStoredTokens() {
   window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
 }
 
-async function apiRequest(path, options = {}) {
+function setStoredSession(session) {
+  if (!session) return;
+  window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+}
+
+function clearStoredSession() {
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+function persistConfiguredApiBaseUrl() {
+  const configuredBaseUrl = getApiBaseUrl();
+  if (configuredBaseUrl) {
+    window.localStorage.setItem(API_BASE_STORAGE_KEY, configuredBaseUrl);
+  }
+}
+
+async function refreshAccessToken() {
+  const baseUrl = getApiBaseUrl();
+  const refreshToken = getStoredRefreshToken();
+  if (!baseUrl || !refreshToken) return null;
+
+  const response = await fetch(`${baseUrl}/auth/refresh`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ refreshToken }),
+  });
+
+  const isJson = response.headers.get("content-type")?.includes("application/json");
+  const payload = isJson ? await response.json() : null;
+  if (!response.ok) {
+    const message = payload?.error?.message || payload?.message || "Session expirée.";
+    throw new Error(Array.isArray(message) ? message.join(", ") : message);
+  }
+
+  const tokens = payload?.data ?? payload;
+  setStoredTokens(tokens);
+  return tokens;
+}
+
+async function apiRequest(path, options = {}, canRetry = true) {
   const baseUrl = getApiBaseUrl();
   if (!baseUrl) {
     throw new Error("API non configurée.");
@@ -239,6 +287,16 @@ async function apiRequest(path, options = {}) {
 
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const payload = isJson ? await response.json() : null;
+  if (response.status === 401 && canRetry && getStoredRefreshToken()) {
+    try {
+      await refreshAccessToken();
+      return await apiRequest(path, options, false);
+    } catch {
+      clearStoredTokens();
+      clearStoredSession();
+    }
+  }
+
   if (!response.ok) {
     const message = payload?.error?.message || payload?.message || "Une erreur est survenue.";
     throw new Error(Array.isArray(message) ? message.join(", ") : message);
@@ -320,6 +378,7 @@ async function loadCurrentSession() {
 
   try {
     authState.currentUser = await apiRequest("/auth/me");
+    setStoredSession(authState.currentUser);
     if (authState.currentUser?.role !== "client" && authState.currentUser?.role !== "admin") {
       authState.professionalProfile = await apiRequest("/professional-profiles/me").catch(() => null);
     } else {
@@ -327,6 +386,7 @@ async function loadCurrentSession() {
     }
   } catch {
     clearStoredTokens();
+    clearStoredSession();
     authState.currentUser = null;
     authState.professionalProfile = null;
   }
@@ -947,5 +1007,6 @@ async function renderAuthPage() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  persistConfiguredApiBaseUrl();
   void renderAuthPage();
 });
