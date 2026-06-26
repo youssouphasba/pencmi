@@ -45,6 +45,20 @@ export class VehiclesController {
   }
 
   @ApiBearerAuth()
+  @RequirePermissions('manage_vehicles')
+  @Get('dashboard/voitures/rental-requests')
+  findMyRentalRequests(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationDto) {
+    return this.service.findMyRentalRequests(user.id, pagination);
+  }
+
+  @ApiBearerAuth()
+  @RequirePermissions('manage_vehicles')
+  @Get('dashboard/voitures/chauffeur-requests')
+  findMyChauffeurRequests(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationDto) {
+    return this.service.findMyChauffeurRequests(user.id, pagination);
+  }
+
+  @ApiBearerAuth()
   @RequirePermissions('publish_vehicle')
   @Post('dashboard/voitures')
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateVehicleDto) {

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ContactSource, ListingStatus, PencmiModule, TargetType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { getPagination, PaginationDto } from '../../common/pagination/pagination.dto';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { CreateSeatRequestDto, CreateTripDto, TripSearchDto, UpdateTripDto } from './trips.dto';
@@ -10,11 +11,29 @@ export class TripsService {
 
   async findPublic(query: TripSearchDto) {
     const pagination = getPagination(query);
-    const where = {
+    const where: Prisma.TripListingWhereInput = {
       status: ListingStatus.active,
       deletedAt: null,
-      departureCity: query.departureCity,
-      arrivalCity: query.arrivalCity,
+      ...(query.departureCity
+        ? {
+            OR: [
+              { departureCity: { contains: query.departureCity, mode: 'insensitive' } },
+              { departurePoint: { contains: query.departureCity, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+      ...(query.arrivalCity
+        ? {
+            AND: [
+              {
+                OR: [
+                  { arrivalCity: { contains: query.arrivalCity, mode: 'insensitive' } },
+                  { arrivalPoint: { contains: query.arrivalCity, mode: 'insensitive' } },
+                ],
+              },
+            ],
+          }
+        : {}),
     };
     const [data, total] = await Promise.all([
       this.prisma.tripListing.findMany({
@@ -112,6 +131,39 @@ export class TripsService {
     const [data, total] = await Promise.all([
       this.prisma.tripListing.findMany({ where, skip: pagination.skip, take: pagination.take, orderBy: { updatedAt: 'desc' } }),
       this.prisma.tripListing.count({ where }),
+    ]);
+    return { data, meta: pagination.meta(total) };
+  }
+
+  async findMySeatRequests(ownerUserId: string, dto: PaginationDto) {
+    const pagination = getPagination(dto);
+    const where = {
+      trip: {
+        ownerUserId,
+        deletedAt: null,
+      },
+    };
+    const [data, total] = await Promise.all([
+      this.prisma.tripSeatRequest.findMany({
+        where,
+        skip: pagination.skip,
+        take: pagination.take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          trip: {
+            select: {
+              id: true,
+              title: true,
+              departureCity: true,
+              arrivalCity: true,
+              departureDate: true,
+              departureTime: true,
+              status: true,
+            },
+          },
+        },
+      }),
+      this.prisma.tripSeatRequest.count({ where }),
     ]);
     return { data, meta: pagination.meta(total) };
   }

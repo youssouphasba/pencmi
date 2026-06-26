@@ -377,7 +377,7 @@ async function loadHotels() {
   }
 
   const payload = await pencmiApiRequest(`/hotels${apiParams.toString() ? `?${apiParams.toString()}` : ""}`);
-  const data = Array.isArray(payload) ? payload : payload.data || [];
+  const data = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.items) ? payload.items : [];
   hotelState.all = data;
   hotelState.filtered = filterHotels(data);
 }

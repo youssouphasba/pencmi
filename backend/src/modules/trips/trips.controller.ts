@@ -39,6 +39,13 @@ export class TripsController {
   }
 
   @ApiBearerAuth()
+  @RequirePermissions('manage_trips')
+  @Get('dashboard/voyages/seat-requests')
+  findMySeatRequests(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationDto) {
+    return this.service.findMySeatRequests(user.id, pagination);
+  }
+
+  @ApiBearerAuth()
   @RequirePermissions('publish_trip')
   @Post('dashboard/voyages')
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateTripDto) {

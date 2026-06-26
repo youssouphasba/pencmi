@@ -15,10 +15,55 @@ const tripDashboardData = {
   messages: [],
   reservations: [],
   contacts: [],
-  stats: null
+  stats: null,
+  loading: true,
+  error: ""
 };
 
+function tripApiBaseUrl() {
+  return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || window.PencmiApiBaseUrl || window.localStorage.getItem("pencmi_api_base_url") || "").replace(/\/+$/, "");
+}
+
+function tripAccessToken() {
+  return window.localStorage.getItem("pencmi_access_token") || "";
+}
+
+function tripListFromPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
+async function tripApiRequest(path) {
+  const baseUrl = tripApiBaseUrl();
+  const token = tripAccessToken();
+  if (!baseUrl || !token) {
+    throw new Error("Connexion annonceur requise.");
+  }
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Chargement impossible.");
+  }
+  return payload?.data ?? payload;
+}
+
+function formatTripDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("fr-FR");
+}
+
 function tripDashboardRouteHref(path) {
+  if (window.location.protocol !== "file:" && /^\/voyages\/[^/]+$/.test(path)) {
+    return `/voyages/detail/?id=${encodeURIComponent(path.slice("/voyages/".length))}`;
+  }
   if (window.location.protocol !== "file:") {
     return path;
   }
@@ -44,11 +89,13 @@ function TripsDashboardLayout(content, currentPage) {
 }
 
 function TripsDashboardSidebar(currentPage) {
+  const listingCount = String(tripDashboardData.trips.length || 0);
+  const reservationCount = String(tripDashboardData.reservations.length || 0);
   const items = [
     ["Vue d’ensemble", tripDashboardRoutes.overview, "overview"],
-    ["Trajets", tripDashboardRoutes.listings, "listings", "0"],
+    ["Trajets", tripDashboardRoutes.listings, "listings", listingCount],
     ["Messages", tripDashboardRoutes.messages, "messages", "0"],
-    ["Demandes de place", tripDashboardRoutes.reservations, "reservations", "0"],
+    ["Demandes de place", tripDashboardRoutes.reservations, "reservations", reservationCount],
     ["Contacts", tripDashboardRoutes.contacts, "contacts", "0"],
     ["Statistiques", tripDashboardRoutes.statistics, "statistics", "0"],
     ["Moyens de contact", tripDashboardRoutes.contactSettings, "contactSettings", "0"],
@@ -71,11 +118,27 @@ function EmptyState(title, text = "", action = "") {
 }
 
 function TripsDashboardPage() {
-  const kpis = ["Trajets actifs", "Trajets en attente", "Trajets complets", "Vues totales", "Favoris", "Messages reçus", "Contacts", "Demandes de réservation", "Places demandées", "Clics WhatsApp", "Clics téléphone", "Taux vue → demande", "Délai moyen de réponse", "Meilleurs trajets", "Trajets à améliorer"];
+  if (tripDashboardData.loading) {
+    return TripsDashboardLayout(`${DashboardHeader("Dashboard voyages", "Chargement de vos données annonceur.")}${EmptyState("Chargement en cours.")}`, "overview");
+  }
+  if (tripDashboardData.error) {
+    return TripsDashboardLayout(`${DashboardHeader("Dashboard voyages", "Vos données annonceur.")}${EmptyState(tripDashboardData.error)}`, "overview");
+  }
+  const activeTrips = tripDashboardData.trips.filter((trip) => trip.status === "active").length;
+  const pendingTrips = tripDashboardData.trips.filter((trip) => trip.status === "pending_review").length;
+  const requestedSeats = tripDashboardData.reservations.reduce((total, request) => total + Number(request.requestedSeats || 0), 0);
+  const kpis = [
+    ["Trajets actifs", activeTrips],
+    ["Trajets en attente", pendingTrips],
+    ["Demandes de place", tripDashboardData.reservations.length],
+    ["Places demandées", requestedSeats],
+    ["Messages reçus", tripDashboardData.messages.length],
+    ["Contacts", tripDashboardData.contacts.length]
+  ];
   return TripsDashboardLayout(`
     ${DashboardHeader("Dashboard voyages", "Suivez vos trajets, demandes, contacts, messages et performances.", `<a class="btn btn-primary" href="${tripDashboardRouteHref(tripDashboardRoutes.publish)}">Publier un trajet</a>`)}
-    <section class="trip-kpi-grid">${kpis.map((title) => KpiCard(title)).join("")}</section>
-    ${EmptyState("Aucune donnée disponible pour le moment.")}
+    <section class="trip-kpi-grid">${kpis.map(([title, value]) => KpiCard(title, String(value))).join("")}</section>
+    ${tripDashboardData.trips.length || tripDashboardData.reservations.length ? "" : EmptyState("Aucune donnée disponible pour le moment.")}
   `, "overview");
 }
 
@@ -87,7 +150,10 @@ function TripListingsDashboardPage() {
 }
 
 function TripListingsTable() {
-  return `<section class="trip-table-wrap"><table class="trip-table"><thead><tr><th>Trajet</th><th>Statut</th><th>Départ</th><th>Arrivée</th><th>Date</th><th>Heure</th><th>Prix</th><th>Places</th><th>Demandes</th><th>Vues</th><th>Favoris</th><th>Score</th><th>Actions</th></tr></thead><tbody></tbody></table></section>`;
+  return `<section class="trip-table-wrap"><table class="trip-table"><thead><tr><th>Trajet</th><th>Statut</th><th>Départ</th><th>Arrivée</th><th>Date</th><th>Heure</th><th>Places</th><th>Demandes</th><th>Actions</th></tr></thead><tbody>${tripDashboardData.trips.map((trip) => {
+    const requests = tripDashboardData.reservations.filter((request) => request.trip?.id === trip.id).length;
+    return `<tr><td>${trip.title}</td><td>${trip.status}</td><td>${trip.departureCity || ""}</td><td>${trip.arrivalCity || ""}</td><td>${formatTripDate(trip.departureDate)}</td><td>${trip.departureTime || ""}</td><td>${trip.availableSeats || ""}</td><td>${requests}</td><td><a class="btn btn-ghost" href="${tripDashboardRouteHref(`/voyages/${trip.id}`)}">Voir</a></td></tr>`;
+  }).join("")}</tbody></table></section>`;
 }
 
 function TripMessagesPage() {
@@ -97,7 +163,7 @@ function TripMessagesPage() {
 function TripReservationsPage() {
   return TripsDashboardLayout(`
     ${DashboardHeader("Demandes de place", "Gérez les demandes de réservation reçues sur vos trajets.")}
-    ${tripDashboardData.reservations.length ? `<section class="trip-table-wrap"><table class="trip-table"><thead><tr><th>Client</th><th>Trajet</th><th>Places demandées</th><th>Bagages</th><th>Message</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead><tbody></tbody></table></section>` : EmptyState("Aucune demande de place pour le moment.")}
+    ${tripDashboardData.reservations.length ? `<section class="trip-table-wrap"><table class="trip-table"><thead><tr><th>Client</th><th>Trajet</th><th>Places demandées</th><th>Bagages</th><th>Message</th><th>Statut</th><th>Date</th></tr></thead><tbody>${tripDashboardData.reservations.map((request) => `<tr><td>${request.clientName || "Client"}</td><td>${request.trip?.title || "Trajet"}</td><td>${request.requestedSeats || ""}</td><td>${request.luggage ? "Oui" : "Non"}</td><td>${request.message || ""}</td><td>${request.status}</td><td>${formatTripDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucune demande de place pour le moment.")}
   `, "reservations");
 }
 
@@ -169,4 +235,23 @@ function renderDashboard() {
   });
 }
 
-renderDashboard();
+async function loadTripDashboardData() {
+  tripDashboardData.loading = true;
+  tripDashboardData.error = "";
+  renderDashboard();
+  try {
+    const [tripsPayload, reservationsPayload] = await Promise.all([
+      tripApiRequest("/dashboard/voyages"),
+      tripApiRequest("/dashboard/voyages/seat-requests"),
+    ]);
+    tripDashboardData.trips = tripListFromPayload(tripsPayload);
+    tripDashboardData.reservations = tripListFromPayload(reservationsPayload);
+  } catch (error) {
+    tripDashboardData.error = error instanceof Error ? error.message : "Chargement impossible.";
+  } finally {
+    tripDashboardData.loading = false;
+    renderDashboard();
+  }
+}
+
+void loadTripDashboardData();

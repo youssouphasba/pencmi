@@ -13,10 +13,56 @@ const vehicleDashboardData = {
   listings: [],
   messages: [],
   contacts: [],
-  stats: null
+  requests: [],
+  stats: null,
+  loading: true,
+  error: ""
 };
 
+function vehicleApiBaseUrl() {
+  return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || window.PencmiApiBaseUrl || window.localStorage.getItem("pencmi_api_base_url") || "").replace(/\/+$/, "");
+}
+
+function vehicleAccessToken() {
+  return window.localStorage.getItem("pencmi_access_token") || "";
+}
+
+function vehicleListFromPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
+async function vehicleApiRequest(path) {
+  const baseUrl = vehicleApiBaseUrl();
+  const token = vehicleAccessToken();
+  if (!baseUrl || !token) {
+    throw new Error("Connexion annonceur requise.");
+  }
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Chargement impossible.");
+  }
+  return payload?.data ?? payload;
+}
+
+function formatVehicleDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("fr-FR");
+}
+
 function vehicleDashboardRouteHref(path) {
+  if (window.location.protocol !== "file:" && /^\/voitures\/[^/]+$/.test(path)) {
+    return `/voitures/detail/?id=${encodeURIComponent(path.slice("/voitures/".length))}`;
+  }
   if (window.location.protocol !== "file:") {
     return path;
   }
@@ -48,11 +94,13 @@ function VehiclesDashboardLayout(content, currentPage) {
 }
 
 function VehiclesDashboardSidebar(currentPage) {
+  const listingCount = String(vehicleDashboardData.listings.length || 0);
+  const contactCount = String(vehicleDashboardData.requests.length || 0);
   const items = [
     ["Vue d’ensemble", vehicleDashboardRoutes.overview, "overview"],
-    ["Annonces", vehicleDashboardRoutes.listings, "listings", "0"],
+    ["Annonces", vehicleDashboardRoutes.listings, "listings", listingCount],
     ["Messages", vehicleDashboardRoutes.messages, "messages", "0"],
-    ["Contacts", vehicleDashboardRoutes.contacts, "contacts", "0"],
+    ["Contacts", vehicleDashboardRoutes.contacts, "contacts", contactCount],
     ["Statistiques", vehicleDashboardRoutes.statistics, "statistics", "0"],
     ["Moyens de contact", vehicleDashboardRoutes.contactSettings, "contactSettings", "0"],
     ["Emails automatiques", vehicleDashboardRoutes.emailSettings, "emailSettings", "0"]
@@ -74,11 +122,25 @@ function EmptyState(title, text = "", action = "") {
 }
 
 function VehiclesDashboardPage() {
-  const kpis = ["Annonces actives", "Annonces en attente", "Vues totales", "Favoris", "Messages reçus", "Contacts", "Clics WhatsApp", "Clics téléphone", "Clics email", "Taux vue → contact", "Délai moyen de réponse", "Meilleures annonces", "Annonces à améliorer"];
+  if (vehicleDashboardData.loading) {
+    return VehiclesDashboardLayout(`${DashboardHeader("Dashboard voitures", "Chargement de vos données annonceur.")}${EmptyState("Chargement en cours.")}`, "overview");
+  }
+  if (vehicleDashboardData.error) {
+    return VehiclesDashboardLayout(`${DashboardHeader("Dashboard voitures", "Vos données annonceur.")}${EmptyState(vehicleDashboardData.error)}`, "overview");
+  }
+  const activeListings = vehicleDashboardData.listings.filter((listing) => listing.status === "active").length;
+  const pendingListings = vehicleDashboardData.listings.filter((listing) => listing.status === "pending_review").length;
+  const kpis = [
+    ["Annonces actives", activeListings],
+    ["Annonces en attente", pendingListings],
+    ["Demandes location/chauffeur", vehicleDashboardData.requests.length],
+    ["Messages reçus", vehicleDashboardData.messages.length],
+    ["Contacts", vehicleDashboardData.contacts.length]
+  ];
   return VehiclesDashboardLayout(`
     ${DashboardHeader("Dashboard voitures", "Suivez vos annonces, contacts, messages et performances.", `<a class="btn btn-primary" href="${vehicleDashboardRouteHref(vehicleDashboardRoutes.publish)}">Publier une voiture</a>`)}
-    <section class="vehicle-kpi-grid">${kpis.map((title) => KpiCard(title)).join("")}</section>
-    ${EmptyState("Aucune donnée disponible pour le moment.")}
+    <section class="vehicle-kpi-grid">${kpis.map(([title, value]) => KpiCard(title, String(value))).join("")}</section>
+    ${vehicleDashboardData.listings.length || vehicleDashboardData.requests.length ? "" : EmptyState("Aucune donnée disponible pour le moment.")}
   `, "overview");
 }
 
@@ -90,7 +152,10 @@ function VehicleListingsDashboardPage() {
 }
 
 function VehicleListingsTable() {
-  return `<section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Voiture</th><th>Statut</th><th>Ville</th><th>Prix</th><th>Vues</th><th>Favoris</th><th>Contacts</th><th>Messages</th><th>Score de complétion</th><th>Actions</th></tr></thead><tbody></tbody></table></section>`;
+  return `<section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Voiture</th><th>Statut</th><th>Ville</th><th>Type</th><th>Prix</th><th>Demandes</th><th>Actions</th></tr></thead><tbody>${vehicleDashboardData.listings.map((listing) => {
+    const requests = vehicleDashboardData.requests.filter((request) => request.listing?.id === listing.id).length;
+    return `<tr><td>${listing.title}</td><td>${listing.status}</td><td>${listing.city || ""}</td><td>${listing.vehicleMode || ""}</td><td>${listing.price || ""}</td><td>${requests}</td><td><a class="btn btn-ghost" href="${vehicleDashboardRouteHref(`/voitures/${listing.id}`)}">Voir</a></td></tr>`;
+  }).join("")}</tbody></table></section>`;
 }
 
 function VehicleMessagesPage() {
@@ -102,7 +167,7 @@ function VehicleContactsPage() {
   return VehiclesDashboardLayout(`
     ${DashboardHeader("Contacts reçus", "Suivez les contacts générés par vos annonces voitures.")}
     <section class="vehicle-dashboard-card"><h2>Sources prévues</h2><div class="vehicle-chip-row">${sources.map((source) => `<span class="vehicle-chip">${source}</span>`).join("")}</div></section>
-    ${EmptyState("Aucun contact reçu pour le moment.")}
+    ${vehicleDashboardData.requests.length ? `<section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Client</th><th>Annonce</th><th>Type</th><th>Début</th><th>Fin</th><th>Message</th><th>Statut</th><th>Date</th></tr></thead><tbody>${vehicleDashboardData.requests.map((request) => `<tr><td>${request.clientName || "Client"}</td><td>${request.listing?.title || "Annonce"}</td><td>${request.requestType || request.listing?.vehicleMode || ""}</td><td>${formatVehicleDate(request.startDate || request.serviceDate)}</td><td>${formatVehicleDate(request.endDate)}</td><td>${request.message || ""}</td><td>${request.status}</td><td>${formatVehicleDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucun contact reçu pour le moment.")}
   `, "contacts");
 }
 
@@ -164,4 +229,26 @@ function renderDashboard() {
   });
 }
 
-renderDashboard();
+async function loadVehicleDashboardData() {
+  vehicleDashboardData.loading = true;
+  vehicleDashboardData.error = "";
+  renderDashboard();
+  try {
+    const [listingsPayload, rentalPayload, chauffeurPayload] = await Promise.all([
+      vehicleApiRequest("/dashboard/voitures"),
+      vehicleApiRequest("/dashboard/voitures/rental-requests"),
+      vehicleApiRequest("/dashboard/voitures/chauffeur-requests"),
+    ]);
+    const rentalRequests = vehicleListFromPayload(rentalPayload).map((request) => ({ ...request, requestType: "location" }));
+    const chauffeurRequests = vehicleListFromPayload(chauffeurPayload).map((request) => ({ ...request, requestType: "chauffeur" }));
+    vehicleDashboardData.listings = vehicleListFromPayload(listingsPayload);
+    vehicleDashboardData.requests = [...rentalRequests, ...chauffeurRequests].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  } catch (error) {
+    vehicleDashboardData.error = error instanceof Error ? error.message : "Chargement impossible.";
+  } finally {
+    vehicleDashboardData.loading = false;
+    renderDashboard();
+  }
+}
+
+void loadVehicleDashboardData();

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ContactSource, ListingStatus, PencmiModule, TargetType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { getPagination, PaginationDto } from '../../common/pagination/pagination.dto';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { CreateRealEstateDto, CreateVisitRequestDto, RealEstateSearchDto, UpdateRealEstateDto } from './real-estate.dto';
@@ -10,7 +11,20 @@ export class RealEstateService {
 
   async findPublic(query: RealEstateSearchDto) {
     const pagination = getPagination(query);
-    const where = { status: ListingStatus.active, deletedAt: null, city: query.city, transaction: query.transaction, propertyType: query.propertyType };
+    const where: Prisma.RealEstateListingWhereInput = {
+      status: ListingStatus.active,
+      deletedAt: null,
+      transaction: query.transaction || undefined,
+      propertyType: query.propertyType || undefined,
+      ...(query.city
+        ? {
+            OR: [
+              { city: { contains: query.city, mode: 'insensitive' } },
+              { neighborhood: { contains: query.city, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
     const [data, total] = await Promise.all([
       this.prisma.realEstateListing.findMany({
         where,

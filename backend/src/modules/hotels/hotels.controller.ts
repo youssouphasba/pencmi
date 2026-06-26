@@ -39,6 +39,13 @@ export class HotelsController {
   }
 
   @ApiBearerAuth()
+  @RequirePermissions('manage_hotels')
+  @Get('dashboard/hotels/reservations')
+  findMyReservationRequests(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationDto) {
+    return this.service.findMyReservationRequests(user.id, pagination);
+  }
+
+  @ApiBearerAuth()
   @RequirePermissions('publish_hotel')
   @Post('dashboard/hotels')
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateHotelDto) {

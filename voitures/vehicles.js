@@ -249,7 +249,7 @@ async function loadVehicles() {
   if (values.city) apiParams.set("city", values.city);
   if (values.type) apiParams.set("vehicleMode", values.type);
   const payload = await pencmiApiRequest(`/voitures${apiParams.toString() ? `?${apiParams.toString()}` : ""}`);
-  const data = Array.isArray(payload) ? payload : payload.data || [];
+  const data = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.items) ? payload.items : [];
   vehicleState.all = data;
   vehicleState.filtered = filterVehicles(data);
 }

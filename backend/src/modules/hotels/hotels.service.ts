@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ContactSource, ListingStatus, PencmiModule, TargetType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { getPagination, PaginationDto } from '../../common/pagination/pagination.dto';
 import { CreateHotelDto, CreateHotelReservationRequestDto, HotelSearchDto, UpdateHotelDto } from './hotels.dto';
@@ -10,11 +11,20 @@ export class HotelsService {
 
   async findPublic(query: HotelSearchDto) {
     const pagination = getPagination(query);
-    const where = {
+    const where: Prisma.HotelPropertyWhereInput = {
       status: ListingStatus.active,
       deletedAt: null,
-      city: query.city,
-      propertyType: query.propertyType,
+      propertyType: query.propertyType || undefined,
+      ...(query.city
+        ? {
+            OR: [
+              { city: { contains: query.city, mode: 'insensitive' } },
+              { region: { contains: query.city, mode: 'insensitive' } },
+              { address: { contains: query.city, mode: 'insensitive' } },
+              { name: { contains: query.city, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
     };
     const [data, total] = await Promise.all([
       this.prisma.hotelProperty.findMany({
@@ -121,6 +131,37 @@ export class HotelsService {
     const [data, total] = await Promise.all([
       this.prisma.hotelProperty.findMany({ where, skip: pagination.skip, take: pagination.take, orderBy: { updatedAt: 'desc' } }),
       this.prisma.hotelProperty.count({ where }),
+    ]);
+    return { data, meta: pagination.meta(total) };
+  }
+
+  async findMyReservationRequests(ownerUserId: string, dto: PaginationDto) {
+    const pagination = getPagination(dto);
+    const where = {
+      property: {
+        ownerUserId,
+        deletedAt: null,
+      },
+    };
+    const [data, total] = await Promise.all([
+      this.prisma.hotelReservationRequest.findMany({
+        where,
+        skip: pagination.skip,
+        take: pagination.take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          property: {
+            select: {
+              id: true,
+              name: true,
+              city: true,
+              propertyType: true,
+              status: true,
+            },
+          },
+        },
+      }),
+      this.prisma.hotelReservationRequest.count({ where }),
     ]);
     return { data, meta: pagination.meta(total) };
   }

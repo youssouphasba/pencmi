@@ -248,7 +248,7 @@ async function loadTrips() {
   if (values.depart) apiParams.set("departureCity", values.depart);
   if (values.arrivee) apiParams.set("arrivalCity", values.arrivee);
   const payload = await pencmiApiRequest(`/voyages${apiParams.toString() ? `?${apiParams.toString()}` : ""}`);
-  const data = Array.isArray(payload) ? payload : payload.data || [];
+  const data = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.items) ? payload.items : [];
   tripState.all = data;
   tripState.filtered = filterTrips(data);
 }

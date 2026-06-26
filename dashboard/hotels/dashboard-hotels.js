@@ -18,10 +18,55 @@ const hotelDashboardData = {
   messages: [],
   reservations: [],
   contacts: [],
-  stats: null
+  stats: null,
+  loading: true,
+  error: ""
 };
 
+function hotelApiBaseUrl() {
+  return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || window.PencmiApiBaseUrl || window.localStorage.getItem("pencmi_api_base_url") || "").replace(/\/+$/, "");
+}
+
+function hotelAccessToken() {
+  return window.localStorage.getItem("pencmi_access_token") || "";
+}
+
+function listFromPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
+async function hotelApiRequest(path) {
+  const baseUrl = hotelApiBaseUrl();
+  const token = hotelAccessToken();
+  if (!baseUrl || !token) {
+    throw new Error("Connexion annonceur requise.");
+  }
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Chargement impossible.");
+  }
+  return payload?.data ?? payload;
+}
+
+function formatHotelDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("fr-FR");
+}
+
 function hotelDashboardRouteHref(path) {
+  if (window.location.protocol !== "file:" && /^\/hotels\/[^/]+$/.test(path)) {
+    return `/hotels/detail/?id=${encodeURIComponent(path.slice("/hotels/".length))}`;
+  }
   if (window.location.protocol !== "file:") {
     return path;
   }
@@ -56,12 +101,14 @@ function HotelsDashboardLayout(content, currentPage) {
 }
 
 function HotelsDashboardSidebar(currentPage) {
+  const listingCount = String(hotelDashboardData.hotels.length || 0);
+  const reservationCount = String(hotelDashboardData.reservations.length || 0);
   const items = [
     ["Vue d’ensemble", hotelDashboardRoutes.overview, "overview"],
-    ["Hébergements", hotelDashboardRoutes.listings, "listings", "0"],
+    ["Hébergements", hotelDashboardRoutes.listings, "listings", listingCount],
     ["Disponibilités", hotelDashboardRoutes.availability, "availability", "0"],
     ["Messages", hotelDashboardRoutes.messages, "messages", "0"],
-    ["Réservations", hotelDashboardRoutes.reservations, "reservations", "0"],
+    ["Réservations", hotelDashboardRoutes.reservations, "reservations", reservationCount],
     ["Contacts", hotelDashboardRoutes.contacts, "contacts", "0"],
     ["Statistiques", hotelDashboardRoutes.statistics, "statistics", "0"],
     ["Moyens de contact", hotelDashboardRoutes.contactSettings, "contactSettings", "0"],
@@ -116,30 +163,27 @@ function AvailabilityAlerts() {
 }
 
 function HotelsDashboardPage() {
+  if (hotelDashboardData.loading) {
+    return HotelsDashboardLayout(`${DashboardHeader("Dashboard hôtels", "Chargement de vos données annonceur.")}${EmptyState("Chargement en cours.")}`, "overview");
+  }
+  if (hotelDashboardData.error) {
+    return HotelsDashboardLayout(`${DashboardHeader("Dashboard hôtels", "Vos données annonceur.")}${EmptyState(hotelDashboardData.error)}`, "overview");
+  }
+  const activeHotels = hotelDashboardData.hotels.filter((hotel) => hotel.status === "active").length;
+  const pendingHotels = hotelDashboardData.hotels.filter((hotel) => hotel.status === "pending_review").length;
+  const pendingReservations = hotelDashboardData.reservations.filter((item) => ["new", "pending"].includes(item.status)).length;
   const kpis = [
-    "Hébergements actifs",
-    "Hébergements en attente",
-    "Chambres disponibles aujourd’hui",
-    "Chambres occupées",
-    "Chambres en attente de confirmation",
-    "Chambres complètes",
-    "Réservations à confirmer",
-    "Arrivées du jour",
-    "Départs du jour",
-    "Taux d’occupation",
-    "Revenu estimé",
-    "Vues totales",
-    "Favoris",
-    "Messages reçus",
-    "Contacts",
-    "Demandes de réservation",
-    "Délai moyen de réponse",
-    "Disponibilités à mettre à jour"
+    ["Hébergements actifs", activeHotels],
+    ["Hébergements en attente", pendingHotels],
+    ["Demandes de réservation", hotelDashboardData.reservations.length],
+    ["Réservations à confirmer", pendingReservations],
+    ["Messages reçus", hotelDashboardData.messages.length],
+    ["Contacts", hotelDashboardData.contacts.length]
   ];
   return HotelsDashboardLayout(`
     ${DashboardHeader("Dashboard hôtels", "Suivez vos hébergements, disponibilités, demandes et performances.", `<a class="btn btn-primary" href="${hotelDashboardRouteHref(hotelDashboardRoutes.publish)}">Publier un hébergement</a>`)}
-    <section class="hotel-kpi-grid">${kpis.map((title) => KpiCard(title)).join("")}</section>
-    ${EmptyState("Aucune donnée disponible pour le moment.")}
+    <section class="hotel-kpi-grid">${kpis.map(([title, value]) => KpiCard(title, String(value))).join("")}</section>
+    ${hotelDashboardData.hotels.length || hotelDashboardData.reservations.length ? "" : EmptyState("Aucune donnée disponible pour le moment.")}
     <div class="dashboard-grid"><section>${HotelAvailabilityDashboard()}</section><section>${AvailabilityAlerts()}</section></div>
   `, "overview");
 }
@@ -152,7 +196,10 @@ function HotelListingsDashboardPage() {
 }
 
 function HotelListingsTable() {
-  return `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Hébergement</th><th>Statut</th><th>Ville</th><th>Prix à partir de</th><th>Chambres</th><th>Disponibilités</th><th>Vues</th><th>Favoris</th><th>Messages</th><th>Demandes</th><th>Score</th><th>Actions</th></tr></thead><tbody></tbody></table></section>`;
+  return `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Hébergement</th><th>Statut</th><th>Ville</th><th>Type</th><th>Chambres</th><th>Demandes</th><th>Actions</th></tr></thead><tbody>${hotelDashboardData.hotels.map((hotel) => {
+    const requests = hotelDashboardData.reservations.filter((request) => request.property?.id === hotel.id).length;
+    return `<tr><td>${hotel.name}</td><td>${hotel.status}</td><td>${hotel.city || ""}</td><td>${hotel.propertyType || ""}</td><td>${Array.isArray(hotel.rooms) ? hotel.rooms.length : 0}</td><td>${requests}</td><td><a class="btn btn-ghost" href="${hotelDashboardRouteHref(`/hotels/${hotel.id}`)}">Voir</a></td></tr>`;
+  }).join("")}</tbody></table></section>`;
 }
 
 function HotelAvailabilityCalendar() {
@@ -179,7 +226,7 @@ function HotelMessagesPage() {
 function HotelReservationsPage() {
   return HotelsDashboardLayout(`
     ${DashboardHeader("Demandes de réservation", "Gérez les demandes de réservation reçues sur vos hébergements.")}
-    ${hotelDashboardData.reservations.length ? `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Client</th><th>Hébergement</th><th>Chambre</th><th>Arrivée</th><th>Départ</th><th>Nuits</th><th>Personnes</th><th>Chambres</th><th>Prix estimé</th><th>Message</th><th>Statut</th><th>Actions</th></tr></thead><tbody></tbody></table></section>` : EmptyState("Aucune demande de réservation pour le moment.")}
+    ${hotelDashboardData.reservations.length ? `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Client</th><th>Hébergement</th><th>Arrivée</th><th>Départ</th><th>Personnes</th><th>Message</th><th>Statut</th><th>Date</th></tr></thead><tbody>${hotelDashboardData.reservations.map((request) => `<tr><td>${request.clientName || "Client"}</td><td>${request.property?.name || "Hébergement"}</td><td>${formatHotelDate(request.checkIn)}</td><td>${formatHotelDate(request.checkOut)}</td><td>${request.guests || ""}</td><td>${request.message || ""}</td><td>${request.status}</td><td>${formatHotelDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucune demande de réservation pour le moment.")}
   `, "reservations");
 }
 
@@ -252,4 +299,23 @@ function renderDashboard() {
   });
 }
 
-renderDashboard();
+async function loadHotelDashboardData() {
+  hotelDashboardData.loading = true;
+  hotelDashboardData.error = "";
+  renderDashboard();
+  try {
+    const [hotelsPayload, reservationsPayload] = await Promise.all([
+      hotelApiRequest("/dashboard/hotels"),
+      hotelApiRequest("/dashboard/hotels/reservations"),
+    ]);
+    hotelDashboardData.hotels = listFromPayload(hotelsPayload);
+    hotelDashboardData.reservations = listFromPayload(reservationsPayload);
+  } catch (error) {
+    hotelDashboardData.error = error instanceof Error ? error.message : "Chargement impossible.";
+  } finally {
+    hotelDashboardData.loading = false;
+    renderDashboard();
+  }
+}
+
+void loadHotelDashboardData();

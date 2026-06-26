@@ -246,6 +246,13 @@ function shuffle(items) {
   return copy;
 }
 
+function listFromApiPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
 function formatPriceFCFA(value) {
   if (value === null || value === undefined || value === "") {
     return "";
@@ -368,7 +375,7 @@ async function loadHomeListings() {
 
     try {
       const payload = await apiRequest(path);
-      const items = Array.isArray(payload) ? payload : [];
+      const items = listFromApiPayload(payload);
       section.items = shuffle(items)
         .map(mapper)
         .filter(Boolean)

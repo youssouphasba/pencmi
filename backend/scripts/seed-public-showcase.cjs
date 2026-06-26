@@ -640,6 +640,51 @@ async function cleanup() {
     })
   ).map((item) => item.id);
 
+  const [realEstateIds, hotelIds, vehicleIds, tripIds] = await Promise.all([
+    prisma.realEstateListing.findMany({
+      where: {
+        OR: [
+          { ownerUserId: { in: managedUserIds } },
+          { metadata: { path: ["seedKey"], equals: SEED_KEY } },
+          { metadata: { path: ["seedKey"], equals: LEGACY_SEED_KEY } },
+        ],
+      },
+      select: { id: true },
+    }),
+    prisma.hotelProperty.findMany({
+      where: {
+        OR: [
+          { ownerUserId: { in: managedUserIds } },
+          { contactSettings: { path: ["seedKey"], equals: SEED_KEY } },
+        ],
+      },
+      select: { id: true },
+    }),
+    prisma.vehicleListing.findMany({
+      where: {
+        OR: [
+          { ownerUserId: { in: managedUserIds } },
+          { metadata: { path: ["seedKey"], equals: SEED_KEY } },
+        ],
+      },
+      select: { id: true },
+    }),
+    prisma.tripListing.findMany({
+      where: {
+        OR: [
+          { ownerUserId: { in: managedUserIds } },
+          { metadata: { path: ["seedKey"], equals: SEED_KEY } },
+        ],
+      },
+      select: { id: true },
+    }),
+  ]);
+
+  const realEstateListingIds = realEstateIds.map((item) => item.id);
+  const hotelPropertyIds = hotelIds.map((item) => item.id);
+  const vehicleListingIds = vehicleIds.map((item) => item.id);
+  const tripListingIds = tripIds.map((item) => item.id);
+
   await prisma.contactEvent.deleteMany({
     where: {
       OR: [
@@ -650,11 +695,11 @@ async function cleanup() {
     },
   });
 
-  await prisma.tripSeatRequest.deleteMany({ where: { clientEmail: { in: [USERS.client.email, "demo.client@pencmi.local"] } } });
-  await prisma.vehicleChauffeurRequest.deleteMany({ where: { clientEmail: { in: [USERS.client.email, "demo.client@pencmi.local"] } } });
-  await prisma.vehicleRentalRequest.deleteMany({ where: { clientEmail: { in: [USERS.client.email, "demo.client@pencmi.local"] } } });
-  await prisma.hotelReservationRequest.deleteMany({ where: { clientEmail: { in: [USERS.client.email, "demo.client@pencmi.local"] } } });
-  await prisma.realEstateVisitRequest.deleteMany({ where: { clientEmail: { in: [USERS.client.email, "demo.client@pencmi.local"] } } });
+  await prisma.tripSeatRequest.deleteMany({ where: { OR: [{ clientEmail: { in: [USERS.client.email, "demo.client@pencmi.local"] } }, { tripId: { in: tripListingIds } }] } });
+  await prisma.vehicleChauffeurRequest.deleteMany({ where: { OR: [{ clientEmail: { in: [USERS.client.email, "demo.client@pencmi.local"] } }, { listingId: { in: vehicleListingIds } }] } });
+  await prisma.vehicleRentalRequest.deleteMany({ where: { OR: [{ clientEmail: { in: [USERS.client.email, "demo.client@pencmi.local"] } }, { listingId: { in: vehicleListingIds } }] } });
+  await prisma.hotelReservationRequest.deleteMany({ where: { OR: [{ clientEmail: { in: [USERS.client.email, "demo.client@pencmi.local"] } }, { propertyId: { in: hotelPropertyIds } }] } });
+  await prisma.realEstateVisitRequest.deleteMany({ where: { OR: [{ clientEmail: { in: [USERS.client.email, "demo.client@pencmi.local"] } }, { listingId: { in: realEstateListingIds } }] } });
 
   await prisma.hotelRoom.deleteMany({ where: { property: { ownerUserId: { in: managedUserIds } } } });
   await prisma.tripListing.deleteMany({ where: { OR: [{ ownerUserId: { in: managedUserIds } }, { metadata: { path: ["seedKey"], equals: SEED_KEY } }] } });

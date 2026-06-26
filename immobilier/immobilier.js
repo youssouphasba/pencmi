@@ -201,6 +201,13 @@ async function apiRequest(path) {
   return payload?.data ?? payload;
 }
 
+function listFromApiPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
 function mapListing(listing) {
   const metadata = listing.metadata || {};
   const professionalProfile = listing.owner?.professionalProfile || {};
@@ -681,7 +688,7 @@ async function loadListings() {
   try {
     const query = buildApiQuery(state.filters);
     const payload = await apiRequest(`/immobilier${query ? `?${query}` : ""}`);
-    state.listings = Array.isArray(payload) ? payload.map(mapListing) : [];
+    state.listings = listFromApiPayload(payload).map(mapListing);
     state.displayedListings = applyClientFilters(state.listings, state.filters);
     state.agencies = buildAgencies(state.listings);
   } catch (error) {

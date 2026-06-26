@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ContactSource, ListingStatus, PencmiModule, TargetType } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { getPagination, PaginationDto } from '../../common/pagination/pagination.dto';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { CreateVehicleDto, CreateVehicleRequestDto, UpdateVehicleDto, VehicleSearchDto } from './vehicles.dto';
@@ -10,7 +11,20 @@ export class VehiclesService {
 
   async findPublic(query: VehicleSearchDto) {
     const pagination = getPagination(query);
-    const where = { status: ListingStatus.active, deletedAt: null, city: query.city, vehicleMode: query.vehicleMode };
+    const where: Prisma.VehicleListingWhereInput = {
+      status: ListingStatus.active,
+      deletedAt: null,
+      vehicleMode: query.vehicleMode || undefined,
+      ...(query.city
+        ? {
+            OR: [
+              { city: { contains: query.city, mode: 'insensitive' } },
+              { title: { contains: query.city, mode: 'insensitive' } },
+              { description: { contains: query.city, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
     const [data, total] = await Promise.all([
       this.prisma.vehicleListing.findMany({
         where,
@@ -126,6 +140,68 @@ export class VehiclesService {
     const [data, total] = await Promise.all([
       this.prisma.vehicleListing.findMany({ where, skip: pagination.skip, take: pagination.take, orderBy: { updatedAt: 'desc' } }),
       this.prisma.vehicleListing.count({ where }),
+    ]);
+    return { data, meta: pagination.meta(total) };
+  }
+
+  async findMyRentalRequests(ownerUserId: string, dto: PaginationDto) {
+    const pagination = getPagination(dto);
+    const where = {
+      listing: {
+        ownerUserId,
+        deletedAt: null,
+      },
+    };
+    const [data, total] = await Promise.all([
+      this.prisma.vehicleRentalRequest.findMany({
+        where,
+        skip: pagination.skip,
+        take: pagination.take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          listing: {
+            select: {
+              id: true,
+              title: true,
+              city: true,
+              vehicleMode: true,
+              status: true,
+            },
+          },
+        },
+      }),
+      this.prisma.vehicleRentalRequest.count({ where }),
+    ]);
+    return { data, meta: pagination.meta(total) };
+  }
+
+  async findMyChauffeurRequests(ownerUserId: string, dto: PaginationDto) {
+    const pagination = getPagination(dto);
+    const where = {
+      listing: {
+        ownerUserId,
+        deletedAt: null,
+      },
+    };
+    const [data, total] = await Promise.all([
+      this.prisma.vehicleChauffeurRequest.findMany({
+        where,
+        skip: pagination.skip,
+        take: pagination.take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          listing: {
+            select: {
+              id: true,
+              title: true,
+              city: true,
+              vehicleMode: true,
+              status: true,
+            },
+          },
+        },
+      }),
+      this.prisma.vehicleChauffeurRequest.count({ where }),
     ]);
     return { data, meta: pagination.meta(total) };
   }
