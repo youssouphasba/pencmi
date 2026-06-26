@@ -575,9 +575,11 @@ function HorizontalListingSection(section) {
 function RealEstateCard(listing) {
   return `
     <article class="listing-card">
-      <img src="${listing.image}" alt="">
+      <a href="${listing.href}" aria-label="${listing.title}">
+        <img src="${listing.image}" alt="${listing.title}">
+      </a>
       <p>${listing.category}</p>
-      <h3>${listing.title}</h3>
+      <h3><a href="${listing.href}">${listing.title}</a></h3>
       <span>${listing.city}${listing.district ? `, ${listing.district}` : ""}</span>
       <strong>${listing.price}</strong>
       ${listing.verified ? "<span>Vérifié</span>" : ""}
@@ -589,9 +591,11 @@ function RealEstateCard(listing) {
 function HotelCard(listing) {
   return `
     <article class="listing-card">
-      <img src="${listing.image}" alt="">
+      <a href="${listing.href}" aria-label="${listing.name}">
+        <img src="${listing.image}" alt="${listing.name}">
+      </a>
       <p>${listing.category}</p>
-      <h3>${listing.name}</h3>
+      <h3><a href="${listing.href}">${listing.name}</a></h3>
       <span>${listing.city}</span>
       <strong>${listing.priceFrom}</strong>
       ${listing.rating ? `<span>${listing.rating}</span>` : ""}
@@ -604,9 +608,11 @@ function HotelCard(listing) {
 function VehicleCard(listing) {
   return `
     <article class="listing-card">
-      <img src="${listing.image}" alt="">
+      <a href="${listing.href}" aria-label="${listing.brand} ${listing.model}">
+        <img src="${listing.image}" alt="${listing.brand} ${listing.model}">
+      </a>
       <p>${listing.category}</p>
-      <h3>${listing.brand} ${listing.model}</h3>
+      <h3><a href="${listing.href}">${listing.brand} ${listing.model}</a></h3>
       <span>${listing.city}</span>
       <strong>${listing.price}</strong>
       ${listing.transmission ? `<span>${listing.transmission}</span>` : ""}
@@ -620,7 +626,7 @@ function VehicleCard(listing) {
 function TripCard(listing) {
   return `
     <article class="listing-card">
-      <h3>${listing.departureCity} → ${listing.arrivalCity}</h3>
+      <h3><a href="${listing.href}">${listing.departureCity} → ${listing.arrivalCity}</a></h3>
       <p>${listing.transportType}</p>
       <strong>${listing.priceFrom}</strong>
       ${listing.company ? `<span>${listing.company}</span>` : ""}
