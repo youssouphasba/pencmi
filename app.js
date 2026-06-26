@@ -60,6 +60,10 @@ const editableHomeContentDefaults = {
 };
 
 function routeHref(path) {
+  if (window.PencmiConfig?.routeHref) {
+    return window.PencmiConfig.routeHref(path);
+  }
+
   if (window.location.protocol !== "file:") {
     return path;
   }
@@ -98,6 +102,10 @@ function routeHref(path) {
 
   if (path.startsWith("/immobilier?")) {
     return `./immobilier/${path.slice("/immobilier".length)}`;
+  }
+
+  if (path.startsWith("/immobilier/annonce/")) {
+    return `./immobilier/annonce/?id=${encodeURIComponent(path.slice("/immobilier/annonce/".length))}`;
   }
 
   if (path === "/login") {
@@ -208,6 +216,104 @@ const listingSections = [
     renderCard: TripCard
   }
 ];
+
+function getApiBaseUrl() {
+  return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || "").replace(/\/+$/, "");
+}
+
+async function apiRequest(path) {
+  const baseUrl = getApiBaseUrl();
+  if (!baseUrl) {
+    throw new Error("API indisponible.");
+  }
+
+  const response = await fetch(`${baseUrl}${path}`);
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Chargement impossible.");
+  }
+
+  return payload?.data ?? payload;
+}
+
+function shuffle(items) {
+  const copy = [...items];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+  }
+  return copy;
+}
+
+function formatPriceFCFA(value) {
+  if (value === null || value === undefined || value === "") {
+    return "";
+  }
+
+  return `${Number(value).toLocaleString("fr-FR")} FCFA`;
+}
+
+function formatRealEstateCategory(listing) {
+  const parts = [];
+
+  if (listing.transaction) {
+    parts.push(capitalize(listing.transaction));
+  }
+
+  if (listing.propertyType) {
+    parts.push(capitalize(listing.propertyType));
+  }
+
+  return parts.join(" · ");
+}
+
+function capitalize(value) {
+  const text = String(value || "").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
+}
+
+function mapHomeRealEstateListing(listing) {
+  const metadata = listing.metadata || {};
+  const photos = Array.isArray(metadata.photos) ? metadata.photos.filter(Boolean) : [];
+  const image = metadata.coverPhoto || photos[0] || "";
+
+  if (!image) {
+    return null;
+  }
+
+  return {
+    image,
+    category: formatRealEstateCategory(listing),
+    title: listing.title,
+    city: listing.city,
+    district: listing.neighborhood,
+    price: formatPriceFCFA(listing.price ?? metadata.price),
+    verified: Boolean(listing.owner?.professionalProfile?.verified),
+    href: routeHref(`/immobilier/annonce/${listing.id}`),
+  };
+}
+
+async function loadHomeListings() {
+  try {
+    const payload = await apiRequest("/immobilier");
+    const items = Array.isArray(payload) ? payload : [];
+    const realEstateItems = shuffle(items)
+      .map(mapHomeRealEstateListing)
+      .filter(Boolean)
+      .slice(0, 6);
+
+    const realEstateSection = listingSections.find((section) => section.key === "realEstate");
+    if (realEstateSection) {
+      realEstateSection.items = realEstateItems;
+    }
+  } catch {
+    const realEstateSection = listingSections.find((section) => section.key === "realEstate");
+    if (realEstateSection) {
+      realEstateSection.items = [];
+    }
+  }
+}
 
 const advantages = [
   {
@@ -515,10 +621,13 @@ function Footer() {
   `;
 }
 
-Header();
-HeroSearch();
-CategoryGrid();
-ListingSections();
-AdvantagesSection();
-ProfessionalCTA();
-Footer();
+document.addEventListener("DOMContentLoaded", async () => {
+  Header();
+  HeroSearch();
+  CategoryGrid();
+  await loadHomeListings();
+  ListingSections();
+  AdvantagesSection();
+  ProfessionalCTA();
+  Footer();
+});

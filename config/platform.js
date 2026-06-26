@@ -240,16 +240,29 @@ function pencmiRelativeRoot() {
 }
 
 function pencmiRouteHref(path = "/") {
-  if (typeof window === "undefined" || window.location.protocol !== "file:") return path;
+  if (typeof window === "undefined") return path;
+
+  const isFileMode = window.location.protocol === "file:";
   const prefix = pencmiRelativeRoot();
-  if (path === "/") return `${prefix}index.html`;
-  if (path.startsWith("/login?")) return `${prefix}login/${path.slice("/login".length)}`;
-  if (path.startsWith("/publier?")) return `${prefix}publier/${path.slice("/publier".length)}`;
+  const rootPrefix = isFileMode ? prefix : "/";
+
+  if (path === "/") return isFileMode ? `${prefix}index.html` : "/";
+  if (path.startsWith("/immobilier/annonce/")) {
+    const id = encodeURIComponent(path.slice("/immobilier/annonce/".length));
+    return `${rootPrefix}immobilier/annonce/?id=${id}`;
+  }
+  if (path.startsWith("/login?")) return `${rootPrefix}login/${path.slice("/login".length)}`;
+  if (path.startsWith("/publier?")) return `${rootPrefix}publier/${path.slice("/publier".length)}`;
   if (path.includes("?")) {
     const [base, query] = path.split("?");
     return `${pencmiRouteHref(base)}?${query}`;
   }
-  return `${prefix}${path.replace(/^\//, "")}/`;
+
+  if (isFileMode) {
+    return `${prefix}${path.replace(/^\//, "")}/`;
+  }
+
+  return `${path.replace(/\/+$/, "")}/`;
 }
 
 window.PencmiConfig = {
