@@ -56,15 +56,18 @@ function tripListFromPayload(payload) {
   return [];
 }
 
-async function tripApiRequest(path) {
+async function tripApiRequest(path, options = {}) {
   const baseUrl = tripApiBaseUrl();
   const token = tripAccessToken();
   if (!baseUrl || !token) {
     throw new Error("Connexion annonceur requise.");
   }
   const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
     headers: {
+      ...(options.headers || {}),
       Authorization: `Bearer ${token}`,
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
     },
   });
   const payload = await response.json().catch(() => null);
@@ -72,6 +75,20 @@ async function tripApiRequest(path) {
     throw new Error(payload?.error?.message || "Chargement impossible.");
   }
   return payload?.data ?? payload;
+}
+
+const tripReservationStatusLabels = {
+  new: "Nouvelle",
+  pending: "En attente",
+  accepted: "Acceptée",
+  refused: "Refusée",
+  cancelled: "Annulée",
+  completed: "Terminée",
+  requires_more_info: "Infos demandées"
+};
+
+function formatTripReservationStatus(status) {
+  return tripReservationStatusLabels[status] || "À traiter";
 }
 
 function formatTripDate(value) {
@@ -184,8 +201,39 @@ function TripMessagesPage() {
 function TripReservationsPage() {
   return TripsDashboardLayout(`
     ${DashboardHeader("Demandes de place", "Gérez les demandes de réservation reçues sur vos trajets.")}
-    ${tripDashboardData.reservations.length ? `<section class="trip-table-wrap"><table class="trip-table"><thead><tr><th>Client</th><th>Trajet</th><th>Places demandées</th><th>Bagages</th><th>Message</th><th>Statut</th><th>Date</th></tr></thead><tbody>${tripDashboardData.reservations.map((request) => `<tr><td>${request.clientName || "Client"}</td><td>${request.trip?.title || "Trajet"}</td><td>${request.requestedSeats || ""}</td><td>${request.luggage ? "Oui" : "Non"}</td><td>${request.message || ""}</td><td>${request.status}</td><td>${formatTripDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucune demande de place pour le moment.")}
+    ${tripDashboardData.reservations.length ? `<section class="trip-table-wrap"><table class="trip-table"><thead><tr><th>Client</th><th>Trajet</th><th>Places demandées</th><th>Bagages</th><th>Message</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead><tbody>${tripDashboardData.reservations.map(TripReservationRow).join("")}</tbody></table></section>` : EmptyState("Aucune demande de place pour le moment.")}
   `, "reservations");
+}
+
+function TripReservationRow(request) {
+  return `
+    <tr>
+      <td>${request.clientName || "Client"}</td>
+      <td>${request.trip?.title || "Trajet"}</td>
+      <td>${request.requestedSeats || ""}</td>
+      <td>${request.luggage ? "Oui" : "Non"}</td>
+      <td>${request.message || ""}</td>
+      <td>${formatTripReservationStatus(request.status)}</td>
+      <td>${formatTripDate(request.createdAt)}</td>
+      <td>
+        <div class="trip-row-actions">
+          <button class="btn btn-primary" type="button" data-trip-request-status="accepted" data-trip-request-id="${request.id}">Accepter</button>
+          <button class="btn btn-ghost" type="button" data-trip-request-status="requires_more_info" data-trip-request-id="${request.id}">Demander des infos</button>
+          <button class="btn btn-ghost" type="button" data-trip-request-status="refused" data-trip-request-id="${request.id}">Refuser</button>
+          <button class="btn btn-ghost" type="button" data-trip-request-status="completed" data-trip-request-id="${request.id}">Terminer</button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+async function updateTripReservationStatus(id, status) {
+  const updated = await tripApiRequest(`/dashboard/voyages/seat-requests/${encodeURIComponent(id)}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+  tripDashboardData.reservations = tripDashboardData.reservations.map((request) => request.id === id ? updated : request);
+  renderDashboard();
 }
 
 function TripContactsPage() {
@@ -256,6 +304,14 @@ function renderDashboard() {
   });
   document.querySelector("[data-save-contact-settings]")?.addEventListener("click", () => {
     document.querySelector("#trip-contact-settings-message").hidden = false;
+  });
+  document.querySelectorAll("[data-trip-request-status]").forEach((button) => {
+    button.addEventListener("click", () => {
+      button.disabled = true;
+      void updateTripReservationStatus(button.dataset.tripRequestId, button.dataset.tripRequestStatus).catch(() => {
+        button.disabled = false;
+      });
+    });
   });
 }
 

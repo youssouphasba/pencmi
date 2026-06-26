@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsString } from 'class-validator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 
 export class RealEstateSearchDto extends PaginationDto {
@@ -64,4 +64,11 @@ export class CreateVisitRequestDto {
   @IsOptional()
   @IsString()
   message?: string;
+}
+
+const visitRequestStatuses = ['pending', 'accepted', 'refused', 'cancelled', 'completed', 'requires_more_info'] as const;
+
+export class UpdateVisitRequestStatusDto {
+  @IsIn(visitRequestStatuses)
+  status: (typeof visitRequestStatuses)[number];
 }

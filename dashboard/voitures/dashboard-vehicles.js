@@ -55,15 +55,18 @@ function vehicleListFromPayload(payload) {
   return [];
 }
 
-async function vehicleApiRequest(path) {
+async function vehicleApiRequest(path, options = {}) {
   const baseUrl = vehicleApiBaseUrl();
   const token = vehicleAccessToken();
   if (!baseUrl || !token) {
     throw new Error("Connexion annonceur requise.");
   }
   const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
     headers: {
+      ...(options.headers || {}),
       Authorization: `Bearer ${token}`,
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
     },
   });
   const payload = await response.json().catch(() => null);
@@ -71,6 +74,20 @@ async function vehicleApiRequest(path) {
     throw new Error(payload?.error?.message || "Chargement impossible.");
   }
   return payload?.data ?? payload;
+}
+
+const vehicleRequestStatusLabels = {
+  new: "Nouvelle",
+  pending: "En attente",
+  accepted: "Acceptée",
+  refused: "Refusée",
+  cancelled: "Annulée",
+  completed: "Terminée",
+  requires_more_info: "Infos demandées"
+};
+
+function formatVehicleRequestStatus(status) {
+  return vehicleRequestStatusLabels[status] || "À traiter";
 }
 
 function formatVehicleDate(value) {
@@ -188,8 +205,41 @@ function VehicleContactsPage() {
   return VehiclesDashboardLayout(`
     ${DashboardHeader("Contacts reçus", "Suivez les contacts générés par vos annonces voitures.")}
     <section class="vehicle-dashboard-card"><h2>Sources prévues</h2><div class="vehicle-chip-row">${sources.map((source) => `<span class="vehicle-chip">${source}</span>`).join("")}</div></section>
-    ${vehicleDashboardData.requests.length ? `<section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Client</th><th>Annonce</th><th>Type</th><th>Début</th><th>Fin</th><th>Message</th><th>Statut</th><th>Date</th></tr></thead><tbody>${vehicleDashboardData.requests.map((request) => `<tr><td>${request.clientName || "Client"}</td><td>${request.listing?.title || "Annonce"}</td><td>${request.requestType || request.listing?.vehicleMode || ""}</td><td>${formatVehicleDate(request.startDate || request.serviceDate)}</td><td>${formatVehicleDate(request.endDate)}</td><td>${request.message || ""}</td><td>${request.status}</td><td>${formatVehicleDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucun contact reçu pour le moment.")}
+    ${vehicleDashboardData.requests.length ? `<section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Client</th><th>Annonce</th><th>Type</th><th>Début</th><th>Fin</th><th>Message</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead><tbody>${vehicleDashboardData.requests.map(VehicleRequestRow).join("")}</tbody></table></section>` : EmptyState("Aucun contact reçu pour le moment.")}
   `, "contacts");
+}
+
+function VehicleRequestRow(request) {
+  return `
+    <tr>
+      <td>${request.clientName || "Client"}</td>
+      <td>${request.listing?.title || "Annonce"}</td>
+      <td>${request.requestType || request.listing?.vehicleMode || ""}</td>
+      <td>${formatVehicleDate(request.startDate || request.serviceDate)}</td>
+      <td>${formatVehicleDate(request.endDate)}</td>
+      <td>${request.message || ""}</td>
+      <td>${formatVehicleRequestStatus(request.status)}</td>
+      <td>${formatVehicleDate(request.createdAt)}</td>
+      <td>
+        <div class="vehicle-row-actions">
+          <button class="btn btn-primary" type="button" data-vehicle-request-status="accepted" data-vehicle-request-type="${request.requestType}" data-vehicle-request-id="${request.id}">Accepter</button>
+          <button class="btn btn-ghost" type="button" data-vehicle-request-status="requires_more_info" data-vehicle-request-type="${request.requestType}" data-vehicle-request-id="${request.id}">Demander des infos</button>
+          <button class="btn btn-ghost" type="button" data-vehicle-request-status="refused" data-vehicle-request-type="${request.requestType}" data-vehicle-request-id="${request.id}">Refuser</button>
+          <button class="btn btn-ghost" type="button" data-vehicle-request-status="completed" data-vehicle-request-type="${request.requestType}" data-vehicle-request-id="${request.id}">Terminer</button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+async function updateVehicleRequestStatus(id, requestType, status) {
+  const path = requestType === "chauffeur" ? "chauffeur-requests" : "rental-requests";
+  const updated = await vehicleApiRequest(`/dashboard/voitures/${path}/${encodeURIComponent(id)}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+  vehicleDashboardData.requests = vehicleDashboardData.requests.map((request) => request.id === id ? { ...updated, requestType } : request);
+  renderDashboard();
 }
 
 function VehicleStatisticsPage() {
@@ -250,6 +300,14 @@ function renderDashboard() {
   });
   document.querySelector("[data-save-contact-settings]")?.addEventListener("click", () => {
     document.querySelector("#vehicle-contact-settings-message").hidden = false;
+  });
+  document.querySelectorAll("[data-vehicle-request-status]").forEach((button) => {
+    button.addEventListener("click", () => {
+      button.disabled = true;
+      void updateVehicleRequestStatus(button.dataset.vehicleRequestId, button.dataset.vehicleRequestType, button.dataset.vehicleRequestStatus).catch(() => {
+        button.disabled = false;
+      });
+    });
   });
 }
 

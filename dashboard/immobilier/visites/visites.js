@@ -28,15 +28,18 @@ function listFromPayload(payload) {
   return [];
 }
 
-async function apiRequest(path) {
+async function apiRequest(path, options = {}) {
   const baseUrl = getApiBaseUrl();
   const token = getAccessToken();
   if (!baseUrl || !token) {
     throw new Error("Connexion annonceur requise.");
   }
   const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
     headers: {
+      ...(options.headers || {}),
       Authorization: `Bearer ${token}`,
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
     },
   });
   const payload = await response.json().catch(() => null);
@@ -85,7 +88,15 @@ function DashboardSidebar() {
 }
 
 function VisitStatusBadge(status) {
-  const labels = { new: "Nouvelle", proposed: "Visite proposée", confirmed: "Confirmée", cancelled: "Annulée", completed: "Terminée" };
+  const labels = {
+    new: "Nouvelle",
+    pending: "Visite proposée",
+    accepted: "Confirmée",
+    refused: "Refusée",
+    cancelled: "Annulée",
+    completed: "Terminée",
+    requires_more_info: "Infos demandées"
+  };
   return `<span class="status-badge">${labels[status] || "À renseigner"}</span>`;
 }
 
@@ -98,9 +109,11 @@ function VisitRequestCard(visit) {
       ${visit.message ? `<p>${visit.message}</p>` : ""}
       <div class="page-actions">
         <button type="button" data-open-detail>Voir détail</button>
-        <button type="button" data-open-proposal>Proposer un créneau</button>
-        <button type="button">Confirmer</button>
-        <button type="button">Annuler</button>
+        <button type="button" data-visit-status="pending" data-visit-id="${visit.id}">Proposer un créneau</button>
+        <button type="button" data-visit-status="accepted" data-visit-id="${visit.id}">Confirmer</button>
+        <button type="button" data-visit-status="requires_more_info" data-visit-id="${visit.id}">Demander des infos</button>
+        <button type="button" data-visit-status="cancelled" data-visit-id="${visit.id}">Annuler</button>
+        <button type="button" data-visit-status="completed" data-visit-id="${visit.id}">Marquer terminée</button>
         <button type="button">Répondre au client</button>
         <a href="${routes.messages}">Ouvrir conversation</a>
       </div>
@@ -169,13 +182,22 @@ function VisitsPage() {
         <header class="dashboard-header">
           <div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>Demandes de visite</h1><p>Gérez les demandes de visite reçues sur vos annonces immobilières.</p></div>
         </header>
-        <div class="status-tabs">${[["Toutes", "all"], ["Nouvelles", "new"], ["Proposées", "proposed"], ["Confirmées", "confirmed"], ["Annulées", "cancelled"], ["Terminées", "completed"]].map(([label, status]) => `<button class="${activeStatus === status ? "is-active" : ""}" type="button" data-status="${status}">${label}</button>`).join("")}</div>
+        <div class="status-tabs">${[["Toutes", "all"], ["Nouvelles", "new"], ["Proposées", "pending"], ["Confirmées", "accepted"], ["Infos demandées", "requires_more_info"], ["Annulées", "cancelled"], ["Terminées", "completed"]].map(([label, status]) => `<button class="${activeStatus === status ? "is-active" : ""}" type="button" data-status="${status}">${label}</button>`).join("")}</div>
         <section class="filter-strip"><input type="search" placeholder="Recherche par client, annonce ou ville"></section>
         ${VisitRequestTable()}
       </main>
     </div>
   `;
   bindEvents();
+}
+
+async function updateVisitStatus(id, status) {
+  const updated = await apiRequest(`/dashboard/immobilier/visits/${encodeURIComponent(id)}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+  visitRequests = visitRequests.map((visit) => visit.id === id ? updated : visit);
+  VisitsPage();
 }
 
 function openModal(content) {
@@ -188,6 +210,14 @@ function bindEvents() {
   document.querySelectorAll("[data-status]").forEach((button) => button.addEventListener("click", () => { activeStatus = button.dataset.status; VisitsPage(); }));
   document.querySelectorAll("[data-open-proposal]").forEach((button) => button.addEventListener("click", () => openModal(VisitProposalModal())));
   document.querySelectorAll("[data-open-detail]").forEach((button) => button.addEventListener("click", () => openModal(VisitDetailModal())));
+  document.querySelectorAll("[data-visit-status]").forEach((button) => {
+    button.addEventListener("click", () => {
+      button.disabled = true;
+      void updateVisitStatus(button.dataset.visitId, button.dataset.visitStatus).catch(() => {
+        button.disabled = false;
+      });
+    });
+  });
 }
 
 async function loadVisitRequests() {

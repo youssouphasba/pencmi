@@ -5,7 +5,7 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { Public } from '../../common/decorators/public.decorator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
-import { CreateSeatRequestDto, CreateTripDto, TripSearchDto, UpdateTripDto } from './trips.dto';
+import { CreateSeatRequestDto, CreateTripDto, TripSearchDto, UpdateSeatRequestStatusDto, UpdateTripDto } from './trips.dto';
 import { TripsService } from './trips.service';
 
 @ApiTags('trips')
@@ -43,6 +43,17 @@ export class TripsController {
   @Get('dashboard/voyages/seat-requests')
   findMySeatRequests(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationDto) {
     return this.service.findMySeatRequests(user.id, pagination);
+  }
+
+  @ApiBearerAuth()
+  @RequirePermissions('manage_trips')
+  @Patch('dashboard/voyages/seat-requests/:id/status')
+  updateSeatRequestStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateSeatRequestStatusDto,
+  ) {
+    return this.service.updateSeatRequestStatus(user.id, id, dto);
   }
 
   @ApiBearerAuth()

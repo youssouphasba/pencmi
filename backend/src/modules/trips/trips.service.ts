@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { ContactSource, ListingStatus, PencmiModule, TargetType } from '@prisma/client';
+import { ContactSource, ListingStatus, PencmiModule, RequestStatus, TargetType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { getPagination, PaginationDto } from '../../common/pagination/pagination.dto';
 import { PrismaService } from '../../database/prisma/prisma.service';
-import { CreateSeatRequestDto, CreateTripDto, TripSearchDto, UpdateTripDto } from './trips.dto';
+import { CreateSeatRequestDto, CreateTripDto, TripSearchDto, UpdateSeatRequestStatusDto, UpdateTripDto } from './trips.dto';
 
 @Injectable()
 export class TripsService {
@@ -166,6 +166,37 @@ export class TripsService {
       this.prisma.tripSeatRequest.count({ where }),
     ]);
     return { data, meta: pagination.meta(total) };
+  }
+
+  async updateSeatRequestStatus(ownerUserId: string, id: string, dto: UpdateSeatRequestStatusDto) {
+    const request = await this.prisma.tripSeatRequest.findFirstOrThrow({
+      where: {
+        id,
+        trip: {
+          ownerUserId,
+          deletedAt: null,
+        },
+      },
+      select: { id: true },
+    });
+
+    return this.prisma.tripSeatRequest.update({
+      where: { id: request.id },
+      data: { status: dto.status as RequestStatus },
+      include: {
+        trip: {
+          select: {
+            id: true,
+            title: true,
+            departureCity: true,
+            arrivalCity: true,
+            departureDate: true,
+            departureTime: true,
+            status: true,
+          },
+        },
+      },
+    });
   }
 
   create(ownerUserId: string, dto: CreateTripDto) {

@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsIn, IsOptional, IsString } from 'class-validator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 
 export class VehicleSearchDto extends PaginationDto {
@@ -55,4 +55,11 @@ export class CreateVehicleRequestDto {
   @IsOptional()
   @IsString()
   message?: string;
+}
+
+const vehicleRequestStatuses = ['pending', 'accepted', 'refused', 'cancelled', 'completed', 'requires_more_info'] as const;
+
+export class UpdateVehicleRequestStatusDto {
+  @IsIn(vehicleRequestStatuses)
+  status: (typeof vehicleRequestStatuses)[number];
 }

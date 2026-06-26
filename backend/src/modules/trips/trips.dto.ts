@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 
 export class TripSearchDto extends PaginationDto {
@@ -64,4 +64,11 @@ export class CreateSeatRequestDto {
   @IsOptional()
   @IsString()
   message?: string;
+}
+
+const seatRequestStatuses = ['pending', 'accepted', 'refused', 'cancelled', 'completed', 'requires_more_info'] as const;
+
+export class UpdateSeatRequestStatusDto {
+  @IsIn(seatRequestStatuses)
+  status: (typeof seatRequestStatuses)[number];
 }

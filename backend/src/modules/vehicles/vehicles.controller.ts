@@ -5,7 +5,7 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { Public } from '../../common/decorators/public.decorator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
-import { CreateVehicleDto, CreateVehicleRequestDto, UpdateVehicleDto, VehicleSearchDto } from './vehicles.dto';
+import { CreateVehicleDto, CreateVehicleRequestDto, UpdateVehicleDto, UpdateVehicleRequestStatusDto, VehicleSearchDto } from './vehicles.dto';
 import { VehiclesService } from './vehicles.service';
 
 @ApiTags('vehicles')
@@ -56,6 +56,28 @@ export class VehiclesController {
   @Get('dashboard/voitures/chauffeur-requests')
   findMyChauffeurRequests(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationDto) {
     return this.service.findMyChauffeurRequests(user.id, pagination);
+  }
+
+  @ApiBearerAuth()
+  @RequirePermissions('manage_vehicles')
+  @Patch('dashboard/voitures/rental-requests/:id/status')
+  updateRentalRequestStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateVehicleRequestStatusDto,
+  ) {
+    return this.service.updateRentalRequestStatus(user.id, id, dto);
+  }
+
+  @ApiBearerAuth()
+  @RequirePermissions('manage_vehicles')
+  @Patch('dashboard/voitures/chauffeur-requests/:id/status')
+  updateChauffeurRequestStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateVehicleRequestStatusDto,
+  ) {
+    return this.service.updateChauffeurRequestStatus(user.id, id, dto);
   }
 
   @ApiBearerAuth()

@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { ContactSource, ListingStatus, PencmiModule, TargetType } from '@prisma/client';
+import { ContactSource, ListingStatus, PencmiModule, RequestStatus, TargetType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { getPagination, PaginationDto } from '../../common/pagination/pagination.dto';
 import { PrismaService } from '../../database/prisma/prisma.service';
-import { CreateRealEstateDto, CreateVisitRequestDto, RealEstateSearchDto, UpdateRealEstateDto } from './real-estate.dto';
+import { CreateRealEstateDto, CreateVisitRequestDto, RealEstateSearchDto, UpdateRealEstateDto, UpdateVisitRequestStatusDto } from './real-estate.dto';
 
 @Injectable()
 export class RealEstateService {
@@ -155,6 +155,35 @@ export class RealEstateService {
       this.prisma.realEstateVisitRequest.count({ where }),
     ]);
     return { data, meta: pagination.meta(total) };
+  }
+
+  async updateVisitRequestStatus(ownerUserId: string, id: string, dto: UpdateVisitRequestStatusDto) {
+    const request = await this.prisma.realEstateVisitRequest.findFirstOrThrow({
+      where: {
+        id,
+        listing: {
+          ownerUserId,
+          deletedAt: null,
+        },
+      },
+      select: { id: true },
+    });
+
+    return this.prisma.realEstateVisitRequest.update({
+      where: { id: request.id },
+      data: { status: dto.status as RequestStatus },
+      include: {
+        listing: {
+          select: {
+            id: true,
+            title: true,
+            city: true,
+            neighborhood: true,
+            status: true,
+          },
+        },
+      },
+    });
   }
 
   create(ownerUserId: string, dto: CreateRealEstateDto) {

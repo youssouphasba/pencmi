@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { ContactSource, ListingStatus, PencmiModule, TargetType } from '@prisma/client';
+import { ContactSource, ListingStatus, PencmiModule, RequestStatus, TargetType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { getPagination, PaginationDto } from '../../common/pagination/pagination.dto';
 import { PrismaService } from '../../database/prisma/prisma.service';
-import { CreateVehicleDto, CreateVehicleRequestDto, UpdateVehicleDto, VehicleSearchDto } from './vehicles.dto';
+import { CreateVehicleDto, CreateVehicleRequestDto, UpdateVehicleDto, UpdateVehicleRequestStatusDto, VehicleSearchDto } from './vehicles.dto';
 
 @Injectable()
 export class VehiclesService {
@@ -204,6 +204,64 @@ export class VehiclesService {
       this.prisma.vehicleChauffeurRequest.count({ where }),
     ]);
     return { data, meta: pagination.meta(total) };
+  }
+
+  async updateRentalRequestStatus(ownerUserId: string, id: string, dto: UpdateVehicleRequestStatusDto) {
+    const request = await this.prisma.vehicleRentalRequest.findFirstOrThrow({
+      where: {
+        id,
+        listing: {
+          ownerUserId,
+          deletedAt: null,
+        },
+      },
+      select: { id: true },
+    });
+
+    return this.prisma.vehicleRentalRequest.update({
+      where: { id: request.id },
+      data: { status: dto.status as RequestStatus },
+      include: {
+        listing: {
+          select: {
+            id: true,
+            title: true,
+            city: true,
+            vehicleMode: true,
+            status: true,
+          },
+        },
+      },
+    });
+  }
+
+  async updateChauffeurRequestStatus(ownerUserId: string, id: string, dto: UpdateVehicleRequestStatusDto) {
+    const request = await this.prisma.vehicleChauffeurRequest.findFirstOrThrow({
+      where: {
+        id,
+        listing: {
+          ownerUserId,
+          deletedAt: null,
+        },
+      },
+      select: { id: true },
+    });
+
+    return this.prisma.vehicleChauffeurRequest.update({
+      where: { id: request.id },
+      data: { status: dto.status as RequestStatus },
+      include: {
+        listing: {
+          select: {
+            id: true,
+            title: true,
+            city: true,
+            vehicleMode: true,
+            status: true,
+          },
+        },
+      },
+    });
   }
 
   create(ownerUserId: string, dto: CreateVehicleDto) {

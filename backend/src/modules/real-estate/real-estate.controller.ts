@@ -5,7 +5,7 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { Public } from '../../common/decorators/public.decorator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
-import { CreateRealEstateDto, CreateVisitRequestDto, RealEstateSearchDto, UpdateRealEstateDto } from './real-estate.dto';
+import { CreateRealEstateDto, CreateVisitRequestDto, RealEstateSearchDto, UpdateRealEstateDto, UpdateVisitRequestStatusDto } from './real-estate.dto';
 import { RealEstateService } from './real-estate.service';
 
 @ApiTags('real-estate')
@@ -43,6 +43,17 @@ export class RealEstateController {
   @Get('dashboard/immobilier/visits')
   findMyVisitRequests(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationDto) {
     return this.service.findMyVisitRequests(user.id, pagination);
+  }
+
+  @ApiBearerAuth()
+  @RequirePermissions('manage_real_estate')
+  @Patch('dashboard/immobilier/visits/:id/status')
+  updateVisitRequestStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateVisitRequestStatusDto,
+  ) {
+    return this.service.updateVisitRequestStatus(user.id, id, dto);
   }
 
   @ApiBearerAuth()
