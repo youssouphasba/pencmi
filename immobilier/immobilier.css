@@ -24,6 +24,7 @@ body {
   margin: 0;
   color: var(--text);
   background: var(--bg);
+  overflow-x: hidden;
 }
 
 a {
@@ -98,7 +99,7 @@ select {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  min-width: max-content;
+  min-width: 0;
 }
 
 .brand-mark {
@@ -129,6 +130,7 @@ select {
   justify-content: space-between;
   gap: 28px;
   flex: 1;
+  min-width: 0;
 }
 
 .main-nav,
@@ -674,9 +676,24 @@ h1 {
     padding: 10px 14px;
   }
 
+  .brand {
+    max-width: calc(100vw - 92px);
+  }
+
+  .brand > span:last-child {
+    min-width: 0;
+  }
+
   .brand-mark {
     width: 36px;
     height: 36px;
+  }
+
+  .brand strong,
+  .brand small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .real-estate-hero {

@@ -55,6 +55,7 @@ html {
   min-width: 320px;
   background: var(--ds-color-background);
   -webkit-text-size-adjust: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -62,6 +63,7 @@ body {
   color: var(--ds-color-text);
   background: var(--ds-color-background);
   font-family: var(--ds-font-family);
+  overflow-x: hidden;
 }
 
 a {
@@ -105,6 +107,75 @@ img,
 svg,
 video {
   max-width: 100%;
+}
+
+.brand > .brand-mark {
+  display: block;
+  width: clamp(124px, 18vw, 172px);
+  min-width: 124px;
+  height: clamp(48px, 7vw, 66px);
+  min-height: 48px;
+  background: url("/Logo%20pencmi.jpeg") center / contain no-repeat;
+  border-radius: 0;
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  box-shadow: none;
+}
+
+.brand > span:last-child {
+  display: none;
+}
+
+.dashboard-brand > span:first-child {
+  display: block;
+  width: 138px;
+  min-width: 138px;
+  height: 58px;
+  min-height: 58px;
+  background: url("/Logo%20pencmi.jpeg") center / contain no-repeat;
+  border-radius: 0;
+  color: transparent;
+  font-size: 0;
+  line-height: 0;
+  box-shadow: none;
+}
+
+.dashboard-brand > div:last-child {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .brand {
+    min-width: 0;
+    max-width: calc(100vw - 96px);
+    flex: 1 1 auto;
+  }
+
+  .brand > span:last-child {
+    min-width: 0;
+  }
+
+  .brand strong,
+  .brand small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .brand > .brand-mark {
+    width: 112px;
+    min-width: 112px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .dashboard-brand > span:first-child {
+    width: 124px;
+    min-width: 124px;
+    height: 52px;
+    min-height: 52px;
+  }
 }
 
 .ds-container {
