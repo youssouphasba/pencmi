@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ProfessionalType } from '@prisma/client';
+import { ListingStatus, ProfessionalType } from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { FilesService } from '../../files/files.service';
 import { UpsertProfessionalProfileDto } from './professional-profiles.dto';
@@ -20,6 +20,61 @@ export class ProfessionalProfilesService {
 
   findMine(userId: string) {
     return this.prisma.professionalProfile.findUnique({ where: { userId } });
+  }
+
+  async findPublic(userId: string) {
+    const [user, realEstateListings, hotelListings, vehicleListings, tripListings] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({
+        where: { id: userId, deletedAt: null },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          city: true,
+          avatarUrl: true,
+          role: true,
+          professionalVerified: true,
+          professionalProfile: true,
+        },
+      }),
+      this.prisma.realEstateListing.findMany({
+        where: { ownerUserId: userId, status: ListingStatus.active, deletedAt: null },
+        orderBy: { updatedAt: 'desc' },
+        take: 12,
+      }),
+      this.prisma.hotelProperty.findMany({
+        where: { ownerUserId: userId, status: ListingStatus.active, deletedAt: null },
+        include: { rooms: true },
+        orderBy: { updatedAt: 'desc' },
+        take: 12,
+      }),
+      this.prisma.vehicleListing.findMany({
+        where: { ownerUserId: userId, status: ListingStatus.active, deletedAt: null },
+        orderBy: { updatedAt: 'desc' },
+        take: 12,
+      }),
+      this.prisma.tripListing.findMany({
+        where: { ownerUserId: userId, status: ListingStatus.active, deletedAt: null },
+        orderBy: { updatedAt: 'desc' },
+        take: 12,
+      }),
+    ]);
+
+    return {
+      user,
+      counts: {
+        realEstate: realEstateListings.length,
+        hotels: hotelListings.length,
+        vehicles: vehicleListings.length,
+        trips: tripListings.length,
+      },
+      listings: {
+        realEstate: realEstateListings,
+        hotels: hotelListings,
+        vehicles: vehicleListings,
+        trips: tripListings,
+      },
+    };
   }
 
   upsertMine(userId: string, dto: UpsertProfessionalProfileDto) {

@@ -17,7 +17,39 @@ export class HotelsService {
       propertyType: query.propertyType,
     };
     const [data, total] = await Promise.all([
-      this.prisma.hotelProperty.findMany({ where, skip: pagination.skip, take: pagination.take, orderBy: { updatedAt: 'desc' } }),
+      this.prisma.hotelProperty.findMany({
+        where,
+        skip: pagination.skip,
+        take: pagination.take,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              city: true,
+              role: true,
+              professionalProfile: {
+                select: {
+                  businessName: true,
+                  professionalType: true,
+                  city: true,
+                  logoUrl: true,
+                  whatsappNumber: true,
+                  professionalPhone: true,
+                  professionalEmail: true,
+                  openingHours: true,
+                  verified: true,
+                  website: true,
+                  description: true,
+                },
+              },
+            },
+          },
+          rooms: true,
+        },
+      }),
       this.prisma.hotelProperty.count({ where }),
     ]);
     return { data, meta: pagination.meta(total) };
@@ -26,7 +58,33 @@ export class HotelsService {
   findPublicOne(id: string) {
     return this.prisma.hotelProperty.findFirstOrThrow({
       where: { id, status: ListingStatus.active, deletedAt: null },
-      include: { rooms: true },
+      include: {
+        rooms: true,
+        owner: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            city: true,
+            role: true,
+            professionalProfile: {
+              select: {
+                businessName: true,
+                professionalType: true,
+                city: true,
+                logoUrl: true,
+                whatsappNumber: true,
+                professionalPhone: true,
+                professionalEmail: true,
+                openingHours: true,
+                verified: true,
+                website: true,
+                description: true,
+              },
+            },
+          },
+        },
+      },
     });
   }
 

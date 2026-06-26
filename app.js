@@ -294,25 +294,89 @@ function mapHomeRealEstateListing(listing) {
   };
 }
 
-async function loadHomeListings() {
-  try {
-    const payload = await apiRequest("/immobilier");
-    const items = Array.isArray(payload) ? payload : [];
-    const realEstateItems = shuffle(items)
-      .map(mapHomeRealEstateListing)
-      .filter(Boolean)
-      .slice(0, 6);
+function mapHomeHotelListing(listing) {
+  const metadata = listing.metadata || {};
+  const photos = Array.isArray(metadata.photos) ? metadata.photos.filter(Boolean) : [];
+  const image = metadata.coverPhoto || photos[0] || "";
 
-    const realEstateSection = listingSections.find((section) => section.key === "realEstate");
-    if (realEstateSection) {
-      realEstateSection.items = realEstateItems;
-    }
-  } catch {
-    const realEstateSection = listingSections.find((section) => section.key === "realEstate");
-    if (realEstateSection) {
-      realEstateSection.items = [];
-    }
+  if (!image) {
+    return null;
   }
+
+  return {
+    image,
+    category: [listing.propertyType, listing.city].filter(Boolean).join(" · "),
+    name: listing.name,
+    city: listing.city,
+    priceFrom: formatPriceFCFA(metadata.nightlyPrice || metadata.priceFrom),
+    rating: metadata.stars ? `${metadata.stars} étoiles` : "",
+    verified: Boolean(listing.owner?.professionalProfile?.verified),
+    href: routeHref(`/hotels/${listing.id}`),
+  };
+}
+
+function mapHomeVehicleListing(listing) {
+  const metadata = listing.metadata || {};
+  const photos = Array.isArray(metadata.photos) ? metadata.photos.filter(Boolean) : [];
+  const image = metadata.coverPhoto || photos[0] || "";
+
+  if (!image) {
+    return null;
+  }
+
+  return {
+    image,
+    category: [listing.vehicleMode, listing.city].filter(Boolean).join(" · "),
+    brand: metadata.brand || "",
+    model: metadata.model || listing.title,
+    city: listing.city,
+    price: formatPriceFCFA(listing.price ?? metadata.price),
+    transmission: metadata.gearbox || "",
+    fuel: metadata.fuel || "",
+    verified: Boolean(listing.owner?.professionalProfile?.verified),
+    href: routeHref(`/voitures/${listing.id}`),
+  };
+}
+
+function mapHomeTripListing(listing) {
+  const metadata = listing.metadata || {};
+  return {
+    departureCity: listing.departureCity,
+    arrivalCity: listing.arrivalCity,
+    transportType: listing.vehicleType,
+    priceFrom: formatPriceFCFA(listing.pricePerSeat ?? metadata.pricePerSeat),
+    company: metadata.transporterName || listing.owner?.professionalProfile?.businessName || "",
+    departureTime: listing.departureTime || "",
+    verified: Boolean(listing.owner?.professionalProfile?.verified),
+    href: routeHref(`/voyages/${listing.id}`),
+  };
+}
+
+async function loadHomeListings() {
+  const loaders = [
+    ["realEstate", "/immobilier", mapHomeRealEstateListing],
+    ["hotels", "/hotels", mapHomeHotelListing],
+    ["vehicles", "/voitures", mapHomeVehicleListing],
+    ["trips", "/voyages", mapHomeTripListing],
+  ];
+
+  await Promise.all(loaders.map(async ([key, path, mapper]) => {
+    const section = listingSections.find((entry) => entry.key === key);
+    if (!section) {
+      return;
+    }
+
+    try {
+      const payload = await apiRequest(path);
+      const items = Array.isArray(payload) ? payload : [];
+      section.items = shuffle(items)
+        .map(mapper)
+        .filter(Boolean)
+        .slice(0, 6);
+    } catch {
+      section.items = [];
+    }
+  }));
 }
 
 const advantages = [

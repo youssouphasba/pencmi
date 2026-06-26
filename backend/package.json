@@ -18,7 +18,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "admin:create": "node scripts/create-admin.cjs",
-    "seed:demo:real-estate": "node scripts/seed-real-estate-demo.cjs"
+    "seed:demo:real-estate": "node scripts/seed-real-estate-demo.cjs",
+    "seed:public-showcase": "node scripts/seed-public-showcase.cjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

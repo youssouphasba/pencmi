@@ -6,6 +6,7 @@ const PencmiModules = {
   vehicleRental: "vehicle_rental",
   vehicleChauffeur: "vehicle_chauffeur",
   trips: "trips",
+  advertisers: "advertisers",
   general: "general",
   system: "system"
 };
@@ -44,6 +45,7 @@ const PencmiRoutes = {
   vehicleDetail: "/voitures/:id",
   trips: "/voyages",
   tripDetail: "/voyages/:id",
+  advertiserProfile: "/annonceurs/:id",
   account: "/compte",
   dashboard: "/dashboard",
   admin: "/admin",
@@ -88,6 +90,7 @@ const PencmiPublicRoutes = [
   "/voitures/region/:regionSlug",
   "/voyages",
   "/voyages/:id",
+  "/annonceurs/:id",
   "/voyages/:departSlug-vers-:arriveeSlug",
   "/voyages/bus",
   "/voyages/car",
@@ -250,6 +253,22 @@ function pencmiRouteHref(path = "/") {
   if (path.startsWith("/immobilier/annonce/")) {
     const id = encodeURIComponent(path.slice("/immobilier/annonce/".length));
     return `${rootPrefix}immobilier/annonce/?id=${id}`;
+  }
+  if (/^\/hotels\/[^/]+$/.test(path)) {
+    const id = encodeURIComponent(path.slice("/hotels/".length));
+    return `${rootPrefix}hotels/detail/?id=${id}`;
+  }
+  if (/^\/voitures\/[^/]+$/.test(path)) {
+    const id = encodeURIComponent(path.slice("/voitures/".length));
+    return `${rootPrefix}voitures/detail/?id=${id}`;
+  }
+  if (/^\/voyages\/[^/]+$/.test(path)) {
+    const id = encodeURIComponent(path.slice("/voyages/".length));
+    return `${rootPrefix}voyages/detail/?id=${id}`;
+  }
+  if (/^\/annonceurs\/[^/]+$/.test(path)) {
+    const id = encodeURIComponent(path.slice("/annonceurs/".length));
+    return `${rootPrefix}annonceurs/?id=${id}`;
   }
   if (path.startsWith("/login?")) return `${rootPrefix}login/${path.slice("/login".length)}`;
   if (path.startsWith("/publier?")) return `${rootPrefix}publier/${path.slice("/publier".length)}`;

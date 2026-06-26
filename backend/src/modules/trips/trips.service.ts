@@ -17,14 +17,73 @@ export class TripsService {
       arrivalCity: query.arrivalCity,
     };
     const [data, total] = await Promise.all([
-      this.prisma.tripListing.findMany({ where, skip: pagination.skip, take: pagination.take, orderBy: { updatedAt: 'desc' } }),
+      this.prisma.tripListing.findMany({
+        where,
+        skip: pagination.skip,
+        take: pagination.take,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              city: true,
+              role: true,
+              professionalProfile: {
+                select: {
+                  businessName: true,
+                  professionalType: true,
+                  city: true,
+                  logoUrl: true,
+                  whatsappNumber: true,
+                  professionalPhone: true,
+                  professionalEmail: true,
+                  openingHours: true,
+                  verified: true,
+                  website: true,
+                  description: true,
+                },
+              },
+            },
+          },
+        },
+      }),
       this.prisma.tripListing.count({ where }),
     ]);
     return { data, meta: pagination.meta(total) };
   }
 
   findPublicOne(id: string) {
-    return this.prisma.tripListing.findFirstOrThrow({ where: { id, status: ListingStatus.active, deletedAt: null } });
+    return this.prisma.tripListing.findFirstOrThrow({
+      where: { id, status: ListingStatus.active, deletedAt: null },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            city: true,
+            role: true,
+            professionalProfile: {
+              select: {
+                businessName: true,
+                professionalType: true,
+                city: true,
+                logoUrl: true,
+                whatsappNumber: true,
+                professionalPhone: true,
+                professionalEmail: true,
+                openingHours: true,
+                verified: true,
+                website: true,
+                description: true,
+              },
+            },
+          },
+        },
+      },
+    });
   }
 
   async createSeatRequest(tripId: string, dto: CreateSeatRequestDto) {

@@ -1,7 +1,8 @@
-import { BadRequestException, Body, Controller, Delete, Get, Post, Put, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
 import { UpsertProfessionalProfileDto } from './professional-profiles.dto';
 import { ProfessionalProfilesService } from './professional-profiles.service';
@@ -11,6 +12,12 @@ import { ProfessionalProfilesService } from './professional-profiles.service';
 @Controller('professional-profiles')
 export class ProfessionalProfilesController {
   constructor(private readonly service: ProfessionalProfilesService) {}
+
+  @Public()
+  @Get('public/:userId')
+  findPublic(@Param('userId') userId: string) {
+    return this.service.findPublic(userId);
+  }
 
   @Get('me')
   findMine(@CurrentUser() user: AuthenticatedUser) {

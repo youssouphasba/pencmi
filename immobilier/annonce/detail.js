@@ -180,10 +180,20 @@ function RealEstatePhotoGallery(listing) {
 
   return `
     <section class="detail-card photo-gallery">
-      <img src="${listing.coverPhoto}" alt="${listing.title}">
+      <img class="gallery-main-image" data-photo-main src="${listing.coverPhoto}" alt="${listing.title}">
       <div class="badge-row"><span class="badge">${listing.photos.length} photo${listing.photos.length > 1 ? "s" : ""}</span></div>
       <div class="gallery-thumbnails">
-        ${listing.photos.map((photo) => `<img class="gallery-thumb" src="${photo}" alt="">`).join("")}
+        ${listing.photos.map((photo, index) => `
+          <button
+            class="gallery-thumb${photo === listing.coverPhoto ? " is-active" : ""}"
+            type="button"
+            data-photo-thumb
+            data-photo-src="${photo}"
+            aria-label="Voir la photo ${index + 1}"
+          >
+            <img src="${photo}" alt="">
+          </button>
+        `).join("")}
       </div>
     </section>
   `;
@@ -227,6 +237,9 @@ function DescriptionSection(listing) {
 
 function ContactCard(listing) {
   const advertiser = listing.advertiser;
+  const advertiserHref = window.PencmiConfig?.routeHref
+    ? window.PencmiConfig.routeHref(`/annonceurs/${advertiser.id}`)
+    : "#";
   return `
     <aside class="contact-card">
       <h2>Annonceur</h2>
@@ -237,6 +250,7 @@ function ContactCard(listing) {
       ${advertiser.isVerified ? `<span class="badge">Professionnel vérifié</span>` : ""}
       ${advertiser.openingHours ? `<p>${advertiser.openingHours}</p>` : ""}
       <div class="contact-actions">
+        <a class="btn btn-light" href="${advertiserHref}">Voir le profil</a>
         <button class="btn btn-ghost" type="button" data-open-visit>Demander une visite</button>
       </div>
     </aside>
@@ -288,6 +302,23 @@ function closeModal() {
 }
 
 function bindDetailActions(listing) {
+  const mainImage = document.querySelector("[data-photo-main]");
+  const thumbnails = Array.from(document.querySelectorAll("[data-photo-thumb]"));
+
+  thumbnails.forEach((button) => {
+    button.addEventListener("click", () => {
+      const nextPhoto = button.dataset.photoSrc;
+      if (!mainImage || !nextPhoto) {
+        return;
+      }
+
+      mainImage.src = nextPhoto;
+      thumbnails.forEach((thumb) => {
+        thumb.classList.toggle("is-active", thumb === button);
+      });
+    });
+  });
+
   document.querySelector("[data-open-visit]")?.addEventListener("click", () => {
     openModal(VisitRequestModal());
     document.querySelector("[data-visit-form]")?.addEventListener("submit", async (event) => {
