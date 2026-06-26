@@ -19,12 +19,33 @@ const vehicleDashboardData = {
   error: ""
 };
 
+const VEHICLE_ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
+const VEHICLE_REFRESH_TOKEN_STORAGE_KEY = "pencmi_refresh_token";
+const VEHICLE_SESSION_STORAGE_KEY = "pencmi_current_session";
+
 function vehicleApiBaseUrl() {
   return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || window.PencmiApiBaseUrl || window.localStorage.getItem("pencmi_api_base_url") || "").replace(/\/+$/, "");
 }
 
 function vehicleAccessToken() {
-  return window.localStorage.getItem("pencmi_access_token") || "";
+  return window.localStorage.getItem(VEHICLE_ACCESS_TOKEN_STORAGE_KEY) || "";
+}
+
+async function vehicleLogout() {
+  const baseUrl = vehicleApiBaseUrl();
+  const token = vehicleAccessToken();
+  if (baseUrl && token) {
+    await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }).catch(() => null);
+  }
+  window.localStorage.removeItem(VEHICLE_ACCESS_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(VEHICLE_REFRESH_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(VEHICLE_SESSION_STORAGE_KEY);
+  window.location.href = vehicleDashboardRouteHref("/login");
 }
 
 function vehicleListFromPayload(payload) {
@@ -110,7 +131,7 @@ function VehiclesDashboardSidebar(currentPage) {
 
 function DashboardHeader(title, subtitle, actions = "") {
   const bell = typeof NotificationBell === "function" ? NotificationBell() : `<a class="btn btn-ghost" href="${vehicleDashboardRouteHref("/dashboard/notifications")}">Notifications</a>`;
-  return `<header class="vehicle-dashboard-header"><div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>${title}</h1><p>${subtitle}</p></div><div class="dashboard-header-actions">${bell}${actions}</div></header>`;
+  return `<header class="vehicle-dashboard-header"><div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>${title}</h1><p>${subtitle}</p></div><div class="dashboard-header-actions">${bell}${actions}<button class="btn btn-ghost" type="button" data-dashboard-logout>Se déconnecter</button></div></header>`;
 }
 
 function KpiCard(title, value) {
@@ -224,6 +245,9 @@ function renderDashboard() {
   };
   document.querySelector("#vehicle-dashboard-root").innerHTML = pages[page]();
   document.querySelector("[data-open-sidebar]")?.addEventListener("click", () => document.querySelector("#vehicle-sidebar").classList.toggle("is-open"));
+  document.querySelector("[data-dashboard-logout]")?.addEventListener("click", () => {
+    void vehicleLogout();
+  });
   document.querySelector("[data-save-contact-settings]")?.addEventListener("click", () => {
     document.querySelector("#vehicle-contact-settings-message").hidden = false;
   });

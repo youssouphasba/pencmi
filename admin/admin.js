@@ -29,6 +29,7 @@ const adminRoutes = {
 const ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
 const REFRESH_TOKEN_STORAGE_KEY = "pencmi_refresh_token";
 const API_BASE_STORAGE_KEY = "pencmi_api_base_url";
+const SESSION_STORAGE_KEY = "pencmi_current_session";
 
 const adminState = {
   currentUser: null,
@@ -109,6 +110,22 @@ function setTokens(tokens) {
 function clearTokens() {
   window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
   window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+}
+
+async function logoutAdmin() {
+  const baseUrl = getApiBaseUrl();
+  const token = getAccessToken();
+  if (baseUrl && token) {
+    await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }).catch(() => null);
+  }
+  clearTokens();
+  window.location.href = adminRouteHref(adminRoutes.login);
 }
 
 async function refreshAccessToken() {
@@ -302,7 +319,7 @@ function AdminHeader(title, subtitle) {
         <h1>${title}</h1>
         <p>${subtitle}</p>
       </div>
-      <div class="admin-header-actions"><a class="btn btn-ghost" href="${adminRouteHref(adminRoutes.home)}">Retour à l’accueil</a></div>
+      <div class="admin-header-actions"><a class="btn btn-ghost" href="${adminRouteHref(adminRoutes.home)}">Retour à l’accueil</a><button class="btn btn-light" type="button" data-admin-logout>Se déconnecter</button></div>
     </header>
   `;
 }
@@ -542,6 +559,10 @@ function AdminOption(label) {
 function bindAdmin() {
   document.querySelector("[data-open-admin-sidebar]")?.addEventListener("click", () => {
     document.querySelector("#admin-sidebar")?.classList.toggle("is-open");
+  });
+
+  document.querySelector("[data-admin-logout]")?.addEventListener("click", () => {
+    void logoutAdmin();
   });
 
   document.querySelectorAll("[data-admin-form]").forEach((form) => {

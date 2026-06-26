@@ -20,12 +20,33 @@ const tripDashboardData = {
   error: ""
 };
 
+const TRIP_ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
+const TRIP_REFRESH_TOKEN_STORAGE_KEY = "pencmi_refresh_token";
+const TRIP_SESSION_STORAGE_KEY = "pencmi_current_session";
+
 function tripApiBaseUrl() {
   return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || window.PencmiApiBaseUrl || window.localStorage.getItem("pencmi_api_base_url") || "").replace(/\/+$/, "");
 }
 
 function tripAccessToken() {
-  return window.localStorage.getItem("pencmi_access_token") || "";
+  return window.localStorage.getItem(TRIP_ACCESS_TOKEN_STORAGE_KEY) || "";
+}
+
+async function tripLogout() {
+  const baseUrl = tripApiBaseUrl();
+  const token = tripAccessToken();
+  if (baseUrl && token) {
+    await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }).catch(() => null);
+  }
+  window.localStorage.removeItem(TRIP_ACCESS_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(TRIP_REFRESH_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(TRIP_SESSION_STORAGE_KEY);
+  window.location.href = tripDashboardRouteHref("/login");
 }
 
 function tripListFromPayload(payload) {
@@ -106,7 +127,7 @@ function TripsDashboardSidebar(currentPage) {
 
 function DashboardHeader(title, subtitle, actions = "") {
   const bell = typeof NotificationBell === "function" ? NotificationBell() : `<a class="btn btn-ghost" href="${tripDashboardRouteHref("/dashboard/notifications")}">Notifications</a>`;
-  return `<header class="trip-dashboard-header"><div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>${title}</h1><p>${subtitle}</p></div><div class="dashboard-header-actions">${bell}${actions}</div></header>`;
+  return `<header class="trip-dashboard-header"><div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>${title}</h1><p>${subtitle}</p></div><div class="dashboard-header-actions">${bell}${actions}<button class="btn btn-ghost" type="button" data-dashboard-logout>Se déconnecter</button></div></header>`;
 }
 
 function KpiCard(title, value) {
@@ -230,6 +251,9 @@ function renderDashboard() {
   };
   document.querySelector("#trip-dashboard-root").innerHTML = pages[page]();
   document.querySelector("[data-open-sidebar]")?.addEventListener("click", () => document.querySelector("#trip-sidebar").classList.toggle("is-open"));
+  document.querySelector("[data-dashboard-logout]")?.addEventListener("click", () => {
+    void tripLogout();
+  });
   document.querySelector("[data-save-contact-settings]")?.addEventListener("click", () => {
     document.querySelector("#trip-contact-settings-message").hidden = false;
   });

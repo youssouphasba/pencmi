@@ -226,6 +226,22 @@ function clearStoredSession() {
   window.localStorage.removeItem(SESSION_STORAGE_KEY);
 }
 
+async function logoutCurrentUser() {
+  const baseUrl = getApiBaseUrl();
+  const token = getStoredAccessToken();
+  if (baseUrl && token) {
+    await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }).catch(() => null);
+  }
+  clearStoredTokens();
+  clearStoredSession();
+  window.location.href = authRouteHref(authRoutes.login);
+}
+
 function persistConfiguredApiBaseUrl() {
   const configuredBaseUrl = getApiBaseUrl();
   if (configuredBaseUrl) {
@@ -556,6 +572,7 @@ function AccountLayout(content, currentPage = "overview", mode = "client") {
         <aside class="account-sidebar">
           <div class="dashboard-brand"><span>P</span><div><strong>Péncmi</strong><small>${mode === "dashboard" ? "Annonceur" : "Compte client"}</small></div></div>
           <nav class="account-nav">${nav.map(([label, href, key]) => `<a href="${authRouteHref(href)}"${key === currentPage ? ' aria-current="page"' : ""}><span>${label}</span><span class="notification-badge">0</span></a>`).join("")}</nav>
+          <button class="btn btn-ghost account-logout-button" type="button" data-auth-logout>Se déconnecter</button>
         </aside>
         <section>${content}</section>
       </section>
@@ -974,6 +991,10 @@ function bindAuthForms() {
 
   document.querySelector("[data-close-delete-modal]")?.addEventListener("click", () => {
     document.querySelector("[data-delete-modal]")?.classList.remove("is-open");
+  });
+
+  document.querySelector("[data-auth-logout]")?.addEventListener("click", () => {
+    void logoutCurrentUser();
   });
 }
 

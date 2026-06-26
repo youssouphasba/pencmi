@@ -23,12 +23,33 @@ const hotelDashboardData = {
   error: ""
 };
 
+const HOTEL_ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
+const HOTEL_REFRESH_TOKEN_STORAGE_KEY = "pencmi_refresh_token";
+const HOTEL_SESSION_STORAGE_KEY = "pencmi_current_session";
+
 function hotelApiBaseUrl() {
   return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || window.PencmiApiBaseUrl || window.localStorage.getItem("pencmi_api_base_url") || "").replace(/\/+$/, "");
 }
 
 function hotelAccessToken() {
-  return window.localStorage.getItem("pencmi_access_token") || "";
+  return window.localStorage.getItem(HOTEL_ACCESS_TOKEN_STORAGE_KEY) || "";
+}
+
+async function hotelLogout() {
+  const baseUrl = hotelApiBaseUrl();
+  const token = hotelAccessToken();
+  if (baseUrl && token) {
+    await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }).catch(() => null);
+  }
+  window.localStorage.removeItem(HOTEL_ACCESS_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(HOTEL_REFRESH_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(HOTEL_SESSION_STORAGE_KEY);
+  window.location.href = hotelDashboardRouteHref("/login");
 }
 
 function listFromPayload(payload) {
@@ -128,7 +149,7 @@ function DashboardHeader(title, subtitle, actions = "") {
   return `
     <header class="hotel-dashboard-header">
       <div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>${title}</h1><p>${subtitle}</p></div>
-      <div class="dashboard-header-actions">${bell}${actions}</div>
+      <div class="dashboard-header-actions">${bell}${actions}<button class="btn btn-ghost" type="button" data-dashboard-logout>Se déconnecter</button></div>
     </header>
   `;
 }
@@ -294,6 +315,9 @@ function renderDashboard() {
   };
   document.querySelector("#hotel-dashboard-root").innerHTML = pages[page]();
   document.querySelector("[data-open-sidebar]")?.addEventListener("click", () => document.querySelector("#hotel-sidebar").classList.toggle("is-open"));
+  document.querySelector("[data-dashboard-logout]")?.addEventListener("click", () => {
+    void hotelLogout();
+  });
   document.querySelector("[data-save-contact-settings]")?.addEventListener("click", () => {
     document.querySelector("#contact-settings-message").hidden = false;
   });

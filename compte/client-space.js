@@ -36,6 +36,11 @@ const clientRoutes = {
   tripAlerts: "/voyages/alertes"
 };
 
+const CLIENT_ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
+const CLIENT_REFRESH_TOKEN_STORAGE_KEY = "pencmi_refresh_token";
+const CLIENT_SESSION_STORAGE_KEY = "pencmi_current_session";
+const CLIENT_API_BASE_STORAGE_KEY = "pencmi_api_base_url";
+
 const clientModuleLabels = {
   real_estate: "Immobilier",
   hotels: "Hôtels",
@@ -86,7 +91,29 @@ function clientRouteHref(path) {
     "/voitures/alertes": `${prefix}voitures/alertes/`,
     "/voyages/alertes": `${prefix}voyages/alertes/`
   };
+  if (path === "/login") return `${prefix}login/`;
   return routes[path] || path;
+}
+
+function clientApiBaseUrl() {
+  return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || window.PencmiApiBaseUrl || window.localStorage.getItem(CLIENT_API_BASE_STORAGE_KEY) || "").replace(/\/+$/, "");
+}
+
+async function clientLogout() {
+  const baseUrl = clientApiBaseUrl();
+  const token = window.localStorage.getItem(CLIENT_ACCESS_TOKEN_STORAGE_KEY) || "";
+  if (baseUrl && token) {
+    await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }).catch(() => null);
+  }
+  window.localStorage.removeItem(CLIENT_ACCESS_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(CLIENT_REFRESH_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(CLIENT_SESSION_STORAGE_KEY);
+  window.location.href = clientRouteHref("/login");
 }
 
 function formatClientStatus(status) {
@@ -129,7 +156,7 @@ function ClientAccountLayout(content, currentPage = "overview", title = "Mon com
             <h1>${title}</h1>
             <p>${subtitle}</p>
           </div>
-          <div class="client-header-actions"><a class="btn btn-light" href="${clientRouteHref(clientRoutes.notifications)}">Notifications <span class="notification-badge">0</span></a></div>
+          <div class="client-header-actions"><a class="btn btn-light" href="${clientRouteHref(clientRoutes.notifications)}">Notifications <span class="notification-badge">0</span></a><button class="btn btn-ghost" type="button" data-client-logout>Se déconnecter</button></div>
         </header>
         ${content}
       </main>
@@ -362,6 +389,10 @@ function bindClientSpace() {
 
   document.querySelector("[data-close-client-modal]")?.addEventListener("click", () => {
     document.querySelector("[data-client-modal]")?.classList.remove("is-open");
+  });
+
+  document.querySelector("[data-client-logout]")?.addEventListener("click", () => {
+    void clientLogout();
   });
 }
 

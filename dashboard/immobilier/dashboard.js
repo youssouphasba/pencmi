@@ -22,6 +22,8 @@ let dashboardLoading = true;
 let dashboardError = "";
 
 const ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
+const REFRESH_TOKEN_STORAGE_KEY = "pencmi_refresh_token";
+const SESSION_STORAGE_KEY = "pencmi_current_session";
 
 const sidebarItems = [
   ["Vue d’ensemble", routes.overview],
@@ -74,6 +76,23 @@ function getApiBaseUrl() {
 
 function getAccessToken() {
   return window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) || "";
+}
+
+async function logoutDashboard() {
+  const baseUrl = getApiBaseUrl();
+  const token = getAccessToken();
+  if (baseUrl && token) {
+    await fetch(`${baseUrl}/auth/logout`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }).catch(() => null);
+  }
+  window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  window.localStorage.removeItem(SESSION_STORAGE_KEY);
+  window.location.href = routeHref("/login");
 }
 
 async function apiRequest(path) {
@@ -265,6 +284,7 @@ function DashboardHeader() {
       <div class="dashboard-header-actions">
         <a class="btn btn-primary" href="${routeHref(routes.publish)}">Publier une annonce</a>
         <a class="btn btn-light" href="${routeHref(routes.realEstate)}">Voir le site</a>
+        <button class="btn btn-ghost" type="button" data-dashboard-logout>Se déconnecter</button>
       </div>
     </header>
   `;
@@ -453,6 +473,10 @@ function VisitStatusBadge(status) {
 function bindDashboardEvents() {
   document.querySelector("[data-open-sidebar]")?.addEventListener("click", () => {
     document.querySelector("#dashboard-sidebar")?.classList.toggle("is-open");
+  });
+
+  document.querySelector("[data-dashboard-logout]")?.addEventListener("click", () => {
+    void logoutDashboard();
   });
 
   document.querySelector("[data-period-filter]")?.addEventListener("change", (event) => {
