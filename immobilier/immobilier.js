@@ -1,75 +1,42 @@
 const routes = {
   home: "/",
   realEstate: "/immobilier",
-  hotels: "/hotels",
-  vehicles: "/voitures",
-  trips: "/voyages",
   login: "/login",
   register: "/register",
   publishRealEstate: "/login?next=/publier?category=immobilier",
   agencies: "/immobilier/agences",
   alerts: "/login?next=/immobilier/alertes",
-  favorites: "/login?next=/favoris",
-  realEstateFavorites: "/login?next=/favoris/immobilier",
-  savedSearches: "/compte/recherches",
-  dashboardListings: "/login?next=/dashboard/listings/immobilier",
-  dashboardMessages: "/login?next=/dashboard/messages",
-  dashboardContacts: "/login?next=/dashboard/contacts",
-  dashboardStats: "/login?next=/dashboard/immobilier/statistiques",
-  help: "/aide",
-  terms: "/conditions",
-  privacy: "/confidentialite",
-  legal: "/mentions-legales",
-  contact: "/contact"
+  favorites: "/login?next=/favoris/immobilier",
 };
 
-function routeHref(path) {
-  if (window.location.protocol !== "file:") {
-    return path;
-  }
+const propertyTypes = [
+  "Appartement",
+  "Maison",
+  "Villa",
+  "Terrain",
+  "Studio",
+  "Chambre",
+  "Bureau",
+  "Commerce",
+];
 
-  const depth = Number(document.body?.dataset?.routeDepth || "1");
-  const prefix = "../".repeat(depth);
-
-  if (path === "/") {
-    return `${prefix}index.html`;
-  }
-
-  if (path === "/immobilier") {
-    return `${prefix}immobilier/`;
-  }
-
-  if (path.startsWith("/immobilier?")) {
-    return `${prefix}immobilier/${path.slice("/immobilier".length)}`;
-  }
-
-  if (path.startsWith("/immobilier/")) {
-    if (path.startsWith("/immobilier/annonce/")) {
-      return `${prefix}immobilier/annonce/?id=${encodeURIComponent(path.slice("/immobilier/annonce/".length))}`;
-    }
-
-    return `${prefix}immobilier/${path.slice("/immobilier/".length)}/`;
-  }
-
-  if (path.startsWith("/login?next=/publier")) {
-    return `${prefix}publier/?category=immobilier`;
-  }
-
-  if (path.startsWith("/login?next=/dashboard") || path.startsWith("/dashboard/immobilier")) {
-    return `${prefix}dashboard/immobilier/`;
-  }
-
-  return path;
-}
-
-function navigateTo(path) {
-  window.location.href = routeHref(path);
-}
-
-const propertyTypes = ["Appartement", "Maison", "Villa", "Terrain", "Studio", "Chambre", "Bureau", "Commerce"];
-const mainCities = ["Dakar", "Thiès", "Mbour", "Saly", "Saint-Louis", "Touba", "Kaolack", "Ziguinchor", "Rufisque", "Pikine", "Guédiawaye", "Diamniadio", "Lac Rose", "Somone", "Cap Skirring"];
-const realEstateListings = [];
-const agencies = [];
+const mainCities = [
+  "Dakar",
+  "Thiès",
+  "Mbour",
+  "Saly",
+  "Saint-Louis",
+  "Touba",
+  "Kaolack",
+  "Ziguinchor",
+  "Rufisque",
+  "Pikine",
+  "Guédiawaye",
+  "Diamniadio",
+  "Lac Rose",
+  "Somone",
+  "Cap Skirring",
+];
 
 const quickTabs = [
   ["Acheter", "/immobilier?transaction=achat"],
@@ -78,61 +45,44 @@ const quickTabs = [
   ["Meublés", "/immobilier?furnished=true"],
   ["Agences", routes.agencies],
   ["Favoris", routes.favorites],
-  ["Publier", routes.publishRealEstate]
+  ["Publier", routes.publishRealEstate],
 ];
 
-const contactSources = [
-  ["whatsappEnabled", "WhatsApp"],
-  ["phoneEnabled", "Appeler"],
-  ["emailEnabled", "Email"],
-  ["internalMessagingEnabled", "Envoyer un message"],
-  ["contactFormEnabled", "Formulaire"],
-  ["visitRequestEnabled", "Demander une visite"]
-];
-const futurePublishSteps = ["transaction", "propertyType", "location", "price", "features", "photos", "description", "conditions", "documents", "contactPreferences", "preview", "submission"];
-const futureAdvertiserRoutes = [
-  "/dashboard/listings",
-  "/dashboard/listings/immobilier",
-  "/dashboard/messages",
-  "/dashboard/messages/:conversationId",
-  "/dashboard/contacts",
-  "/dashboard/contact-settings",
-  "/dashboard/leads",
-  "/dashboard/stats",
-  "/dashboard/immobilier",
-  "/dashboard/immobilier/annonces",
-  "/dashboard/immobilier/messages",
-  "/dashboard/immobilier/contacts",
-  "/dashboard/immobilier/visites",
-  "/dashboard/immobilier/favoris",
-  "/dashboard/immobilier/statistiques",
-  "/dashboard/immobilier/contact-settings"
-];
-
-const futureDashboardComponents = [
-  "RealEstateDashboardOverview",
-  "KpiCard",
-  "ListingPerformanceTable",
-  "ContactSourceChart",
-  "ConversionRateCard",
-  "ResponseTimeCard",
-  "TopListingsCard",
-  "ListingCompletionScore",
-  "AdvertiserRecommendations",
-  "RecentLeadsList",
-  "RecentMessagesList"
-];
-
-const filterOptions = {
-  transactions: ["Location", "Achat", "Vente"],
-  propertyTypes,
-  bedrooms: ["1 chambre", "2 chambres", "3 chambres", "4 chambres et plus"],
-  bathrooms: ["1", "2", "3 et plus"],
-  housingOptions: ["Meublé", "Non meublé", "Parking", "Gardien", "Climatisation", "Balcon", "Terrasse", "Piscine", "Groupe électrogène", "Compteur SENELEC individuel", "Eau disponible"],
-  senegalOptions: ["Caution", "Avance", "Commission agence", "Zone non inondable", "Proche route principale", "Proche école", "Proche marché", "Proche mosquée", "Titre foncier", "Bail", "Délibération", "NICAD disponible", "Terrain viabilisé", "Terrain clôturé"],
-  advertiserTypes: ["Particulier", "Agence", "Promoteur", "Annonce vérifiée"],
-  sortOptions: ["Plus récentes", "Prix croissant", "Prix décroissant", "Surface croissante", "Surface décroissante"]
+const state = {
+  filters: null,
+  listings: [],
+  displayedListings: [],
+  agencies: [],
+  loading: true,
+  error: "",
 };
+
+function routeHref(path) {
+  if (window.PencmiConfig?.routeHref) {
+    return window.PencmiConfig.routeHref(path);
+  }
+
+  if (window.location.protocol !== "file:") {
+    return path;
+  }
+
+  const depth = Number(document.body?.dataset?.routeDepth || "1");
+  const prefix = "../".repeat(depth);
+
+  if (path === "/") return `${prefix}index.html`;
+  if (path === "/immobilier") return `${prefix}immobilier/`;
+  if (path.startsWith("/immobilier?")) return `${prefix}immobilier/${path.slice("/immobilier".length)}`;
+  if (path.startsWith("/immobilier/annonce/")) {
+    return `${prefix}immobilier/annonce/?id=${encodeURIComponent(path.slice("/immobilier/annonce/".length))}`;
+  }
+  if (path.startsWith("/login?next=/publier")) return `${prefix}publier/?category=immobilier`;
+  if (path.startsWith("/login?")) return `${prefix}login/${path.slice("/login".length)}`;
+  return path;
+}
+
+function getApiBaseUrl() {
+  return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || "").replace(/\/+$/, "");
+}
 
 function normalizeValue(value) {
   return String(value || "")
@@ -140,44 +90,54 @@ function normalizeValue(value) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "-");
+    .replace(/\s+/g, "_");
 }
 
-function buildRealEstateSearchUrl(filters) {
-  const params = new URLSearchParams();
-  const locationParams = buildLocationQuery(filters);
-
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value && !["country", "region", "department", "city", "district", "radius", "nearMe"].includes(key)) {
-      params.set(key, normalizeValue(value));
-    }
-  });
-
-  locationParams.forEach((value, key) => {
-    params.set(key, value);
-  });
-
-  const query = params.toString();
-  return query ? `${routes.realEstate}?${query}` : routes.realEstate;
-}
-
-function parseRealEstateSearchParams(search = window.location.search) {
-  const params = new URLSearchParams(search);
-  return {
-    transaction: params.get("transaction") || "",
-    type: params.get("type") || "",
-    city: params.get("city") || params.get("location") || "",
-    maxPrice: params.get("maxPrice") || "",
-    furnished: params.get("furnished") || ""
-  };
+function capitalize(value) {
+  const text = String(value || "").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "";
 }
 
 function formatPriceFCFA(value) {
-  if (!value) {
+  if (value === null || value === undefined || value === "") {
     return "";
   }
 
   return `${Number(value).toLocaleString("fr-FR")} FCFA`;
+}
+
+function formatPropertyType(type) {
+  const labels = {
+    appartement: "Appartement",
+    maison: "Maison",
+    villa: "Villa",
+    terrain: "Terrain",
+    studio: "Studio",
+    chambre: "Chambre",
+    bureau: "Bureau",
+    commerce: "Commerce",
+  };
+
+  return labels[type] || capitalize(type);
+}
+
+function formatTransaction(transaction) {
+  const labels = {
+    achat: "Achat",
+    vente: "Vente",
+    location: "Location",
+  };
+
+  return labels[transaction] || capitalize(transaction);
+}
+
+function formatAdvertiserType(role) {
+  const labels = {
+    real_estate_agency: "Agence immobilière",
+    advertiser_individual: "Annonceur particulier",
+  };
+
+  return labels[role] || "Annonceur";
 }
 
 function formatPropertyFeatures(listing) {
@@ -185,111 +145,142 @@ function formatPropertyFeatures(listing) {
     listing.surface ? `${listing.surface} m²` : "",
     listing.bedrooms ? `${listing.bedrooms} ch.` : "",
     listing.bathrooms ? `${listing.bathrooms} sdb` : "",
-    listing.furnished ? "Meublé" : ""
-  ].filter(Boolean).join(" · ");
+    listing.furnished ? "Meublé" : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function parseSearchParams(search = window.location.search) {
+  const params = new URLSearchParams(search);
+  return {
+    transaction: params.get("transaction") || "",
+    type: params.get("type") || "",
+    city: params.get("city") || params.get("location") || "",
+    maxPrice: params.get("maxPrice") || "",
+    furnished: params.get("furnished") || "",
+  };
+}
+
+function buildSearchUrl(filters) {
+  const params = new URLSearchParams();
+
+  if (filters.transaction) params.set("transaction", filters.transaction);
+  if (filters.type) params.set("type", filters.type);
+  if (filters.city) params.set("city", filters.city);
+  if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
+  if (filters.furnished) params.set("furnished", filters.furnished);
+
+  const query = params.toString();
+  return query ? `${routes.realEstate}?${query}` : routes.realEstate;
+}
+
+function buildApiQuery(filters) {
+  const params = new URLSearchParams();
+
+  if (filters.transaction) params.set("transaction", filters.transaction);
+  if (filters.type) params.set("propertyType", filters.type);
+  if (filters.city) params.set("city", filters.city);
+
+  return params.toString();
+}
+
+async function apiRequest(path) {
+  const baseUrl = getApiBaseUrl();
+  if (!baseUrl) {
+    throw new Error("API immobilier indisponible.");
+  }
+
+  const response = await fetch(`${baseUrl}${path}`);
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Chargement des annonces impossible.");
+  }
+
+  return payload?.data ?? payload;
+}
+
+function mapListing(listing) {
+  const metadata = listing.metadata || {};
+  const professionalProfile = listing.owner?.professionalProfile || {};
+  const photos = Array.isArray(metadata.photos) ? metadata.photos.filter(Boolean) : [];
+  const advertiserName =
+    professionalProfile.businessName ||
+    [listing.owner?.firstName, listing.owner?.lastName].filter(Boolean).join(" ") ||
+    "Annonceur";
+
+  return {
+    id: listing.id,
+    slug: listing.slug,
+    title: listing.title,
+    city: listing.city,
+    district: listing.neighborhood,
+    price: metadata.price ?? listing.price ?? null,
+    transaction: listing.transaction || "",
+    propertyType: listing.propertyType || "",
+    surface: metadata.surface,
+    bedrooms: metadata.bedrooms,
+    bathrooms: metadata.bathrooms,
+    furnished: Boolean(metadata.furnished),
+    views: Number(metadata.views || 0),
+    favorites: Number(metadata.favorites || 0),
+    coverPhoto: metadata.coverPhoto || photos[0] || "",
+    advertiser: {
+      name: advertiserName,
+      type: formatAdvertiserType(listing.owner?.role),
+      city: professionalProfile.city || listing.owner?.city || "",
+      verified: Boolean(professionalProfile.verified),
+      logoUrl: professionalProfile.logoUrl || "",
+    },
+  };
+}
+
+function buildAgencies(listings) {
+  const seen = new Set();
+
+  return listings
+    .filter((listing) => listing.advertiser.name)
+    .map((listing) => ({
+      name: listing.advertiser.name,
+      city: listing.advertiser.city,
+      type: listing.advertiser.type,
+      verified: listing.advertiser.verified,
+      logoUrl: listing.advertiser.logoUrl,
+    }))
+    .filter((agency) => {
+      const key = `${agency.name}::${agency.city}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function applyClientFilters(listings, filters) {
+  const maxPrice = Number(filters.maxPrice || 0);
+
+  return listings.filter((listing) => {
+    if (filters.furnished === "true" && !listing.furnished) return false;
+    if (maxPrice && Number(listing.price || 0) > maxPrice) return false;
+    return true;
+  });
 }
 
 function optionElements(values, selectedValue = "") {
   return values
-    .map((value) => `<option value="${normalizeValue(value)}"${normalizeValue(selectedValue) === normalizeValue(value) ? " selected" : ""}>${value}</option>`)
+    .map((value) => {
+      const normalized = normalizeValue(value);
+      const selected = normalized === selectedValue ? " selected" : "";
+      return `<option value="${normalized}"${selected}>${value}</option>`;
+    })
     .join("");
-}
-
-function locationOptionElements(values, selectedValue = "") {
-  return values
-    .map((value) => `<option value="${slugifyLocation(value)}"${selectedValue === slugifyLocation(value) ? " selected" : ""}>${value}</option>`)
-    .join("");
-}
-
-function radiusOptionElements(selectedValue = "") {
-  return RADIUS_OPTIONS
-    .map((option) => `<option value="${option.value}"${selectedValue === option.value ? " selected" : ""}>${option.label}</option>`)
-    .join("");
-}
-
-function checkboxList(values, name) {
-  return values
-    .map((value) => `
-      <label class="check-option">
-        <input type="checkbox" name="${name}" value="${normalizeValue(value)}">
-        <span>${value}</span>
-      </label>
-    `)
-    .join("");
-}
-
-function RegionSelect(selectedValue = "") {
-  return `
-    <select name="region" data-location-region>
-      <option value="">Tout le Sénégal / Région</option>
-      <option value="SN"${selectedValue === "SN" ? " selected" : ""}>Tout le Sénégal</option>
-      ${locationOptionElements(SENEGAL_LOCATIONS.map((location) => location.region), selectedValue)}
-    </select>
-  `;
-}
-
-function DepartmentSelect(regionSlug = "", selectedValue = "") {
-  const region = findLocationRegion(regionSlug);
-  const departments = region ? region.departments : [];
-
-  return `
-    <select name="department" data-location-department>
-      <option value="">Département</option>
-      ${locationOptionElements(departments, selectedValue)}
-    </select>
-  `;
-}
-
-function CitySelect(regionSlug = "", selectedValue = "") {
-  const region = findLocationRegion(regionSlug);
-  const cities = region ? region.cities : mainCities;
-
-  return `
-    <select name="city" data-location-city>
-      <option value="">Ville</option>
-      ${locationOptionElements(cities, selectedValue)}
-    </select>
-  `;
-}
-
-function DistrictInput(selectedValue = "") {
-  return `<input name="district" type="search" value="${selectedValue}" placeholder="Quartier">`;
-}
-
-function RadiusSelect(selectedValue = "") {
-  return `
-    <select name="radius">
-      ${radiusOptionElements(selectedValue)}
-    </select>
-  `;
-}
-
-function SenegalLocationSelector() {
-  const currentLocation = parseLocationParams();
-  const selectedRegion = currentLocation.country === "SN" ? "SN" : currentLocation.region;
-
-  return `
-    <div class="filter-grid location-selector" data-location-selector>
-      <label class="field-label">Où recherchez-vous ?</label>
-      ${RegionSelect(selectedRegion)}
-      ${DepartmentSelect(currentLocation.region, currentLocation.department)}
-      ${CitySelect(currentLocation.region, currentLocation.city)}
-      ${DistrictInput(currentLocation.district)}
-      ${RadiusSelect(currentLocation.radius)}
-      <label class="check-option">
-        <input type="checkbox" name="nearMe" value="true"${currentLocation.nearMe ? " checked" : ""}>
-        <span>Autour de moi</span>
-      </label>
-      <label class="check-option">
-        <input type="checkbox" name="aroundCity" value="true">
-        <span>Autour d’une ville</span>
-      </label>
-    </div>
-  `;
 }
 
 function RealEstateHeader() {
-  document.querySelector("#real-estate-header").innerHTML = `
+  const root = document.querySelector("#real-estate-header");
+  if (!root) return;
+
+  root.innerHTML = `
     <a class="brand" href="${routeHref(routes.home)}" aria-label="Accueil Péncmi">
       <span class="brand-mark">P</span>
       <span>
@@ -308,33 +299,33 @@ function RealEstateHeader() {
       <nav class="main-nav" aria-label="Navigation principale">
         <a href="${routeHref(routes.home)}">Accueil</a>
         <a href="${routeHref(routes.realEstate)}" aria-current="page">Immobilier</a>
-        <a href="${routes.hotels}">Hôtels</a>
-        <a href="${routes.vehicles}">Voitures</a>
-        <a href="${routes.trips}">Voyages interurbains</a>
+        <a href="/hotels">Hôtels</a>
+        <a href="/voitures">Voitures</a>
+        <a href="/voyages">Voyages interurbains</a>
       </nav>
       <div class="header-actions">
-        <a class="btn btn-ghost" href="${routes.login}">Se connecter</a>
-        <a class="btn btn-light" href="${routes.register}">Créer mon espace</a>
-        <a class="btn btn-ghost" href="${routes.favorites}">Mes favoris</a>
+        <a class="btn btn-ghost" href="${routeHref(routes.login)}">Se connecter</a>
+        <a class="btn btn-light" href="${routeHref(routes.register)}">Créer mon espace</a>
         <a class="btn btn-primary" href="${routeHref(routes.publishRealEstate)}">Publier une annonce</a>
       </div>
     </div>
   `;
 
-  const toggle = document.querySelector(".menu-toggle");
-  const panel = document.querySelector(".header-panel");
+  const toggle = root.querySelector(".menu-toggle");
+  const panel = root.querySelector(".header-panel");
 
-  toggle.addEventListener("click", () => {
+  toggle?.addEventListener("click", () => {
     const isOpen = panel.classList.toggle("is-open");
     toggle.setAttribute("aria-expanded", String(isOpen));
-    toggle.setAttribute("aria-label", isOpen ? "Fermer le menu" : "Ouvrir le menu");
   });
 }
 
 function RealEstateHeroSearch() {
-  const currentFilters = parseRealEstateSearchParams();
+  const filters = state.filters;
+  const root = document.querySelector("#real-estate-hero");
+  if (!root) return;
 
-  document.querySelector("#real-estate-hero").innerHTML = `
+  root.innerHTML = `
     <div class="hero-inner">
       <div class="hero-copy">
         <h1>Trouvez votre bien immobilier au Sénégal</h1>
@@ -344,46 +335,53 @@ function RealEstateHeroSearch() {
         <div class="field">
           <label for="transaction">Type de projet</label>
           <select id="transaction" name="transaction">
-            <option value="achat"${currentFilters.transaction === "achat" ? " selected" : ""}>Acheter</option>
-            <option value="location"${currentFilters.transaction === "location" ? " selected" : ""}>Louer</option>
+            <option value="achat"${filters.transaction === "achat" ? " selected" : ""}>Acheter</option>
+            <option value="location"${filters.transaction === "location" ? " selected" : ""}>Louer</option>
+            <option value="vente"${filters.transaction === "vente" ? " selected" : ""}>Vente</option>
           </select>
         </div>
         <div class="field">
           <label for="type">Type de bien</label>
           <select id="type" name="type">
-            ${optionElements(propertyTypes, currentFilters.type)}
+            <option value="">Tous les biens</option>
+            ${optionElements(propertyTypes, filters.type)}
           </select>
         </div>
         <div class="field">
           <label for="location">Ville ou quartier</label>
-          <input id="location" name="location" type="search" list="main-cities" value="${currentFilters.city}" placeholder="Dakar, Saly, Thiès">
+          <input id="location" name="city" type="search" list="main-cities" value="${filters.city}" placeholder="Dakar, Saly, Thiès">
           <datalist id="main-cities">
             ${mainCities.map((city) => `<option value="${city}"></option>`).join("")}
           </datalist>
         </div>
         <div class="field">
           <label for="maxPrice">Budget maximum</label>
-          <input id="maxPrice" name="maxPrice" type="number" inputmode="numeric" min="0" value="${currentFilters.maxPrice}" placeholder="500000">
+          <input id="maxPrice" name="maxPrice" type="number" inputmode="numeric" min="0" value="${filters.maxPrice}" placeholder="500000">
         </div>
         <button class="btn btn-primary" type="submit">Rechercher</button>
       </form>
     </div>
   `;
 
-  document.querySelector("#property-search").addEventListener("submit", (event) => {
+  root.querySelector("#property-search")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    navigateTo(buildRealEstateSearchUrl({
-      transaction: form.get("transaction"),
-      type: form.get("type"),
-      city: form.get("location"),
-      maxPrice: form.get("maxPrice")
-    }));
+    window.location.href = routeHref(
+      buildSearchUrl({
+        transaction: String(form.get("transaction") || ""),
+        type: String(form.get("type") || ""),
+        city: String(form.get("city") || ""),
+        maxPrice: String(form.get("maxPrice") || ""),
+      }),
+    );
   });
 }
 
 function RealEstateQuickTabs() {
-  document.querySelector("#real-estate-tabs").innerHTML = quickTabs
+  const root = document.querySelector("#real-estate-tabs");
+  if (!root) return;
+
+  root.innerHTML = quickTabs
     .map(([label, href]) => `<a href="${routeHref(href)}">${label}</a>`)
     .join("");
 }
@@ -401,7 +399,9 @@ function RealEstateFilters() {
           <div class="filter-grid">
             <select name="transaction">
               <option value="">Toutes</option>
-              ${optionElements(filterOptions.transactions)}
+              <option value="achat"${state.filters.transaction === "achat" ? " selected" : ""}>Achat</option>
+              <option value="location"${state.filters.transaction === "location" ? " selected" : ""}>Location</option>
+              <option value="vente"${state.filters.transaction === "vente" ? " selected" : ""}>Vente</option>
             </select>
           </div>
         </fieldset>
@@ -411,61 +411,35 @@ function RealEstateFilters() {
           <div class="filter-grid">
             <select name="type">
               <option value="">Tous les biens</option>
-              ${optionElements(filterOptions.propertyTypes)}
+              ${optionElements(propertyTypes, state.filters.type)}
             </select>
           </div>
         </fieldset>
 
         <fieldset class="filter-group">
           <legend>Localisation</legend>
-          ${SenegalLocationSelector()}
+          <div class="filter-grid">
+            <select name="city">
+              <option value="">Toutes les villes</option>
+              ${mainCities.map((city) => `<option value="${city}"${state.filters.city === city ? " selected" : ""}>${city}</option>`).join("")}
+            </select>
+          </div>
         </fieldset>
 
         <fieldset class="filter-group">
           <legend>Prix</legend>
           <div class="filter-grid">
-            <input name="minPrice" type="number" inputmode="numeric" min="0" placeholder="Prix minimum">
-            <input name="maxPrice" type="number" inputmode="numeric" min="0" placeholder="Prix maximum">
+            <input name="maxPrice" type="number" inputmode="numeric" min="0" value="${state.filters.maxPrice}" placeholder="Prix maximum">
           </div>
         </fieldset>
 
         <fieldset class="filter-group">
-          <legend>Surface</legend>
-          <div class="filter-grid">
-            <input name="minSurface" type="number" inputmode="numeric" min="0" placeholder="Surface minimum">
-            <input name="maxSurface" type="number" inputmode="numeric" min="0" placeholder="Surface maximum">
-          </div>
-        </fieldset>
-
-        <fieldset class="filter-group">
-          <legend>Chambres</legend>
-          <div class="option-list">${checkboxList(filterOptions.bedrooms, "bedrooms")}</div>
-        </fieldset>
-
-        <fieldset class="filter-group">
-          <legend>Salles de bain</legend>
-          <div class="option-list">${checkboxList(filterOptions.bathrooms, "bathrooms")}</div>
-        </fieldset>
-
-        <fieldset class="filter-group">
-          <legend>Options logement</legend>
-          <div class="option-list">${checkboxList(filterOptions.housingOptions, "housingOptions")}</div>
-        </fieldset>
-
-        <fieldset class="filter-group">
-          <legend>Spécifique Sénégal</legend>
-          <div class="option-list">${checkboxList(filterOptions.senegalOptions, "senegalOptions")}</div>
-        </fieldset>
-
-        <fieldset class="filter-group">
-          <legend>Annonceur</legend>
-          <div class="option-list">${checkboxList(filterOptions.advertiserTypes, "advertiserTypes")}</div>
-        </fieldset>
-
-        <fieldset class="filter-group">
-          <legend>Tri</legend>
-          <div class="filter-grid">
-            <select name="sort">${optionElements(filterOptions.sortOptions)}</select>
+          <legend>Options</legend>
+          <div class="option-list">
+            <label class="check-option">
+              <input type="checkbox" name="furnished" value="true"${state.filters.furnished === "true" ? " checked" : ""}>
+              <span>Meublé</span>
+            </label>
           </div>
         </fieldset>
 
@@ -475,103 +449,56 @@ function RealEstateFilters() {
   `;
 }
 
-function MobileFilterDrawer() {
-  const panel = document.querySelector("#filters-panel");
-  const openButton = document.querySelector("[data-open-filters]");
-  const closeButton = document.querySelector("[data-close-filters]");
-
-  openButton.addEventListener("click", () => {
-    panel.classList.add("is-open");
-  });
-
-  closeButton.addEventListener("click", () => {
-    panel.classList.remove("is-open");
-  });
-}
-
-function FavoriteButton({ active = false, href = routes.favorites } = {}) {
+function FavoriteButton() {
   return `
-    <a class="favorite-button${active ? " is-active" : ""}" href="${href}" aria-label="${active ? "Retirer des favoris" : "Ajouter aux favoris"}">
+    <a class="favorite-button" href="${routeHref(routes.favorites)}" aria-label="Ajouter aux favoris">
       <span aria-hidden="true">♡</span>
     </a>
   `;
 }
 
 function SavedSearchButton() {
-  return `<a class="btn btn-light" href="${routes.alerts}">Créer une alerte</a>`;
-}
-
-function FavoritesLink() {
-  return `<a class="btn btn-ghost" href="${routes.favorites}">Mes favoris</a>`;
-}
-
-function SavedSearchEmptyState() {
-  return `
-    <div class="empty-state">
-      <div>
-        <h3>Aucune recherche sauvegardée pour le moment.</h3>
-        <p>Les recherches sauvegardées et les alertes seront disponibles depuis l’espace client.</p>
-        ${SavedSearchButton()}
-      </div>
-    </div>
-  `;
-}
-
-function MessageButton(enabled) {
-  return enabled ? `<a class="btn btn-ghost" href="${routes.login}">Envoyer un message</a>` : "";
-}
-
-function ContactAdvertiserModal() {
-  return "";
-}
-
-function ConversationList() {
-  return "";
-}
-
-function ConversationThread() {
-  return "";
-}
-
-function EmailNotificationStatus() {
-  return "";
-}
-
-function UnreadMessagesBadge(count = 0) {
-  return count ? `<span class="unread-badge">${count}</span>` : "";
+  return `<a class="btn btn-light" href="${routeHref(routes.alerts)}">Créer une alerte</a>`;
 }
 
 function RealEstateListingCard(listing) {
-  const contactButtons = contactSources
-    .filter(([source]) => listing.advertiser?.contactPreferences?.[source])
-    .map(([source, label]) => source === "internalMessagingEnabled" ? MessageButton(true) : `<button class="btn btn-ghost" type="button">${label}</button>`)
-    .join("");
+  const media = listing.coverPhoto
+    ? `<img src="${listing.coverPhoto}" alt="${listing.title}" style="width:100%;height:220px;object-fit:cover;border-radius:8px;">`
+    : `<div class="map-placeholder" style="min-height:220px;">Aucune photo disponible</div>`;
+
+  const badges = [
+    formatTransaction(listing.transaction),
+    formatPropertyType(listing.propertyType),
+    listing.advertiser.verified ? "Vérifié" : "",
+  ].filter(Boolean);
 
   return `
-    <article class="listing-card">
-      <div class="listing-media"></div>
-      <div>
-        <span>${listing.transaction}</span>
-        <span>${listing.type}</span>
-        ${listing.verified ? "<span>Vérifié</span>" : ""}
+    <article class="dashboard-card" style="display:grid;gap:14px;margin-bottom:16px;">
+      <div>${media}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        ${badges.map((badge) => `<span class="status-badge">${badge}</span>`).join("")}
       </div>
-      <h3>${listing.title}</h3>
-      <p>${listing.city}${listing.district ? `, ${listing.district}` : ""}</p>
-      <strong>${formatPriceFCFA(listing.price)}</strong>
-      <p>${formatPropertyFeatures(listing)}</p>
-      <a class="btn btn-primary" href="${routeHref(`/immobilier/annonce/${listing.id}`)}">Voir détails</a>
-      ${FavoriteButton({ active: listing.isFavorite, href: routes.favorites })}
-      <div>${contactButtons}</div>
+      <div style="display:grid;gap:8px;">
+        <h3 style="margin:0;color:var(--blue-dark);">${listing.title}</h3>
+        <p style="margin:0;color:var(--muted);">${[listing.district, listing.city].filter(Boolean).join(", ")}</p>
+        ${listing.price ? `<strong style="font-size:1.1rem;color:var(--blue-dark);">${formatPriceFCFA(listing.price)}</strong>` : ""}
+        ${formatPropertyFeatures(listing) ? `<p style="margin:0;color:var(--muted);">${formatPropertyFeatures(listing)}</p>` : ""}
+        <p style="margin:0;color:var(--muted);">Annonceur : ${listing.advertiser.name}</p>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        <a class="btn btn-primary" href="${routeHref(`/immobilier/annonce/${listing.id}`)}">Voir détails</a>
+        ${FavoriteButton()}
+      </div>
     </article>
   `;
 }
 
-function RealEstateEmptyState() {
+function RealEstateEmptyState(message = "Aucune annonce immobilière disponible pour le moment.") {
   return `
     <div class="empty-state">
       <div>
-        <h3>Aucune annonce immobilière disponible pour le moment.</h3>
-        <p>Les résultats seront affichés ici dès que des annonces réelles seront disponibles depuis l’API ou la base de données.</p>
+        <h3>${message}</h3>
+        <p>Les résultats s’affichent ici dès qu’une annonce correspond à votre recherche.</p>
         <div class="empty-actions">
           <a class="btn btn-ghost" href="#property-search">Modifier ma recherche</a>
           ${SavedSearchButton()}
@@ -581,161 +508,204 @@ function RealEstateEmptyState() {
   `;
 }
 
-function RealEstateResultsLayout() {
-  const listings = realEstateListings.map(RealEstateListingCard).join("");
+function AgenciesSection() {
+  const root = document.querySelector("#real-estate-agencies");
+  if (!root) return;
 
-  document.querySelector("#real-estate-results").innerHTML = `
-    <div class="results-toolbar">
-      <div>
-        <h2>Annonces immobilières</h2>
-        <p>${realEstateListings.length} annonce disponible</p>
+  if (!state.agencies.length) {
+    root.innerHTML = `
+      <div class="agencies-inner">
+        <h2>Annonceurs immobiliers</h2>
+        <p>Aucun annonceur publié pour le moment.</p>
       </div>
-      <div class="results-actions">
-        <button class="btn btn-ghost filter-toggle" type="button" data-open-filters>Filtres</button>
-        <button class="btn btn-ghost map-toggle" type="button" data-toggle-map>Voir la carte</button>
-        ${FavoritesLink()}
-        ${SavedSearchButton()}
-      </div>
-    </div>
-
-    <div class="results-layout">
-      ${RealEstateFilters()}
-      <div class="results-list">${realEstateListings.length ? listings : RealEstateEmptyState()}</div>
-      <aside class="map-panel" id="map-panel" aria-label="Carte des biens">
-        <div class="map-placeholder"></div>
-      </aside>
-    </div>
-  `;
-
-  document.querySelector("#filters-form").addEventListener("submit", (event) => {
-    event.preventDefault();
-    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
-    data.country = data.region === "SN" ? "SN" : "";
-    data.region = data.region === "SN" ? "" : data.region;
-    data.nearMe = data.nearMe === "true";
-    navigateTo(buildRealEstateSearchUrl(data));
-  });
-
-  document.querySelector("[data-toggle-map]").addEventListener("click", () => {
-    document.querySelector("#map-panel").classList.toggle("is-open");
-  });
-
-  MobileFilterDrawer();
-  bindSenegalLocationSelector();
-}
-
-function bindSenegalLocationSelector() {
-  const selector = document.querySelector("[data-location-selector]");
-  const regionSelect = document.querySelector("[data-location-region]");
-  const departmentSelect = document.querySelector("[data-location-department]");
-  const citySelect = document.querySelector("[data-location-city]");
-
-  if (!selector || !regionSelect || !departmentSelect || !citySelect) {
+    `;
     return;
   }
 
-  regionSelect.addEventListener("change", () => {
-    const regionSlug = regionSelect.value === "SN" ? "" : regionSelect.value;
-    const region = findLocationRegion(regionSlug);
-    const departments = region ? region.departments : [];
-    const cities = region ? region.cities : mainCities;
-
-    departmentSelect.innerHTML = `<option value="">Département</option>${locationOptionElements(departments)}`;
-    citySelect.innerHTML = `<option value="">Ville</option>${locationOptionElements(cities)}`;
-  });
+  root.innerHTML = `
+    <div class="agencies-inner">
+      <h2>Annonceurs immobiliers</h2>
+      <p>Les professionnels publiés apparaissent ici automatiquement.</p>
+      <div class="listing-performance-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:18px;">
+        ${state.agencies.map((agency) => `
+          <article class="dashboard-card">
+            <div style="display:flex;align-items:center;gap:12px;">
+              ${agency.logoUrl ? `<img src="${agency.logoUrl}" alt="${agency.name}" style="width:48px;height:48px;object-fit:contain;border-radius:8px;border:1px solid var(--line);">` : `<div class="brand-mark" style="width:48px;height:48px;">${agency.name.slice(0, 1).toUpperCase()}</div>`}
+              <div>
+                <strong>${agency.name}</strong>
+                <p style="margin:4px 0 0;color:var(--muted);">${agency.type}${agency.city ? ` · ${agency.city}` : ""}</p>
+              </div>
+            </div>
+            ${agency.verified ? `<div style="margin-top:12px;"><span class="status-badge">Vérifié</span></div>` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </div>
+  `;
 }
 
 function RealEstateAdvertiserCTA() {
-  document.querySelector("#real-estate-advertiser").innerHTML = `
+  const root = document.querySelector("#real-estate-advertiser");
+  if (!root) return;
+
+  root.innerHTML = `
     <div class="advertiser-inner">
       <div>
         <h2>Vous avez un bien à louer ou à vendre ?</h2>
-        <p>Publiez votre annonce, recevez des demandes et gérez vos contacts depuis votre espace.</p>
+        <p>Publiez votre annonce et gérez vos demandes depuis votre espace annonceur.</p>
         <div class="advertiser-actions">
           <a class="btn btn-primary" href="${routeHref(routes.publishRealEstate)}">Publier une annonce</a>
-          <a class="btn btn-light" href="${routes.register}">Créer mon espace</a>
+          <a class="btn btn-light" href="${routeHref(routes.register)}">Créer mon espace</a>
         </div>
       </div>
       <div class="advertiser-benefits">
         <span>Publier un bien</span>
-        <span>Gérer les demandes</span>
-        <span>Discuter avec les clients</span>
-        <span>Choisir les moyens de contact</span>
-      </div>
-    </div>
-  `;
-}
-
-function RealEstateAgenciesSection() {
-  document.querySelector("#real-estate-agencies").innerHTML = `
-    <div class="agencies-inner">
-      <h2>Agences immobilières</h2>
-      <p>Retrouvez prochainement les agences, promoteurs et professionnels présents sur Péncmi.</p>
-      <span class="agency-empty">Aucune agence disponible pour le moment.</span>
-      <div class="agencies-actions">
-        <a class="btn btn-light" href="${routes.agencies}">Voir les agences</a>
+        <span>Recevoir des demandes</span>
+        <span>Suivre les visites</span>
+        <span>Gérer vos contacts</span>
       </div>
     </div>
   `;
 }
 
 function RealEstateFooter() {
-  const columns = [
-    {
-      title: "Immobilier",
-      links: [
-        ["Acheter", "/immobilier?transaction=achat"],
-        ["Louer", "/immobilier?transaction=location"],
-        ["Terrains", "/immobilier?type=terrain"],
-        ["Meublés", "/immobilier?furnished=true"],
-        ["Agences", routes.agencies],
-        ["Favoris", routes.realEstateFavorites],
-        ["Alertes", routes.alerts]
-      ]
-    },
-    {
-      title: "Espace annonceur",
-      links: [
-        ["Publier une annonce", routes.publishRealEstate],
-        ["Mes annonces", routes.dashboardListings],
-        ["Messages", routes.dashboardMessages],
-        ["Contacts", routes.dashboardContacts],
-        ["Statistiques", routes.dashboardStats]
-      ]
-    },
-    {
-      title: "Aide et légal",
-      links: [
-        ["Aide", routes.help],
-        ["Conditions", routes.terms],
-        ["Confidentialité", routes.privacy],
-        ["Mentions légales", routes.legal],
-        ["Contact", routes.contact]
-      ]
-    }
-  ];
+  const root = document.querySelector("#real-estate-footer");
+  if (!root) return;
 
-  document.querySelector("#real-estate-footer").innerHTML = `
+  root.innerHTML = `
     <div class="footer-grid">
       <div class="footer-brand">
         <strong>Péncmi</strong>
-        <p>Portail sénégalais pour logement, hôtels, voitures et voyages interurbains.</p>
+        <p>Plateforme sénégalaise pour l’immobilier, les hôtels, les voitures et les voyages interurbains.</p>
       </div>
-      ${columns.map((column) => `
-        <div class="footer-column">
-          <h3>${column.title}</h3>
-          ${column.links.map(([label, href]) => `<a href="${routeHref(href)}">${label}</a>`).join("")}
-        </div>
-      `).join("")}
+      <div class="footer-column">
+        <h3>Immobilier</h3>
+        <a href="${routeHref("/immobilier?transaction=achat")}">Acheter</a>
+        <a href="${routeHref("/immobilier?transaction=location")}">Louer</a>
+        <a href="${routeHref("/immobilier?type=terrain")}">Terrains</a>
+        <a href="${routeHref(routes.favorites)}">Favoris</a>
+      </div>
+      <div class="footer-column">
+        <h3>Annonceur</h3>
+        <a href="${routeHref(routes.publishRealEstate)}">Publier une annonce</a>
+        <a href="${routeHref("/dashboard/immobilier")}">Dashboard immobilier</a>
+      </div>
+      <div class="footer-column">
+        <h3>Support</h3>
+        <a href="/aide">Aide</a>
+        <a href="/contact">Contact</a>
+        <a href="/mentions-legales">Mentions légales</a>
+        <a href="/confidentialite">Confidentialité</a>
+      </div>
     </div>
     <div class="footer-bottom">© 2026 Péncmi. Tous droits réservés.</div>
   `;
 }
 
-RealEstateHeader();
-RealEstateHeroSearch();
-RealEstateQuickTabs();
-RealEstateResultsLayout();
-RealEstateAdvertiserCTA();
-RealEstateAgenciesSection();
-RealEstateFooter();
+function bindFilters() {
+  document.querySelector("[data-open-filters]")?.addEventListener("click", () => {
+    document.querySelector("#filters-panel")?.classList.add("is-open");
+  });
+
+  document.querySelector("[data-close-filters]")?.addEventListener("click", () => {
+    document.querySelector("#filters-panel")?.classList.remove("is-open");
+  });
+
+  document.querySelector("[data-toggle-map]")?.addEventListener("click", () => {
+    document.querySelector("#map-panel")?.classList.toggle("is-open");
+  });
+
+  document.querySelector("#filters-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const nextFilters = {
+      transaction: String(form.get("transaction") || ""),
+      type: String(form.get("type") || ""),
+      city: String(form.get("city") || ""),
+      maxPrice: String(form.get("maxPrice") || ""),
+      furnished: form.get("furnished") ? "true" : "",
+    };
+    window.location.href = routeHref(buildSearchUrl(nextFilters));
+  });
+}
+
+function ResultsLayout() {
+  const root = document.querySelector("#real-estate-results");
+  if (!root) return;
+
+  let content = RealEstateEmptyState();
+  if (state.loading) {
+    content = RealEstateEmptyState("Chargement des annonces...");
+  } else if (state.error) {
+    content = RealEstateEmptyState(state.error);
+  } else if (state.displayedListings.length) {
+    content = state.displayedListings.map(RealEstateListingCard).join("");
+  }
+
+  root.innerHTML = `
+    <div class="results-toolbar">
+      <div>
+        <h2>Annonces immobilières</h2>
+        <p>${state.loading ? "Chargement..." : `${state.displayedListings.length} annonce${state.displayedListings.length > 1 ? "s" : ""} disponible${state.displayedListings.length > 1 ? "s" : ""}`}</p>
+      </div>
+      <div class="results-actions">
+        <button class="btn btn-ghost filter-toggle" type="button" data-open-filters>Filtres</button>
+        <button class="btn btn-ghost map-toggle" type="button" data-toggle-map>Voir la carte</button>
+        <a class="btn btn-ghost" href="${routeHref(routes.favorites)}">Mes favoris</a>
+        ${SavedSearchButton()}
+      </div>
+    </div>
+
+    <div class="results-layout">
+      ${RealEstateFilters()}
+      <div class="results-list">${content}</div>
+      <aside class="map-panel" id="map-panel" aria-label="Zone d’information">
+        <div class="map-placeholder">
+          <div>
+            <strong>Recherche active</strong>
+            <p style="margin:8px 0 0;">${state.filters.city || "Tout le Sénégal"}${state.filters.transaction ? ` · ${formatTransaction(state.filters.transaction)}` : ""}${state.filters.type ? ` · ${formatPropertyType(state.filters.type)}` : ""}</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  `;
+
+  bindFilters();
+}
+
+async function loadListings() {
+  state.loading = true;
+  state.error = "";
+  ResultsLayout();
+
+  try {
+    const query = buildApiQuery(state.filters);
+    const payload = await apiRequest(`/immobilier${query ? `?${query}` : ""}`);
+    state.listings = Array.isArray(payload) ? payload.map(mapListing) : [];
+    state.displayedListings = applyClientFilters(state.listings, state.filters);
+    state.agencies = buildAgencies(state.listings);
+  } catch (error) {
+    state.listings = [];
+    state.displayedListings = [];
+    state.agencies = [];
+    state.error = error instanceof Error ? error.message : "Chargement impossible.";
+  } finally {
+    state.loading = false;
+    ResultsLayout();
+    AgenciesSection();
+  }
+}
+
+function initializePage() {
+  state.filters = parseSearchParams();
+  RealEstateHeader();
+  RealEstateHeroSearch();
+  RealEstateQuickTabs();
+  ResultsLayout();
+  RealEstateAdvertiserCTA();
+  AgenciesSection();
+  RealEstateFooter();
+  void loadListings();
+}
+
+document.addEventListener("DOMContentLoaded", initializePage);

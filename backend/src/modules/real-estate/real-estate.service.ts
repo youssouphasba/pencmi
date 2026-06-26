@@ -12,14 +12,69 @@ export class RealEstateService {
     const pagination = getPagination(query);
     const where = { status: ListingStatus.active, deletedAt: null, city: query.city, transaction: query.transaction, propertyType: query.propertyType };
     const [data, total] = await Promise.all([
-      this.prisma.realEstateListing.findMany({ where, skip: pagination.skip, take: pagination.take, orderBy: { updatedAt: 'desc' } }),
+      this.prisma.realEstateListing.findMany({
+        where,
+        skip: pagination.skip,
+        take: pagination.take,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          owner: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              city: true,
+              professionalProfile: {
+                select: {
+                  businessName: true,
+                  professionalType: true,
+                  city: true,
+                  logoUrl: true,
+                  whatsappNumber: true,
+                  professionalPhone: true,
+                  professionalEmail: true,
+                  openingHours: true,
+                  verified: true,
+                },
+              },
+            },
+          },
+        },
+      }),
       this.prisma.realEstateListing.count({ where }),
     ]);
     return { data, meta: pagination.meta(total) };
   }
 
   findPublicOne(id: string) {
-    return this.prisma.realEstateListing.findFirstOrThrow({ where: { id, status: ListingStatus.active, deletedAt: null } });
+    return this.prisma.realEstateListing.findFirstOrThrow({
+      where: { id, status: ListingStatus.active, deletedAt: null },
+      include: {
+        owner: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            city: true,
+            professionalProfile: {
+              select: {
+                businessName: true,
+                professionalType: true,
+                city: true,
+                logoUrl: true,
+                whatsappNumber: true,
+                professionalPhone: true,
+                professionalEmail: true,
+                openingHours: true,
+                verified: true,
+                website: true,
+                description: true,
+              },
+            },
+          },
+        },
+      },
+    });
   }
 
   async createVisitRequest(listingId: string, dto: CreateVisitRequestDto) {
@@ -53,6 +108,37 @@ export class RealEstateService {
     const [data, total] = await Promise.all([
       this.prisma.realEstateListing.findMany({ where, skip: pagination.skip, take: pagination.take, orderBy: { updatedAt: 'desc' } }),
       this.prisma.realEstateListing.count({ where }),
+    ]);
+    return { data, meta: pagination.meta(total) };
+  }
+
+  async findMyVisitRequests(ownerUserId: string, dto: PaginationDto) {
+    const pagination = getPagination(dto);
+    const where = {
+      listing: {
+        ownerUserId,
+        deletedAt: null,
+      },
+    };
+    const [data, total] = await Promise.all([
+      this.prisma.realEstateVisitRequest.findMany({
+        where,
+        skip: pagination.skip,
+        take: pagination.take,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          listing: {
+            select: {
+              id: true,
+              title: true,
+              city: true,
+              neighborhood: true,
+              status: true,
+            },
+          },
+        },
+      }),
+      this.prisma.realEstateVisitRequest.count({ where }),
     ]);
     return { data, meta: pagination.meta(total) };
   }

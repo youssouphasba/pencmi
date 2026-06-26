@@ -10,17 +10,18 @@ const routes = {
   stats: "/dashboard/immobilier/statistiques",
   contactSettings: "/dashboard/immobilier/contact-settings",
   emailSettings: "/dashboard/immobilier/email-settings",
-  profile: "/dashboard/profil"
+  profile: "/dashboard/profil",
+  login: "/login?next=/dashboard/immobilier",
 };
 
-const dashboardStats = null;
-const listingPerformanceStats = [];
-const recentMessages = [];
-const recentContacts = [];
-const recentVisitRequests = [];
-const topListings = [];
-const listingsToImprove = [];
+let dashboardStats = null;
+let listingPerformanceStats = [];
+let recentVisitRequests = [];
 let selectedPeriod = "30";
+let dashboardLoading = true;
+let dashboardError = "";
+
+const ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
 
 const sidebarItems = [
   ["Vue d’ensemble", routes.overview],
@@ -32,144 +33,178 @@ const sidebarItems = [
   ["Statistiques", routes.stats, "stats"],
   ["Moyens de contact", routes.contactSettings, "contactSettings"],
   ["Emails automatiques", routes.emailSettings, "failedEmails"],
-  ["Mon profil", routes.profile]
+  ["Mon profil", routes.profile],
 ];
 
 const kpiDefinitions = [
   ["Annonces actives", "activeListings", "AN"],
   ["Annonces en attente", "pendingListings", "AT"],
+  ["Annonces suspendues", "suspendedListings", "SU"],
   ["Vues totales", "totalViews", "VU"],
-  ["Clics détails", "detailClicks", "CD"],
-  ["Favoris ajoutés", "favorites", "FA"],
-  ["Messages reçus", "messages", "MS"],
-  ["Contacts reçus", "contacts", "CO"],
+  ["Favoris", "favorites", "FA"],
   ["Demandes de visite", "visitRequests", "DV"],
-  ["Clics WhatsApp", "whatsappClicks", "WA"],
-  ["Clics téléphone", "phoneClicks", "TE"],
-  ["Clics email", "emailClicks", "EM"],
-  ["Taux vue → contact", "viewToContactRate", "TC", "percentage"],
-  ["Délai moyen de réponse", "averageResponseTimeMinutes", "DR", "time"],
-  ["Conversations non lues", "unreadConversations", "NL"]
+  ["Contacts", "contacts", "CO"],
+  ["Messages", "messages", "MS"],
 ];
 
 function routeHref(path) {
-  if (window.location.protocol !== "file:") {
-    return path;
-  }
+  if (window.location.protocol !== "file:") return path;
 
   const depth = Number(document.body?.dataset?.routeDepth || "2");
   const prefix = "../".repeat(depth);
 
-  if (path === "/immobilier") {
-    return `${prefix}immobilier/`;
-  }
-
-  if (path.startsWith("/publier")) {
-    return `${prefix}publier/?category=immobilier`;
-  }
-
+  if (path === "/immobilier") return `${prefix}immobilier/`;
+  if (path.startsWith("/publier")) return `${prefix}publier/?category=immobilier`;
+  if (path.startsWith("/login?")) return `${prefix}login/${path.slice("/login".length)}`;
   if (path.includes("?")) {
     const [base, query] = path.split("?");
     return `${routeHref(base)}?${query}`;
   }
-
-  if (path.startsWith("/dashboard/")) {
-    return `${prefix}${path.replace(/^\//, "")}/`;
+  if (path.startsWith("/dashboard/")) return `${prefix}${path.replace(/^\//, "")}/`;
+  if (path.startsWith("/immobilier/annonce/")) {
+    return `${prefix}immobilier/annonce/?id=${encodeURIComponent(path.slice("/immobilier/annonce/".length))}`;
   }
 
   return path;
 }
 
-function formatMetric(value) {
-  if (value === null || value === undefined || value === "") {
-    return "";
+function getApiBaseUrl() {
+  return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || "").replace(/\/+$/, "");
+}
+
+function getAccessToken() {
+  return window.localStorage.getItem(ACCESS_TOKEN_STORAGE_KEY) || "";
+}
+
+async function apiRequest(path) {
+  const baseUrl = getApiBaseUrl();
+  const token = getAccessToken();
+
+  if (!baseUrl || !token) {
+    throw new Error("Session annonceur indisponible.");
   }
 
-  return Number(value).toLocaleString("fr-FR");
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Chargement impossible.");
+  }
+
+  return payload?.data ?? payload;
+}
+
+function formatMetric(value) {
+  return Number(value || 0).toLocaleString("fr-FR");
 }
 
 function formatPercentage(value) {
-  if (value === null || value === undefined || value === "") {
-    return "";
-  }
-
-  return `${Number(value).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%`;
-}
-
-function formatResponseTime(value) {
-  if (value === null || value === undefined || value === "") {
-    return "";
-  }
-
-  if (value < 60) {
-    return `${value} min`;
-  }
-
-  return `${Math.round(value / 60)} h`;
+  return `${Number(value || 0).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%`;
 }
 
 function formatDate(value) {
-  if (!value) {
-    return "";
-  }
-
+  if (!value) return "";
   return new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
 }
 
-function calculateConversionRate(contacts, views) {
-  if (!contacts || !views) {
-    return 0;
-  }
-
-  return Math.round((contacts / views) * 1000) / 10;
-}
-
-function getStatusLabel(status) {
+function formatStatus(status) {
   const labels = {
     draft: "Brouillon",
-    pending_review: "En attente de validation",
+    pending_review: "En attente",
     active: "Active",
     suspended: "Suspendue",
     expired: "Expirée",
     deleted: "Supprimée",
-    new: "Nouveau",
-    read: "Lu",
-    replied: "Répondu",
-    archived: "Archivé",
-    closed: "Clôturé",
-    proposed: "Visite proposée",
-    confirmed: "Confirmée",
+    new: "Nouvelle",
+    pending: "En attente",
+    accepted: "Acceptée",
+    refused: "Refusée",
     cancelled: "Annulée",
     completed: "Terminée",
-    pending: "En attente",
-    sent: "Envoyé",
-    failed: "Échec"
   };
-
   return labels[status] || "À renseigner";
 }
 
-function getListingRecommendations(listing) {
-  if (!listing) {
-    return [];
-  }
+function formatPropertyType(type) {
+  const labels = {
+    appartement: "Appartement",
+    maison: "Maison",
+    villa: "Villa",
+    terrain: "Terrain",
+    studio: "Studio",
+    chambre: "Chambre",
+    bureau: "Bureau",
+    commerce: "Commerce",
+  };
+  return labels[type] || type || "";
+}
 
-  const recommendations = [];
+function completionScore(listing) {
+  const metadata = listing.metadata || {};
+  const checks = [
+    Boolean(metadata.photos?.length),
+    Boolean(listing.title),
+    Boolean(listing.description),
+    Boolean(listing.city),
+    Boolean(listing.propertyType),
+    Boolean(listing.transaction),
+    Boolean(listing.neighborhood),
+    Boolean(metadata.surface),
+    Boolean(metadata.bedrooms || metadata.bedrooms === 0),
+    Boolean(metadata.bathrooms || metadata.bathrooms === 0),
+  ];
 
-  if (!listing.photoCount) recommendations.push("Ajouter plus de photos");
-  if (!listing.hasDescription) recommendations.push("Compléter la description");
-  if (!listing.district) recommendations.push("Ajouter le quartier");
-  if (!listing.surface) recommendations.push("Renseigner la surface");
-  if (!listing.hasConditions) recommendations.push("Ajouter les conditions");
-  if (!listing.whatsappEnabled) recommendations.push("Activer WhatsApp");
-  if (!listing.internalMessagingEnabled) recommendations.push("Activer la messagerie interne");
-  if (!listing.emailNotificationsEnabled) recommendations.push("Activer les notifications email");
-  if (listing.unreadMessages) recommendations.push("Répondre aux messages en attente");
-  if (!listing.availableFrom) recommendations.push("Mettre à jour la disponibilité");
-  if (!listing.priceChecked) recommendations.push("Vérifier le prix");
-  if (!listing.hasDocuments) recommendations.push("Ajouter les documents disponibles");
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+}
 
-  return recommendations;
+function listingViewCount(listing) {
+  return Number(listing.metadata?.views || 0);
+}
+
+function listingFavoriteCount(listing) {
+  return Number(listing.metadata?.favorites || 0);
+}
+
+function mapListingPerformance(listing, visitRequests) {
+  const listingVisits = visitRequests.filter((visit) => visit.listing?.id === listing.id);
+  const views = listingViewCount(listing);
+  const contacts = listingVisits.length;
+
+  return {
+    listingId: listing.id,
+    title: listing.title,
+    status: listing.status,
+    city: listing.city,
+    propertyType: formatPropertyType(listing.propertyType),
+    views,
+    detailClicks: Number(listing.metadata?.detailClicks || 0),
+    favorites: listingFavoriteCount(listing),
+    messages: Number(listing.metadata?.messages || 0),
+    contacts,
+    visitRequests: contacts,
+    contactRate: views ? (contacts / views) * 100 : 0,
+    completionScore: completionScore(listing),
+    updatedAt: listing.updatedAt,
+  };
+}
+
+function buildDashboardStats(listings, visitRequests) {
+  const performances = listings.map((listing) => mapListingPerformance(listing, visitRequests));
+
+  return {
+    activeListings: listings.filter((listing) => listing.status === "active").length,
+    pendingListings: listings.filter((listing) => listing.status === "pending_review").length,
+    suspendedListings: listings.filter((listing) => listing.status === "suspended").length,
+    totalViews: performances.reduce((sum, listing) => sum + listing.views, 0),
+    favorites: performances.reduce((sum, listing) => sum + listing.favorites, 0),
+    visitRequests: visitRequests.length,
+    contacts: visitRequests.length,
+    messages: performances.reduce((sum, listing) => sum + listing.messages, 0),
+  };
 }
 
 function RealEstateDashboardLayout() {
@@ -189,13 +224,13 @@ function RealEstateDashboardLayout() {
 
 function DashboardSidebar() {
   const badges = {
-    messages: recentMessages.length,
-    contacts: recentContacts.length,
+    messages: dashboardStats?.messages || 0,
+    contacts: dashboardStats?.contacts || 0,
     visits: recentVisitRequests.length,
-    listings: 0,
+    listings: listingPerformanceStats.filter((listing) => listing.status !== "active").length,
     stats: 0,
     contactSettings: 0,
-    failedEmails: 0
+    failedEmails: 0,
   };
 
   return `
@@ -220,25 +255,16 @@ function DashboardSidebar() {
 }
 
 function DashboardHeader() {
-  const bell = typeof NotificationBell === "function" ? NotificationBell() : `<a class="btn btn-ghost" href="../notifications/">Notifications <span class="notification-badge">0</span></a>`;
   return `
     <header class="dashboard-header">
       <div>
         <button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button>
         <h1>Dashboard immobilier</h1>
-        <p>Gérez vos annonces, vos contacts et vos performances.</p>
+        <p>Gérez vos annonces et vos demandes réelles.</p>
       </div>
-      <div>
-        <div class="dashboard-header-actions">
-          ${bell}
-          <a class="btn btn-primary" href="${routeHref(routes.publish)}">Publier une annonce</a>
-          <a class="btn btn-light" href="${routeHref(routes.realEstate)}">Voir le site</a>
-        </div>
-        <div class="dashboard-profile-actions">
-          <a class="btn btn-ghost" href="${routes.profile}">Profil</a>
-          <a class="btn btn-ghost" href="${routes.contactSettings}">Paramètres</a>
-          <a class="btn btn-ghost" href="/logout">Déconnexion</a>
-        </div>
+      <div class="dashboard-header-actions">
+        <a class="btn btn-primary" href="${routeHref(routes.publish)}">Publier une annonce</a>
+        <a class="btn btn-light" href="${routeHref(routes.realEstate)}">Voir le site</a>
       </div>
     </header>
   `;
@@ -259,6 +285,14 @@ function DashboardPeriodFilter() {
 }
 
 function DashboardOverview() {
+  if (dashboardLoading) {
+    return `<section class="dashboard-section">${EmptyDashboardState("Chargement du dashboard...")}</section>`;
+  }
+
+  if (dashboardError) {
+    return `<section class="dashboard-section">${EmptyDashboardState(dashboardError, "Se connecter", routes.login)}</section>`;
+  }
+
   return `
     <section class="dashboard-section">
       <div class="dashboard-section-header">
@@ -269,18 +303,15 @@ function DashboardOverview() {
 
     <section class="dashboard-section">
       <div class="dashboard-section-header">
-        <h2>Performance récente</h2>
+        <h2>Mes annonces</h2>
       </div>
       ${ListingPerformanceTable()}
-      <div class="listing-performance-cards">${listingPerformanceStats.map(ListingPerformanceCard).join("") || EmptyDashboardState("Vous n’avez aucune annonce immobilière pour le moment.", "Publier ma première annonce", routes.publish)}</div>
+      <div class="listing-performance-cards">${listingPerformanceStats.map(ListingPerformanceCard).join("")}</div>
     </section>
 
     <section class="dashboard-section">
       <div class="dashboard-grid">
-        ${RecentMessagesList()}
-        ${RecentContactsList()}
         ${RecentVisitRequestsList()}
-        ${AdvertiserRecommendations()}
         ${TopListingsCard()}
         ${DashboardFavoritesOverview()}
       </div>
@@ -288,22 +319,19 @@ function DashboardOverview() {
   `;
 }
 
-function KpiCard([title, key, icon, format]) {
-  const value = dashboardStats?.[key];
-  const formattedValue = format === "percentage" ? formatPercentage(value) : format === "time" ? formatResponseTime(value) : formatMetric(value);
-
+function KpiCard([title, key, icon]) {
   return `
     <article class="kpi-card">
       <span class="kpi-icon">${icon}</span>
       <h3>${title}</h3>
-      ${formattedValue ? `<div class="kpi-value">${formattedValue}</div>` : `<div class="kpi-empty">Aucune donnée disponible</div>`}
+      <div class="kpi-value">${formatMetric(dashboardStats?.[key] || 0)}</div>
     </article>
   `;
 }
 
 function ListingPerformanceTable() {
   if (!listingPerformanceStats.length) {
-    return `<div class="performance-table-wrap">${EmptyDashboardState("Vous n’avez aucune annonce immobilière pour le moment.", "Publier ma première annonce", routes.publish)}</div>`;
+    return EmptyDashboardState("Vous n’avez aucune annonce immobilière pour le moment.", "Publier ma première annonce", routes.publish);
   }
 
   return `
@@ -316,12 +344,9 @@ function ListingPerformanceTable() {
             <th>Ville</th>
             <th>Type</th>
             <th>Vues</th>
-            <th>Clics détails</th>
             <th>Favoris</th>
-            <th>Messages</th>
-            <th>Contacts</th>
-            <th>Demandes de visite</th>
-            <th>Taux de contact</th>
+            <th>Demandes</th>
+            <th>Taux contact</th>
             <th>Score</th>
             <th>Actions</th>
           </tr>
@@ -333,18 +358,12 @@ function ListingPerformanceTable() {
             <td>${listing.city || ""}</td>
             <td>${listing.propertyType || ""}</td>
             <td>${formatMetric(listing.views)}</td>
-            <td>${formatMetric(listing.detailClicks)}</td>
             <td>${formatMetric(listing.favorites)}</td>
-            <td>${formatMetric(listing.messages)}</td>
-            <td>${formatMetric(listing.contacts)}</td>
             <td>${formatMetric(listing.visitRequests)}</td>
             <td>${formatPercentage(listing.contactRate)}</td>
             <td>${ListingCompletionScore(listing.completionScore)}</td>
             <td>
-              <a href="/immobilier/annonce/${listing.listingId}">Voir</a>
-              <a href="/publier?category=immobilier&id=${listing.listingId}">Modifier</a>
-              <button type="button">Désactiver</button>
-              <a href="/dashboard/immobilier/statistiques?listing=${listing.listingId}">Statistiques</a>
+              <a href="${routeHref(`/immobilier/annonce/${listing.listingId}`)}">Voir</a>
             </td>
           </tr>
         `).join("")}</tbody>
@@ -358,7 +377,7 @@ function ListingPerformanceCard(listing) {
     <article class="dashboard-card">
       <h3>${listing.title}</h3>
       <p>${ListingStatusBadge(listing.status)} ${listing.city || ""}</p>
-      <p>Vues : ${formatMetric(listing.views)} · Contacts : ${formatMetric(listing.contacts)}</p>
+      <p>Vues : ${formatMetric(listing.views)} · Demandes : ${formatMetric(listing.visitRequests)}</p>
       ${ListingCompletionScore(listing.completionScore)}
     </article>
   `;
@@ -374,73 +393,19 @@ function ListingCompletionScore(score) {
   `;
 }
 
-function AdvertiserRecommendations() {
-  const recommendations = listingsToImprove.flatMap(getListingRecommendations);
-
-  return `
-    <section class="dashboard-card">
-      <h3>Annonces à améliorer</h3>
-      ${recommendations.length ? `<ul>${recommendations.map((item) => `<li>${item}</li>`).join("")}</ul>` : `<p class="dashboard-muted">Vos annonces sont bien complétées pour le moment.</p>`}
-    </section>
-  `;
-}
-
-function RecentMessagesList() {
-  return `
-    <section class="dashboard-card">
-      <div class="dashboard-section-header">
-        <h3>Messages récents</h3>
-        <a href="${routes.messages}">Voir tout</a>
-      </div>
-      ${recentMessages.length ? recentMessages.map((message) => `
-        <article>
-          <strong>${message.clientName || "Client"}</strong>
-          <p>${message.preview}</p>
-          ${MessageStatusBadge(message.status)}
-          ${EmailNotificationStatus(message.emailNotification)}
-          <a class="btn btn-ghost" href="/dashboard/immobilier/messages/${message.conversationId}">Répondre</a>
-        </article>
-      `).join("") : EmptyDashboardState("Aucun message reçu pour le moment.")}
-    </section>
-  `;
-}
-
-function RecentContactsList() {
-  return `
-    <section class="dashboard-card">
-      <div class="dashboard-section-header">
-        <h3>Contacts récents</h3>
-        <a href="${routes.contacts}">Voir tout</a>
-      </div>
-      ${recentContacts.length ? recentContacts.map((contact) => `
-        <article>
-          ${ContactSourceBadge(contact.source)}
-          <p>${contact.listingTitle}</p>
-          ${MessageStatusBadge(contact.status)}
-        </article>
-      `).join("") : EmptyDashboardState("Aucun contact reçu pour le moment.")}
-    </section>
-  `;
-}
-
 function RecentVisitRequestsList() {
   return `
     <section class="dashboard-card">
       <div class="dashboard-section-header">
         <h3>Demandes de visite</h3>
-        <a href="${routes.visits}">Voir tout</a>
+        <a href="${routeHref(routes.visits)}">Voir tout</a>
       </div>
       ${recentVisitRequests.length ? recentVisitRequests.map((visit) => `
         <article>
           <strong>${visit.clientName || "Client"}</strong>
           <p>${visit.listingTitle}</p>
+          <p>${formatDate(visit.preferredDate)}</p>
           ${VisitStatusBadge(visit.status)}
-          <div class="dashboard-mobile-actions">
-            <button class="btn btn-ghost" type="button">Proposer un créneau</button>
-            <button class="btn btn-ghost" type="button">Confirmer</button>
-            <button class="btn btn-ghost" type="button">Annuler</button>
-            <button class="btn btn-ghost" type="button">Répondre</button>
-          </div>
         </article>
       `).join("") : EmptyDashboardState("Aucune demande de visite pour le moment.")}
     </section>
@@ -448,10 +413,11 @@ function RecentVisitRequestsList() {
 }
 
 function TopListingsCard() {
+  const topListings = [...listingPerformanceStats].sort((left, right) => right.views - left.views).slice(0, 3);
   return `
     <section class="dashboard-card">
       <h3>Meilleures annonces</h3>
-      ${topListings.length ? topListings.map((listing) => `<p>${listing.title}</p>`).join("") : EmptyDashboardState("Aucune statistique disponible pour le moment.")}
+      ${topListings.length ? topListings.map((listing) => `<p>${listing.title} · ${formatMetric(listing.views)} vues</p>`).join("") : EmptyDashboardState("Aucune statistique disponible pour le moment.")}
     </section>
   `;
 }
@@ -460,7 +426,7 @@ function DashboardFavoritesOverview() {
   return `
     <section class="dashboard-card">
       <h3>Favoris reçus</h3>
-      ${dashboardStats?.favorites ? `<p>${formatMetric(dashboardStats.favorites)} favoris ajoutés</p>` : EmptyDashboardState("Aucune annonce ajoutée en favori pour le moment.")}
+      <p>${formatMetric(dashboardStats?.favorites || 0)} favoris enregistrés</p>
     </section>
   `;
 }
@@ -470,48 +436,23 @@ function EmptyDashboardState(text = "Aucune donnée disponible pour le moment.",
     <div class="empty-dashboard-state">
       <div>
         <strong>${text}</strong>
-        ${actionLabel ? `<p><a class="btn btn-primary" href="${routeHref(actionHref)}">${actionLabel}</a></p>` : `<p>Aucune donnée disponible</p>`}
+        ${actionLabel ? `<p><a class="btn btn-primary" href="${routeHref(actionHref)}">${actionLabel}</a></p>` : ""}
       </div>
     </div>
   `;
 }
 
-function EmailNotificationStatus(notification) {
-  if (!notification) {
-    return "";
-  }
-
-  return `<span class="status-badge">${getStatusLabel(notification.status)}</span>`;
-}
-
-function ContactSourceBadge(source) {
-  const labels = {
-    whatsapp: "WhatsApp",
-    phone: "Téléphone",
-    email: "Email",
-    internal_message: "Message interne",
-    form: "Formulaire",
-    visit_request: "Demande de visite"
-  };
-
-  return `<span class="source-badge">${labels[source] || "Source à renseigner"}</span>`;
-}
-
 function ListingStatusBadge(status) {
-  return `<span class="status-badge">${getStatusLabel(status)}</span>`;
-}
-
-function MessageStatusBadge(status) {
-  return `<span class="status-badge">${getStatusLabel(status)}</span>`;
+  return `<span class="status-badge">${formatStatus(status)}</span>`;
 }
 
 function VisitStatusBadge(status) {
-  return `<span class="status-badge">${getStatusLabel(status)}</span>`;
+  return `<span class="status-badge">${formatStatus(status)}</span>`;
 }
 
 function bindDashboardEvents() {
   document.querySelector("[data-open-sidebar]")?.addEventListener("click", () => {
-    document.querySelector("#dashboard-sidebar").classList.toggle("is-open");
+    document.querySelector("#dashboard-sidebar")?.classList.toggle("is-open");
   });
 
   document.querySelector("[data-period-filter]")?.addEventListener("change", (event) => {
@@ -520,4 +461,36 @@ function bindDashboardEvents() {
   });
 }
 
-RealEstateDashboardLayout();
+async function loadDashboardData() {
+  dashboardLoading = true;
+  dashboardError = "";
+  RealEstateDashboardLayout();
+
+  try {
+    const [listingsPayload, visitsPayload] = await Promise.all([
+      apiRequest("/dashboard/immobilier"),
+      apiRequest("/dashboard/immobilier/visits"),
+    ]);
+
+    const listings = listingsPayload?.data || listingsPayload || [];
+    const visits = visitsPayload?.data || visitsPayload || [];
+
+    listingPerformanceStats = listings.map((listing) => mapListingPerformance(listing, visits));
+    recentVisitRequests = visits.slice(0, 5).map((visit) => ({
+      clientName: visit.clientName,
+      listingTitle: visit.listing?.title || "Annonce",
+      preferredDate: visit.preferredDate,
+      status: visit.status,
+    }));
+    dashboardStats = buildDashboardStats(listings, visits);
+  } catch (error) {
+    dashboardError = error instanceof Error ? error.message : "Chargement impossible.";
+  } finally {
+    dashboardLoading = false;
+    RealEstateDashboardLayout();
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  void loadDashboardData();
+});

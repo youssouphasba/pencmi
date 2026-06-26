@@ -14,4 +14,19 @@ export class AdminController {
   overview() {
     return this.service.overview();
   }
+
+  @Get('users')
+  users() {
+    return this.service.users();
+  }
+
+  @Get('advertisers')
+  advertisers() {
+    return this.service.advertisers();
+  }
+
+  @Get('listings/real-estate')
+  realEstateListings() {
+    return this.service.realEstateListings();
+  }
 }

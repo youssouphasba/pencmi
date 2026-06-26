@@ -39,6 +39,13 @@ export class RealEstateController {
   }
 
   @ApiBearerAuth()
+  @RequirePermissions('manage_real_estate')
+  @Get('dashboard/immobilier/visits')
+  findMyVisitRequests(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationDto) {
+    return this.service.findMyVisitRequests(user.id, pagination);
+  }
+
+  @ApiBearerAuth()
   @RequirePermissions('publish_real_estate')
   @Post('dashboard/immobilier')
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateRealEstateDto) {
