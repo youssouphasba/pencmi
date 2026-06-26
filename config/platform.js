@@ -223,6 +223,13 @@ const PencmiGeoConstants = {
   files: ["/llms.txt", "/ai.txt", "/about-pencmi.txt", "/data/platform-summary.json", "/data/public-entities.json", "/data/public-routes.json"]
 };
 
+const PencmiRuntimeConfig = window.PencmiRuntimeConfig || {};
+const PencmiApiBaseUrl = String(
+  PencmiRuntimeConfig.apiBaseUrl ||
+  PencmiRuntimeConfig.backendUrl ||
+  ""
+).replace(/\/+$/, "");
+
 function pencmiPathDepth() {
   return Number(document.body?.dataset?.routeDepth || "0");
 }
@@ -246,6 +253,7 @@ function pencmiRouteHref(path = "/") {
 }
 
 window.PencmiConfig = {
+  apiBaseUrl: PencmiApiBaseUrl,
   modules: PencmiModules,
   statuses: PencmiStatuses,
   routeAccess: PencmiRouteAccess,
@@ -259,3 +267,7 @@ window.PencmiConfig = {
   geo: PencmiGeoConstants,
   routeHref: pencmiRouteHref
 };
+
+if (PencmiApiBaseUrl) {
+  window.PencmiApiBaseUrl = PencmiApiBaseUrl;
+}

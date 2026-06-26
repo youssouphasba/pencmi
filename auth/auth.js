@@ -158,9 +158,22 @@ function validatePassword(value) {
   return String(value || "").length >= 8;
 }
 
+function isPrivateFrontendHost(hostname = "") {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname.endsWith(".local") ||
+    /^10\./.test(hostname) ||
+    /^192\.168\./.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
+  );
+}
+
 function getApiBaseUrl() {
   const configuredBaseUrl =
     document.body.dataset.apiBaseUrl ||
+    window.PencmiConfig?.apiBaseUrl ||
     window.PencmiApiBaseUrl ||
     window.localStorage.getItem(API_BASE_STORAGE_KEY) ||
     "";
@@ -170,6 +183,9 @@ function getApiBaseUrl() {
   }
 
   if (window.location.protocol === "http:" || window.location.protocol === "https:") {
+    if (isPrivateFrontendHost(window.location.hostname)) {
+      return "";
+    }
     return `${window.location.origin}/api/v1`;
   }
 
@@ -211,10 +227,15 @@ async function apiRequest(path, options = {}) {
     headers.set("Content-Type", "application/json");
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error("API inaccessible. Vérifiez l'URL du backend et la configuration CORS.");
+  }
 
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const payload = isJson ? await response.json() : null;
@@ -740,7 +761,7 @@ async function bindProfileForm(form) {
     showMessage(success, "", false);
 
     if (!getApiBaseUrl() || !getStoredAccessToken()) {
-      showMessage(success, "Le formulaire de profil est prêt, mais l’API n’est pas encore connectée dans ce navigateur.");
+      showMessage(error, "Profil indisponible tant que l'API ou la session n'est pas configurée.");
       return;
     }
 
@@ -798,8 +819,7 @@ function bindAuthForms() {
     }
 
     if (!getApiBaseUrl()) {
-      const target = getRedirectAfterLogin("client", getNextParam());
-      window.location.href = authRouteHref(target);
+      showMessage(error, "Connexion indisponible tant que l'URL du backend n'est pas configurée.");
       return;
     }
 
@@ -843,7 +863,7 @@ function bindAuthForms() {
     }
 
     if (!getApiBaseUrl()) {
-      showMessage(success, "Le formulaire d’inscription est prêt. Configurez l’API pour activer l’inscription réelle.");
+      showMessage(error, "Inscription indisponible tant que l'URL du backend n'est pas configurée.");
       return;
     }
 
