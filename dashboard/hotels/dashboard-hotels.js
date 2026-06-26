@@ -59,15 +59,18 @@ function listFromPayload(payload) {
   return [];
 }
 
-async function hotelApiRequest(path) {
+async function hotelApiRequest(path, options = {}) {
   const baseUrl = hotelApiBaseUrl();
   const token = hotelAccessToken();
   if (!baseUrl || !token) {
     throw new Error("Connexion annonceur requise.");
   }
   const response = await fetch(`${baseUrl}${path}`, {
+    ...options,
     headers: {
+      ...(options.headers || {}),
       Authorization: `Bearer ${token}`,
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
     },
   });
   const payload = await response.json().catch(() => null);
@@ -75,6 +78,21 @@ async function hotelApiRequest(path) {
     throw new Error(payload?.error?.message || "Chargement impossible.");
   }
   return payload?.data ?? payload;
+}
+
+const hotelReservationStatusLabels = {
+  new: "Nouvelle",
+  pending: "En attente",
+  accepted: "Acceptée",
+  refused: "Refusée",
+  cancelled: "Annulée",
+  expired: "Expirée",
+  completed: "Terminée",
+  requires_more_info: "Infos demandées"
+};
+
+function formatHotelReservationStatus(status) {
+  return hotelReservationStatusLabels[status] || "À traiter";
 }
 
 function formatHotelDate(value) {
@@ -247,8 +265,39 @@ function HotelMessagesPage() {
 function HotelReservationsPage() {
   return HotelsDashboardLayout(`
     ${DashboardHeader("Demandes de réservation", "Gérez les demandes de réservation reçues sur vos hébergements.")}
-    ${hotelDashboardData.reservations.length ? `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Client</th><th>Hébergement</th><th>Arrivée</th><th>Départ</th><th>Personnes</th><th>Message</th><th>Statut</th><th>Date</th></tr></thead><tbody>${hotelDashboardData.reservations.map((request) => `<tr><td>${request.clientName || "Client"}</td><td>${request.property?.name || "Hébergement"}</td><td>${formatHotelDate(request.checkIn)}</td><td>${formatHotelDate(request.checkOut)}</td><td>${request.guests || ""}</td><td>${request.message || ""}</td><td>${request.status}</td><td>${formatHotelDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucune demande de réservation pour le moment.")}
+    ${hotelDashboardData.reservations.length ? `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Client</th><th>Hébergement</th><th>Arrivée</th><th>Départ</th><th>Personnes</th><th>Message</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead><tbody>${hotelDashboardData.reservations.map(HotelReservationRow).join("")}</tbody></table></section>` : EmptyState("Aucune demande de réservation pour le moment.")}
   `, "reservations");
+}
+
+function HotelReservationRow(request) {
+  return `
+    <tr>
+      <td>${request.clientName || "Client"}</td>
+      <td>${request.property?.name || "Hébergement"}</td>
+      <td>${formatHotelDate(request.checkIn)}</td>
+      <td>${formatHotelDate(request.checkOut)}</td>
+      <td>${request.guests || ""}</td>
+      <td>${request.message || ""}</td>
+      <td>${formatHotelReservationStatus(request.status)}</td>
+      <td>${formatHotelDate(request.createdAt)}</td>
+      <td>
+        <div class="hotel-row-actions">
+          <button class="btn btn-primary" type="button" data-reservation-status="accepted" data-reservation-id="${request.id}">Accepter</button>
+          <button class="btn btn-ghost" type="button" data-reservation-status="requires_more_info" data-reservation-id="${request.id}">Demander des infos</button>
+          <button class="btn btn-ghost" type="button" data-reservation-status="refused" data-reservation-id="${request.id}">Refuser</button>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+async function updateHotelReservationStatus(id, status) {
+  const updated = await hotelApiRequest(`/dashboard/hotels/reservations/${encodeURIComponent(id)}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status })
+  });
+  hotelDashboardData.reservations = hotelDashboardData.reservations.map((request) => request.id === id ? updated : request);
+  renderDashboard();
 }
 
 function HotelContactsPage() {
@@ -320,6 +369,14 @@ function renderDashboard() {
   });
   document.querySelector("[data-save-contact-settings]")?.addEventListener("click", () => {
     document.querySelector("#contact-settings-message").hidden = false;
+  });
+  document.querySelectorAll("[data-reservation-status]").forEach((button) => {
+    button.addEventListener("click", () => {
+      button.disabled = true;
+      void updateHotelReservationStatus(button.dataset.reservationId, button.dataset.reservationStatus).catch(() => {
+        button.disabled = false;
+      });
+    });
   });
 }
 

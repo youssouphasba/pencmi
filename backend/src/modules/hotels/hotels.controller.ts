@@ -5,7 +5,7 @@ import { RequirePermissions } from '../../common/decorators/permissions.decorato
 import { Public } from '../../common/decorators/public.decorator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
-import { CreateHotelDto, CreateHotelReservationRequestDto, HotelSearchDto, UpdateHotelDto } from './hotels.dto';
+import { CreateHotelDto, CreateHotelReservationRequestDto, HotelSearchDto, UpdateHotelDto, UpdateHotelReservationStatusDto } from './hotels.dto';
 import { HotelsService } from './hotels.service';
 
 @ApiTags('hotels')
@@ -43,6 +43,17 @@ export class HotelsController {
   @Get('dashboard/hotels/reservations')
   findMyReservationRequests(@CurrentUser() user: AuthenticatedUser, @Query() pagination: PaginationDto) {
     return this.service.findMyReservationRequests(user.id, pagination);
+  }
+
+  @ApiBearerAuth()
+  @RequirePermissions('manage_hotels')
+  @Patch('dashboard/hotels/reservations/:id/status')
+  updateReservationStatus(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: UpdateHotelReservationStatusDto,
+  ) {
+    return this.service.updateReservationStatus(user.id, id, dto);
   }
 
   @ApiBearerAuth()

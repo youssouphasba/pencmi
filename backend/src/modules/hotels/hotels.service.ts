@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { ContactSource, ListingStatus, PencmiModule, TargetType } from '@prisma/client';
+import { ContactSource, ListingStatus, PencmiModule, RequestStatus, TargetType } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { getPagination, PaginationDto } from '../../common/pagination/pagination.dto';
-import { CreateHotelDto, CreateHotelReservationRequestDto, HotelSearchDto, UpdateHotelDto } from './hotels.dto';
+import { CreateHotelDto, CreateHotelReservationRequestDto, HotelSearchDto, UpdateHotelDto, UpdateHotelReservationStatusDto } from './hotels.dto';
 
 @Injectable()
 export class HotelsService {
@@ -164,6 +164,43 @@ export class HotelsService {
       this.prisma.hotelReservationRequest.count({ where }),
     ]);
     return { data, meta: pagination.meta(total) };
+  }
+
+  async updateReservationStatus(ownerUserId: string, id: string, dto: UpdateHotelReservationStatusDto) {
+    const request = await this.prisma.hotelReservationRequest.findFirstOrThrow({
+      where: {
+        id,
+        property: {
+          ownerUserId,
+          deletedAt: null,
+        },
+      },
+      include: {
+        property: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+          },
+        },
+      },
+    });
+
+    return this.prisma.hotelReservationRequest.update({
+      where: { id: request.id },
+      data: { status: dto.status as RequestStatus },
+      include: {
+        property: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+            propertyType: true,
+            status: true,
+          },
+        },
+      },
+    });
   }
 
   create(ownerUserId: string, dto: CreateHotelDto) {

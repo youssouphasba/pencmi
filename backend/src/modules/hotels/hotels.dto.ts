@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 
 export class HotelSearchDto extends PaginationDto {
@@ -70,4 +70,11 @@ export class CreateHotelReservationRequestDto {
   @IsOptional()
   @IsString()
   message?: string;
+}
+
+const hotelReservationStatuses = ['pending', 'accepted', 'refused', 'cancelled', 'requires_more_info'] as const;
+
+export class UpdateHotelReservationStatusDto {
+  @IsIn(hotelReservationStatuses)
+  status: (typeof hotelReservationStatuses)[number];
 }
