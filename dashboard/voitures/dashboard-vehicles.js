@@ -99,17 +99,17 @@ function VehiclesDashboardSidebar(currentPage) {
   const items = [
     ["Vue d’ensemble", vehicleDashboardRoutes.overview, "overview"],
     ["Annonces", vehicleDashboardRoutes.listings, "listings", listingCount],
-    ["Messages", vehicleDashboardRoutes.messages, "messages", "0"],
+    ["Messages", vehicleDashboardRoutes.messages, "messages"],
     ["Contacts", vehicleDashboardRoutes.contacts, "contacts", contactCount],
-    ["Statistiques", vehicleDashboardRoutes.statistics, "statistics", "0"],
-    ["Moyens de contact", vehicleDashboardRoutes.contactSettings, "contactSettings", "0"],
-    ["Emails automatiques", vehicleDashboardRoutes.emailSettings, "emailSettings", "0"]
+    ["Statistiques", vehicleDashboardRoutes.statistics, "statistics"],
+    ["Moyens de contact", vehicleDashboardRoutes.contactSettings, "contactSettings"],
+    ["Emails automatiques", vehicleDashboardRoutes.emailSettings, "emailSettings"]
   ];
   return `<aside class="dashboard-sidebar" id="vehicle-sidebar"><div class="dashboard-brand"><span>P</span><div><strong>Péncmi</strong><small>Annonceur voitures</small></div></div><nav class="dashboard-nav">${items.map(([label, href, key, badge]) => `<a href="${vehicleDashboardRouteHref(href)}"${key === currentPage ? ' aria-current="page"' : ""}><span>${label}</span>${badge ? `<span class="notification-badge">${badge}</span>` : ""}</a>`).join("")}</nav></aside>`;
 }
 
 function DashboardHeader(title, subtitle, actions = "") {
-  const bell = typeof NotificationBell === "function" ? NotificationBell() : `<a class="btn btn-ghost" href="${vehicleDashboardRouteHref("/dashboard/notifications")}">Notifications <span class="notification-badge">0</span></a>`;
+  const bell = typeof NotificationBell === "function" ? NotificationBell() : `<a class="btn btn-ghost" href="${vehicleDashboardRouteHref("/dashboard/notifications")}">Notifications</a>`;
   return `<header class="vehicle-dashboard-header"><div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>${title}</h1><p>${subtitle}</p></div><div class="dashboard-header-actions">${bell}${actions}</div></header>`;
 }
 

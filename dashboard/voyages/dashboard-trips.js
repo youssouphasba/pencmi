@@ -94,18 +94,18 @@ function TripsDashboardSidebar(currentPage) {
   const items = [
     ["Vue d’ensemble", tripDashboardRoutes.overview, "overview"],
     ["Trajets", tripDashboardRoutes.listings, "listings", listingCount],
-    ["Messages", tripDashboardRoutes.messages, "messages", "0"],
+    ["Messages", tripDashboardRoutes.messages, "messages"],
     ["Demandes de place", tripDashboardRoutes.reservations, "reservations", reservationCount],
-    ["Contacts", tripDashboardRoutes.contacts, "contacts", "0"],
-    ["Statistiques", tripDashboardRoutes.statistics, "statistics", "0"],
-    ["Moyens de contact", tripDashboardRoutes.contactSettings, "contactSettings", "0"],
-    ["Emails automatiques", tripDashboardRoutes.emailSettings, "emailSettings", "0"]
+    ["Contacts", tripDashboardRoutes.contacts, "contacts", reservationCount],
+    ["Statistiques", tripDashboardRoutes.statistics, "statistics"],
+    ["Moyens de contact", tripDashboardRoutes.contactSettings, "contactSettings"],
+    ["Emails automatiques", tripDashboardRoutes.emailSettings, "emailSettings"]
   ];
   return `<aside class="dashboard-sidebar" id="trip-sidebar"><div class="dashboard-brand"><span>P</span><div><strong>Péncmi</strong><small>Annonceur voyages</small></div></div><nav class="dashboard-nav">${items.map(([label, href, key, badge]) => `<a href="${tripDashboardRouteHref(href)}"${key === currentPage ? ' aria-current="page"' : ""}><span>${label}</span>${badge ? `<span class="notification-badge">${badge}</span>` : ""}</a>`).join("")}</nav></aside>`;
 }
 
 function DashboardHeader(title, subtitle, actions = "") {
-  const bell = typeof NotificationBell === "function" ? NotificationBell() : `<a class="btn btn-ghost" href="${tripDashboardRouteHref("/dashboard/notifications")}">Notifications <span class="notification-badge">0</span></a>`;
+  const bell = typeof NotificationBell === "function" ? NotificationBell() : `<a class="btn btn-ghost" href="${tripDashboardRouteHref("/dashboard/notifications")}">Notifications</a>`;
   return `<header class="trip-dashboard-header"><div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>${title}</h1><p>${subtitle}</p></div><div class="dashboard-header-actions">${bell}${actions}</div></header>`;
 }
 
@@ -172,7 +172,7 @@ function TripContactsPage() {
   return TripsDashboardLayout(`
     ${DashboardHeader("Contacts reçus", "Suivez les contacts générés par vos trajets.")}
     <section class="trip-dashboard-card"><h2>Sources prévues</h2><div class="trip-chip-row">${sources.map((source) => `<span class="trip-chip">${source}</span>`).join("")}</div></section>
-    ${EmptyState("Aucun contact reçu pour le moment.")}
+    ${tripDashboardData.reservations.length ? `<section class="trip-table-wrap"><table class="trip-table"><thead><tr><th>Client</th><th>Trajet</th><th>Téléphone</th><th>Email</th><th>Places</th><th>Message</th><th>Source</th><th>Date</th></tr></thead><tbody>${tripDashboardData.reservations.map((request) => `<tr><td>${request.clientName || "Client"}</td><td>${request.trip?.title || "Trajet"}</td><td>${request.clientPhone || ""}</td><td>${request.clientEmail || ""}</td><td>${request.requestedSeats || ""}</td><td>${request.message || ""}</td><td>Demande de place</td><td>${formatTripDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucun contact reçu pour le moment.")}
   `, "contacts");
 }
 

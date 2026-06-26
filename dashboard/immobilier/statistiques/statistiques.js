@@ -26,7 +26,7 @@ function routeHref(path) {
 }
 
 function DashboardSidebar() {
-  const items = [["Vue d’ensemble", routes.dashboard], ["Mes annonces", routes.listings], ["Messages", routes.messages, "0"], ["Contacts", routes.contacts, "0"], ["Demandes de visite", routes.visits, "0"], ["Favoris reçus", routes.favorites], ["Statistiques", routes.stats], ["Moyens de contact", routes.contactSettings], ["Mon profil", routes.profile]];
+  const items = [["Vue d’ensemble", routes.dashboard], ["Mes annonces", routes.listings], ["Messages", routes.messages], ["Contacts", routes.contacts], ["Demandes de visite", routes.visits], ["Favoris reçus", routes.favorites], ["Statistiques", routes.stats], ["Moyens de contact", routes.contactSettings], ["Mon profil", routes.profile]];
   return `<aside class="dashboard-sidebar" id="dashboard-sidebar"><div class="dashboard-brand"><span>P</span><div><strong>Péncmi</strong><small>Annonceur immobilier</small></div></div><nav class="dashboard-nav">${items.map(([label, href, badge]) => `<a href="${routeHref(href)}"${href === routes.stats ? ' aria-current="page"' : ""}><span>${label}</span>${badge ? `<span class="notification-badge">${badge}</span>` : ""}</a>`).join("")}</nav></aside>`;
 }
 

@@ -106,14 +106,14 @@ function HotelsDashboardSidebar(currentPage) {
   const items = [
     ["Vue d’ensemble", hotelDashboardRoutes.overview, "overview"],
     ["Hébergements", hotelDashboardRoutes.listings, "listings", listingCount],
-    ["Disponibilités", hotelDashboardRoutes.availability, "availability", "0"],
-    ["Messages", hotelDashboardRoutes.messages, "messages", "0"],
+    ["Disponibilités", hotelDashboardRoutes.availability, "availability"],
+    ["Messages", hotelDashboardRoutes.messages, "messages"],
     ["Réservations", hotelDashboardRoutes.reservations, "reservations", reservationCount],
-    ["Contacts", hotelDashboardRoutes.contacts, "contacts", "0"],
-    ["Statistiques", hotelDashboardRoutes.statistics, "statistics", "0"],
-    ["Moyens de contact", hotelDashboardRoutes.contactSettings, "contactSettings", "0"],
-    ["Emails automatiques", hotelDashboardRoutes.emailSettings, "emailSettings", "0"],
-    ["Intégration logiciel hôtelier", hotelDashboardRoutes.integration, "integration", "0"]
+    ["Contacts", hotelDashboardRoutes.contacts, "contacts", reservationCount],
+    ["Statistiques", hotelDashboardRoutes.statistics, "statistics"],
+    ["Moyens de contact", hotelDashboardRoutes.contactSettings, "contactSettings"],
+    ["Emails automatiques", hotelDashboardRoutes.emailSettings, "emailSettings"],
+    ["Intégration logiciel hôtelier", hotelDashboardRoutes.integration, "integration"]
   ];
   return `
     <aside class="dashboard-sidebar" id="hotel-sidebar">
@@ -124,7 +124,7 @@ function HotelsDashboardSidebar(currentPage) {
 }
 
 function DashboardHeader(title, subtitle, actions = "") {
-  const bell = typeof NotificationBell === "function" ? NotificationBell() : `<a class="btn btn-ghost" href="${hotelDashboardRouteHref("/dashboard/notifications")}">Notifications <span class="notification-badge">0</span></a>`;
+  const bell = typeof NotificationBell === "function" ? NotificationBell() : `<a class="btn btn-ghost" href="${hotelDashboardRouteHref("/dashboard/notifications")}">Notifications</a>`;
   return `
     <header class="hotel-dashboard-header">
       <div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>${title}</h1><p>${subtitle}</p></div>
@@ -235,7 +235,7 @@ function HotelContactsPage() {
   return HotelsDashboardLayout(`
     ${DashboardHeader("Contacts reçus", "Suivez les contacts générés par vos hébergements.")}
     <section class="hotel-dashboard-card"><h2>Sources prévues</h2><div class="hotel-chip-row">${sources.map((source) => `<span class="hotel-chip">${source}</span>`).join("")}</div></section>
-    ${EmptyState("Aucun contact reçu pour le moment.")}
+    ${hotelDashboardData.reservations.length ? `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Client</th><th>Hébergement</th><th>Téléphone</th><th>Email</th><th>Message</th><th>Source</th><th>Date</th></tr></thead><tbody>${hotelDashboardData.reservations.map((request) => `<tr><td>${request.clientName || "Client"}</td><td>${request.property?.name || "Hébergement"}</td><td>${request.clientPhone || ""}</td><td>${request.clientEmail || ""}</td><td>${request.message || ""}</td><td>Demande de réservation</td><td>${formatHotelDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucun contact reçu pour le moment.")}
   `, "contacts");
 }
 

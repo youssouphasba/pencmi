@@ -11,7 +11,7 @@ const routes = {
   publish: "/publier?category=immobilier"
 };
 
-const advertiserListings = [];
+let advertiserListings = [];
 let activeStatus = "all";
 let filters = {
   query: "",
@@ -37,6 +37,92 @@ const statusTabs = [
 const propertyTypes = ["appartement", "maison", "villa", "terrain", "studio", "chambre", "bureau", "commerce"];
 const transactions = ["location", "vente", "achat"];
 
+function getApiBaseUrl() {
+  return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || window.PencmiApiBaseUrl || window.localStorage.getItem("pencmi_api_base_url") || "").replace(/\/+$/, "");
+}
+
+function getAccessToken() {
+  return window.localStorage.getItem("pencmi_access_token") || "";
+}
+
+function listFromPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
+async function apiRequest(path) {
+  const baseUrl = getApiBaseUrl();
+  const token = getAccessToken();
+  if (!baseUrl || !token) {
+    throw new Error("Connexion annonceur requise.");
+  }
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Chargement impossible.");
+  }
+  return payload?.data ?? payload;
+}
+
+function mapApiListing(listing, visits = []) {
+  const metadata = listing.metadata || {};
+  const listingVisits = visits.filter((visit) => visit.listing?.id === listing.id);
+  return {
+    id: listing.id,
+    title: listing.title,
+    status: listing.status,
+    city: listing.city,
+    district: listing.neighborhood,
+    region: metadata.region || "",
+    transaction: listing.transaction || "",
+    propertyType: listing.propertyType || "",
+    price: listing.price ?? metadata.price,
+    createdAt: listing.createdAt,
+    updatedAt: listing.updatedAt,
+    completionScore: getCompletionScore(listing),
+    recommendations: getRecommendations(listing),
+    quickStats: {
+      views: Number(metadata.views || 0),
+      contacts: listingVisits.length,
+      messages: Number(metadata.messages || 0),
+      favorites: Number(metadata.favorites || 0),
+    },
+  };
+}
+
+function getCompletionScore(listing) {
+  const metadata = listing.metadata || {};
+  const checks = [
+    Boolean(listing.title),
+    Boolean(listing.description),
+    Boolean(listing.city),
+    Boolean(listing.neighborhood),
+    Boolean(listing.propertyType),
+    Boolean(listing.transaction),
+    Boolean(metadata.photos?.length),
+    Boolean(metadata.price || listing.price),
+    Boolean(metadata.surface),
+    Boolean(metadata.bedrooms || metadata.bedrooms === 0),
+  ];
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+}
+
+function getRecommendations(listing) {
+  const metadata = listing.metadata || {};
+  const recommendations = [];
+  if (!metadata.photos?.length) recommendations.push("Ajouter des photos");
+  if (!listing.description) recommendations.push("Compléter la description");
+  if (!listing.neighborhood) recommendations.push("Ajouter le quartier");
+  if (!(metadata.price || listing.price)) recommendations.push("Vérifier le prix");
+  return recommendations;
+}
+
 function routeHref(path) {
   if (window.location.protocol !== "file:") {
     return path;
@@ -52,6 +138,19 @@ function routeHref(path) {
 
   if (path === "/dashboard/immobilier/contact-settings") {
     return "../contact-settings/";
+  }
+
+  if (path === "/dashboard/immobilier/statistiques") {
+    return "../statistiques/";
+  }
+
+  if (path.startsWith("/dashboard/immobilier/statistiques?")) {
+    return `../statistiques/${path.slice("/dashboard/immobilier/statistiques".length)}`;
+  }
+
+  if (path.startsWith("/dashboard/immobilier/annonces/") && path.endsWith("/edit")) {
+    const id = path.slice("/dashboard/immobilier/annonces/".length, -"/edit".length);
+    return `./edit/?id=${encodeURIComponent(id)}`;
   }
 
   if (path === "/publier?category=immobilier") {
@@ -134,9 +233,9 @@ function DashboardSidebar() {
   const items = [
     ["Vue d’ensemble", routes.dashboard],
     ["Mes annonces", routes.listings],
-    ["Messages", routes.messages, "0"],
-    ["Contacts", routes.contacts, "0"],
-    ["Demandes de visite", routes.visits, "0"],
+    ["Messages", routes.messages],
+    ["Contacts", routes.contacts],
+    ["Demandes de visite", routes.visits],
     ["Favoris reçus", routes.favorites],
     ["Statistiques", routes.stats],
     ["Moyens de contact", routes.contactSettings],
@@ -346,8 +445,8 @@ function ListingActionsMenu(listing) {
   return `
     <div class="listing-actions">
       <a href="${routeHref(`/immobilier/annonce/${listing.id}`)}">Voir</a>
-      <a href="/dashboard/immobilier/annonces/${listing.id}/edit">Modifier</a>
-      <a href="/dashboard/immobilier/statistiques?listingId=${listing.id}">Statistiques</a>
+      <a href="${routeHref(`/dashboard/immobilier/annonces/${listing.id}/edit`)}">Modifier</a>
+      <a href="${routeHref(`/dashboard/immobilier/statistiques?listingId=${listing.id}`)}">Statistiques</a>
       <button type="button" data-open-disable="${listing.id}">Désactiver</button>
       <button type="button" data-open-delete="${listing.id}">Supprimer</button>
     </div>
@@ -507,4 +606,19 @@ function bindListingsEvents() {
   });
 }
 
-AdvertiserListingsPage();
+async function loadAdvertiserListings() {
+  AdvertiserListingsPage();
+  try {
+    const [listingsPayload, visitsPayload] = await Promise.all([
+      apiRequest("/dashboard/immobilier"),
+      apiRequest("/dashboard/immobilier/visits"),
+    ]);
+    const visits = listFromPayload(visitsPayload);
+    advertiserListings = listFromPayload(listingsPayload).map((listing) => mapApiListing(listing, visits));
+  } catch {
+    advertiserListings = [];
+  }
+  AdvertiserListingsPage();
+}
+
+void loadAdvertiserListings();

@@ -36,9 +36,9 @@ let preferences = {
 const sidebarItems = [
   ["Vue d’ensemble", routes.dashboard],
   ["Mes annonces", routes.listings],
-  ["Messages", routes.messages, "0"],
-  ["Contacts", routes.contacts, "0"],
-  ["Demandes de visite", routes.visits, "0"],
+  ["Messages", routes.messages],
+  ["Contacts", routes.contacts],
+  ["Demandes de visite", routes.visits],
   ["Favoris reçus", routes.favorites],
   ["Statistiques", routes.stats],
   ["Moyens de contact", routes.contactSettings],

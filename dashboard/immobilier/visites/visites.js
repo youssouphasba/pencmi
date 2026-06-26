@@ -10,8 +10,41 @@ const routes = {
   profile: "/dashboard/profil"
 };
 
-const visitRequests = [];
+let visitRequests = [];
 let activeStatus = "all";
+
+function getApiBaseUrl() {
+  return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || window.PencmiApiBaseUrl || window.localStorage.getItem("pencmi_api_base_url") || "").replace(/\/+$/, "");
+}
+
+function getAccessToken() {
+  return window.localStorage.getItem("pencmi_access_token") || "";
+}
+
+function listFromPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
+async function apiRequest(path) {
+  const baseUrl = getApiBaseUrl();
+  const token = getAccessToken();
+  if (!baseUrl || !token) {
+    throw new Error("Connexion annonceur requise.");
+  }
+  const response = await fetch(`${baseUrl}${path}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "Chargement impossible.");
+  }
+  return payload?.data ?? payload;
+}
 
 function routeHref(path) {
   if (window.location.protocol !== "file:") {
@@ -27,12 +60,13 @@ function routeHref(path) {
 }
 
 function DashboardSidebar() {
+  const visitCount = String(visitRequests.length || 0);
   const items = [
     ["Vue d’ensemble", routes.dashboard],
     ["Mes annonces", routes.listings],
-    ["Messages", routes.messages, "0"],
-    ["Contacts", routes.contacts, "0"],
-    ["Demandes de visite", routes.visits, "0"],
+    ["Messages", routes.messages],
+    ["Contacts", routes.contacts, visitCount],
+    ["Demandes de visite", routes.visits, visitCount],
     ["Favoris reçus", routes.favorites],
     ["Statistiques", routes.stats],
     ["Moyens de contact", routes.contactSettings],
@@ -59,7 +93,9 @@ function VisitRequestCard(visit) {
   return `
     <article class="page-panel visit-card">
       <h3>${visit.clientName || "Client"}</h3>
-      <p>${visit.listingTitle || ""} ${VisitStatusBadge(visit.status)}</p>
+      <p>${visit.listing?.title || visit.listingTitle || ""} ${VisitStatusBadge(visit.status)}</p>
+      <p>${[visit.clientPhone, visit.clientEmail].filter(Boolean).join(" · ")}</p>
+      ${visit.message ? `<p>${visit.message}</p>` : ""}
       <div class="page-actions">
         <button type="button" data-open-detail>Voir détail</button>
         <button type="button" data-open-proposal>Proposer un créneau</button>
@@ -73,8 +109,9 @@ function VisitRequestCard(visit) {
 }
 
 function VisitRequestTable() {
-  return visitRequests.length
-    ? `<div class="cards-list">${visitRequests.map(VisitRequestCard).join("")}</div>`
+  const filteredVisits = activeStatus === "all" ? visitRequests : visitRequests.filter((visit) => visit.status === activeStatus);
+  return filteredVisits.length
+    ? `<div class="cards-list">${filteredVisits.map(VisitRequestCard).join("")}</div>`
     : EmptyState("Aucune demande de visite pour le moment.", [
       ["Voir mes annonces", routes.listings],
       ["Configurer mes moyens de contact", routes.contactSettings]
@@ -153,4 +190,15 @@ function bindEvents() {
   document.querySelectorAll("[data-open-detail]").forEach((button) => button.addEventListener("click", () => openModal(VisitDetailModal())));
 }
 
-VisitsPage();
+async function loadVisitRequests() {
+  VisitsPage();
+  try {
+    const payload = await apiRequest("/dashboard/immobilier/visits");
+    visitRequests = listFromPayload(payload);
+  } catch {
+    visitRequests = [];
+  }
+  VisitsPage();
+}
+
+void loadVisitRequests();
