@@ -1,4 +1,4 @@
 window.PencmiRuntimeConfig = Object.freeze({
-  apiBaseUrl: '',
-  backendUrl: '',
+  apiBaseUrl: 'https://pencmi-production.up.railway.app/api/v1',
+  backendUrl: 'https://pencmi-production.up.railway.app',
 });
