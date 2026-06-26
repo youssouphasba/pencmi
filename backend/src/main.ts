@@ -8,16 +8,51 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { ApiResponseInterceptor } from './common/interceptors/api-response.interceptor';
 
+function isPrivateFrontendOrigin(origin = '') {
+  try {
+    const url = new URL(origin);
+    const host = url.hostname;
+
+    return (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '::1' ||
+      host.endsWith('.local') ||
+      /^10\./.test(host) ||
+      /^192\.168\./.test(host) ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const config = app.get(ConfigService);
   const apiPrefix = config.getOrThrow<string>('API_PREFIX');
-  const corsOrigins = config.get<string>('CORS_ORIGINS')?.split(',').map((origin) => origin.trim()) ?? [];
+  const corsOrigins = config
+    .get<string>('CORS_ORIGINS')
+    ?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean) ?? [];
 
   app.use(helmet());
   app.use(cookieParser(config.get<string>('COOKIE_SECRET')));
   app.enableCors({
-    origin: corsOrigins.length > 0 ? corsOrigins : true,
+    origin: (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (corsOrigins.includes(origin) || isPrivateFrontendOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('Origine CORS non autorisée.'));
+    },
     credentials: true,
   });
   app.setGlobalPrefix(apiPrefix, {
