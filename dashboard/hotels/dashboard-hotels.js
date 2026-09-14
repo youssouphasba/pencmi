@@ -375,6 +375,7 @@ function renderDashboard() {
       button.disabled = true;
       void updateHotelReservationStatus(button.dataset.reservationId, button.dataset.reservationStatus).catch(() => {
         button.disabled = false;
+        window.alert("La mise à jour de la demande a échoué. Vérifiez la connexion puis réessayez.");
       });
     });
   });

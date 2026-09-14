@@ -215,6 +215,7 @@ function bindEvents() {
       button.disabled = true;
       void updateVisitStatus(button.dataset.visitId, button.dataset.visitStatus).catch(() => {
         button.disabled = false;
+        window.alert("La mise à jour de la demande a échoué. Vérifiez la connexion puis réessayez.");
       });
     });
   });

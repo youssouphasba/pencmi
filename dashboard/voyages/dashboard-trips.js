@@ -310,6 +310,7 @@ function renderDashboard() {
       button.disabled = true;
       void updateTripReservationStatus(button.dataset.tripRequestId, button.dataset.tripRequestStatus).catch(() => {
         button.disabled = false;
+        window.alert("La mise à jour de la demande a échoué. Vérifiez la connexion puis réessayez.");
       });
     });
   });

@@ -306,6 +306,7 @@ function renderDashboard() {
       button.disabled = true;
       void updateVehicleRequestStatus(button.dataset.vehicleRequestId, button.dataset.vehicleRequestType, button.dataset.vehicleRequestStatus).catch(() => {
         button.disabled = false;
+        window.alert("La mise à jour de la demande a échoué. Vérifiez la connexion puis réessayez.");
       });
     });
   });
