@@ -75,7 +75,7 @@ export class AuthService {
   async refresh(refreshToken: string) {
     const payload = await this.verifyRefreshToken(refreshToken);
     const tokenHash = await this.hashToken(refreshToken);
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const session = await this.getActiveSession(payload, tx);
       // Serialize refresh and logout on the same session row.
       const locked = await tx.userSession.updateMany({
@@ -89,8 +89,27 @@ export class AuthService {
         || storedToken.userId !== payload.id || storedToken.sessionId !== payload.sessionId) {
         throw new UnauthorizedException('Session expirée.');
       }
-      return this.issueTokens({ id: session.user.id, role: session.user.role }, undefined, session.id, tx);
-    });
+      if (storedToken.consumedAt) {
+        const revokedAt = new Date();
+        await tx.userSession.updateMany({
+          where: { id: session.id, userId: payload.id, revokedAt: null }, data: { revokedAt },
+        });
+        await tx.refreshToken.updateMany({
+          where: { sessionId: session.id, userId: payload.id, revokedAt: null }, data: { revokedAt },
+        });
+        return { replayed: true } as const;
+      }
+      const consumed = await tx.refreshToken.updateMany({
+        where: { id: storedToken.id, tokenHash, userId: payload.id, sessionId: session.id,
+          consumedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
+        data: { consumedAt: new Date() },
+      });
+      if (consumed.count !== 1) throw new UnauthorizedException('Session expirée.');
+      return this.issueTokens({ id: session.user.id, role: session.user.role }, undefined, session.id, tx, storedToken.id);
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted });
+    // Replay revocation must commit before returning an authentication error.
+    if ('replayed' in result) throw new UnauthorizedException('Session expirée. Veuillez vous reconnecter.');
+    return result;
   }
 
   async getCurrentUser(userId: string) {
@@ -158,7 +177,7 @@ export class AuthService {
     }
   }
 
-  private async issueTokens(user: Pick<AuthenticatedUser, 'id' | 'role'>, userAgent?: string, existingSessionId?: string, db: Prisma.TransactionClient = this.prisma) {
+  private async issueTokens(user: Pick<AuthenticatedUser, 'id' | 'role'>, userAgent?: string, existingSessionId?: string, db: Prisma.TransactionClient = this.prisma, parentTokenId?: string) {
     const session = existingSessionId
       ? { id: existingSessionId }
       : await db.userSession.create({
@@ -195,6 +214,7 @@ export class AuthService {
         userId: user.id,
         sessionId: session.id,
         tokenHash,
+        parentTokenId,
         expiresAt: new Date(refreshClaims.exp * 1000),
       },
     });

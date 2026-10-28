@@ -30,6 +30,9 @@ const ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
 const REFRESH_TOKEN_STORAGE_KEY = "pencmi_refresh_token";
 const API_BASE_STORAGE_KEY = "pencmi_api_base_url";
 const SESSION_STORAGE_KEY = "pencmi_current_session";
+const tokenSessionModule = window.PencmiTokenSession
+  ? Promise.resolve({ tokenSession: window.PencmiTokenSession })
+  : import(new URL("../auth/token-session.mjs", document.currentScript.src));
 
 const adminState = {
   currentUser: null,
@@ -49,6 +52,7 @@ const adminState = {
   emailLogs: [],
   loading: true,
   error: "",
+  errorCode: "",
 };
 
 const adminModuleLabels = {
@@ -102,11 +106,6 @@ function getRefreshToken() {
   return window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || "";
 }
 
-function setTokens(tokens) {
-  if (tokens?.accessToken) window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, tokens.accessToken);
-  if (tokens?.refreshToken) window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, tokens.refreshToken);
-}
-
 function clearTokens() {
   window.localStorage.removeItem(ACCESS_TOKEN_STORAGE_KEY);
   window.localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
@@ -128,36 +127,22 @@ async function logoutAdmin() {
   window.location.href = adminRouteHref(adminRoutes.login);
 }
 
-async function refreshAccessToken() {
+async function refreshAccessToken(failedAccessToken = getAccessToken()) {
   const baseUrl = getApiBaseUrl();
-  const refreshToken = getRefreshToken();
-  if (!baseUrl || !refreshToken) throw new Error("Connexion admin requise.");
-
-  const response = await fetch(`${baseUrl}/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refreshToken }),
-  });
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    clearTokens();
-    throw new Error(payload?.error?.message || "Connexion admin requise.");
-  }
-
-  const tokens = payload?.data ?? payload;
-  setTokens(tokens);
-  return tokens;
+  if (!baseUrl) throw new Error("API admin non configurée.");
+  const { tokenSession } = await tokenSessionModule;
+  return tokenSession.refresh(baseUrl, failedAccessToken);
 }
 
 async function apiRequest(path, options = {}, canRetry = true) {
   const baseUrl = getApiBaseUrl();
   const token = getAccessToken();
   if (!baseUrl) throw new Error("API admin non configurée.");
+  const requestCredentials = { accessToken: token, refreshToken: getRefreshToken() };
 
   if (!token) {
     if (getRefreshToken() && canRetry) {
-      await refreshAccessToken();
+      await refreshAccessToken(token);
       return apiRequest(path, options, false);
     }
     throw new Error("Connexion admin requise.");
@@ -173,11 +158,17 @@ async function apiRequest(path, options = {}, canRetry = true) {
 
   const payload = await response.json().catch(() => null);
   if (response.status === 401 && canRetry && getRefreshToken()) {
-    await refreshAccessToken();
+    await refreshAccessToken(token);
     return apiRequest(path, options, false);
   }
 
-  if (!response.ok) throw new Error(payload?.error?.message || "Chargement admin impossible.");
+  if (!response.ok) {
+    if (response.status === 401) {
+      const { tokenSession } = await tokenSessionModule;
+      await tokenSession.invalidate(requestCredentials);
+    }
+    throw new Error(payload?.error?.message || "Chargement admin impossible.");
+  }
   return payload?.data ?? payload;
 }
 
@@ -224,8 +215,8 @@ function escapeHtml(value = "") {
   return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[char]);
 }
 
-function AdminUnauthorizedState(message = "Accès non autorisé") {
-  const isLoginRequired = message === "Connexion admin requise.";
+function AdminUnauthorizedState(message = "Accès non autorisé", requiresLogin = false) {
+  const isLoginRequired = requiresLogin || !getAccessToken() || message === "Connexion admin requise.";
   const target = isLoginRequired ? adminRoutes.login : adminRoutes.home;
   const label = isLoginRequired ? "Se connecter" : "Retour à l’accueil";
   return `<section class="admin-empty-state"><h2>${escapeHtml(message)}</h2><a class="btn btn-primary" href="${adminRouteHref(target)}">${label}</a></section>`;
@@ -606,6 +597,7 @@ async function loadAdminData() {
     adminState.reports = listFrom(reports);
   } catch (error) {
     adminState.error = error instanceof Error ? error.message : "Chargement admin impossible.";
+    adminState.errorCode = error?.code || "";
   } finally {
     adminState.loading = false;
   }
@@ -617,7 +609,7 @@ async function renderAdmin() {
 
   await loadAdminData();
   if (adminState.error) {
-    root.innerHTML = AdminUnauthorizedState(adminState.error);
+    root.innerHTML = AdminUnauthorizedState(adminState.error, ["SESSION_INVALID", "REFRESH_UNCERTAIN", "SESSION_CHANGED", "COORDINATION_UNAVAILABLE"].includes(adminState.errorCode));
     return;
   }
 

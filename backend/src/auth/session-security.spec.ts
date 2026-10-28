@@ -17,7 +17,7 @@ import { PermissionsGuard } from './guards/permissions.guard';
 
 type TestUser = { id: string; role: UserRole; status: AccountStatus; deletedAt: Date | null; passwordHash: string };
 type TestSession = { id: string; userId: string; revokedAt: Date | null; lastUsedAt?: Date };
-type TestRefreshToken = { id: string; tokenHash: string; userId: string; sessionId: string; expiresAt: Date; revokedAt: Date | null };
+type TestRefreshToken = { id: string; tokenHash: string; userId: string; sessionId: string; expiresAt: Date; revokedAt: Date | null; consumedAt: Date | null; parentTokenId: string | null };
 
 describe('JWT session security', () => {
   const jwt = new JwtService();
@@ -51,7 +51,7 @@ describe('JWT session security', () => {
   function store(token: string, overrides: Partial<TestRefreshToken> = {}) {
     const claims = jwt.decode<{ id: string; sessionId: string; exp: number }>(token);
     const row = { id: randomUUID(), tokenHash: hash(token), userId: claims.id, sessionId: claims.sessionId,
-      expiresAt: new Date(claims.exp * 1000), revokedAt: null, ...overrides };
+      expiresAt: new Date(claims.exp * 1000), revokedAt: null, consumedAt: null, parentTokenId: null, ...overrides };
     tokens.set(hash(token), row);
     return row;
   }
@@ -104,7 +104,8 @@ describe('JWT session security', () => {
     prisma.refreshToken.findUnique.mockImplementation(async ({ where }) => tokens.get(where.tokenHash) ?? null);
     prisma.refreshToken.create.mockImplementation(async ({ data }) => {
       if (tokens.has(data.tokenHash)) throw new Error('Duplicate token hash');
-      const token = { id: randomUUID(), ...data, revokedAt: null };
+      if (data.parentTokenId && [...tokens.values()].some((token) => token.parentTokenId === data.parentTokenId)) throw new Error('Duplicate rotation parent');
+      const token = { id: randomUUID(), ...data, revokedAt: null, consumedAt: null };
       tokens.set(data.tokenHash, token);
       return token;
     });
@@ -112,17 +113,27 @@ describe('JWT session security', () => {
       let count = 0;
       for (const token of tokens.values()) {
         if (token.sessionId === where.sessionId && token.userId === where.userId && !token.revokedAt) {
+          if (where.id && token.id !== where.id) continue;
+          if (where.tokenHash && token.tokenHash !== where.tokenHash) continue;
+          if ('consumedAt' in where && token.consumedAt) continue;
+          if (where.expiresAt && token.expiresAt <= where.expiresAt.gt) continue;
           Object.assign(token, data);
           count++;
         }
       }
       return { count };
     });
+    let queue = Promise.resolve();
     prisma.$transaction.mockImplementation(async (callback) => {
+      const previous = queue;
+      let release!: () => void;
+      queue = new Promise<void>((resolve) => { release = resolve; });
+      await previous;
       const oldSessions = structuredClone(sessions);
       const oldTokens = structuredClone(tokens);
       try { return await callback(prisma); }
       catch (error) { sessions = oldSessions; tokens = oldTokens; throw error; }
+      finally { release(); }
     });
     admin.overview.mockResolvedValue({ allowed: true });
   });
@@ -303,9 +314,56 @@ describe('JWT session security', () => {
     const token = await signed('refresh');
     store(token);
     const first = await service.refresh(token);
-    const second = await service.refresh(token);
+    const second = await service.refresh(first.refreshToken);
     expect(first.refreshToken).not.toBe(second.refreshToken);
     expect(tokens.has(hash(first.refreshToken))).toBe(true);
     expect(tokens.has(hash(second.refreshToken))).toBe(true);
+    expect(tokens.get(hash(token))!.consumedAt).toBeInstanceOf(Date);
+    expect(tokens.get(hash(first.refreshToken))!.consumedAt).toBeInstanceOf(Date);
+    expect(tokens.get(hash(second.refreshToken))!.consumedAt).toBeNull();
+  });
+
+  it('detects replay and commits revocation of only the affected session', async () => {
+    const old = await signed('refresh');
+    store(old);
+    sessions.set('another-device', { id: 'another-device', userId: 'user-a', revokedAt: null });
+    const other = await signed('refresh', { sessionId: 'another-device' });
+    store(other);
+    const next = await service.refresh(old);
+    await expect(service.refresh(old)).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(sessions.get('session-a')!.revokedAt).toBeInstanceOf(Date);
+    expect(tokens.get(hash(next.refreshToken))!.revokedAt).toBeInstanceOf(Date);
+    expect(sessions.get('another-device')!.revokedAt).toBeNull();
+    expect(tokens.get(hash(other))!.revokedAt).toBeNull();
+    await expect(service.validateAccessToken(next.accessToken)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(service.refresh(next.refreshToken)).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it('allows only one concurrent refresh and never creates two successors', async () => {
+    const old = await signed('refresh');
+    const parent = store(old);
+    const results = await Promise.allSettled([service.refresh(old), service.refresh(old)]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect([...tokens.values()].filter((token) => token.parentTokenId === parent.id)).toHaveLength(1);
+    expect(sessions.get('session-a')!.revokedAt).toBeInstanceOf(Date);
+  });
+
+  it('rolls back consumption if issuing the successor fails', async () => {
+    const old = await signed('refresh');
+    store(old);
+    prisma.refreshToken.create.mockRejectedValueOnce(new Error('Simulated insert failure'));
+    await expect(service.refresh(old)).rejects.toThrow('Simulated insert failure');
+    expect(tokens.get(hash(old))!.consumedAt).toBeNull();
+    expect(sessions.get('session-a')!.revokedAt).toBeNull();
+    await expect(service.refresh(old)).resolves.toHaveProperty('refreshToken');
+  });
+
+  it('does not confuse administrative revocation with a rotated-token replay', async () => {
+    const token = await signed('refresh');
+    store(token, { consumedAt: new Date(), revokedAt: new Date() });
+    await expect(service.refresh(token)).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(sessions.get('session-a')!.revokedAt).toBeNull();
+    expect(prisma.refreshToken.create).not.toHaveBeenCalled();
   });
 });

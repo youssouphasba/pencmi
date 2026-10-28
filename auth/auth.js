@@ -7,6 +7,9 @@ const ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
 const REFRESH_TOKEN_STORAGE_KEY = "pencmi_refresh_token";
 const API_BASE_STORAGE_KEY = "pencmi_api_base_url";
 const SESSION_STORAGE_KEY = "pencmi_current_session";
+const tokenSessionModule = window.PencmiTokenSession
+  ? Promise.resolve({ tokenSession: window.PencmiTokenSession })
+  : import(new URL("./token-session.mjs", document.currentScript.src));
 
 const authRoutes = {
   home: "/",
@@ -203,13 +206,9 @@ function getStoredRefreshToken() {
   return window.localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY) || "";
 }
 
-function setStoredTokens(tokens) {
-  if (tokens?.accessToken) {
-    window.localStorage.setItem(ACCESS_TOKEN_STORAGE_KEY, tokens.accessToken);
-  }
-  if (tokens?.refreshToken) {
-    window.localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, tokens.refreshToken);
-  }
+async function setStoredTokens(tokens) {
+  const { tokenSession } = await tokenSessionModule;
+  await tokenSession.install(tokens);
 }
 
 function clearStoredTokens() {
@@ -249,29 +248,11 @@ function persistConfiguredApiBaseUrl() {
   }
 }
 
-async function refreshAccessToken() {
+async function refreshAccessToken(failedAccessToken = getStoredAccessToken()) {
   const baseUrl = getApiBaseUrl();
-  const refreshToken = getStoredRefreshToken();
-  if (!baseUrl || !refreshToken) return null;
-
-  const response = await fetch(`${baseUrl}/auth/refresh`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ refreshToken }),
-  });
-
-  const isJson = response.headers.get("content-type")?.includes("application/json");
-  const payload = isJson ? await response.json() : null;
-  if (!response.ok) {
-    const message = payload?.error?.message || payload?.message || "Session expirée.";
-    throw new Error(Array.isArray(message) ? message.join(", ") : message);
-  }
-
-  const tokens = payload?.data ?? payload;
-  setStoredTokens(tokens);
-  return tokens;
+  if (!baseUrl) throw new Error("API non configurée.");
+  const { tokenSession } = await tokenSessionModule;
+  return tokenSession.refresh(baseUrl, failedAccessToken);
 }
 
 async function apiRequest(path, options = {}, canRetry = true) {
@@ -282,6 +263,7 @@ async function apiRequest(path, options = {}, canRetry = true) {
 
   const headers = new Headers(options.headers || {});
   const token = getStoredAccessToken();
+  const requestCredentials = { accessToken: token, refreshToken: getStoredRefreshToken() };
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
   }
@@ -303,17 +285,18 @@ async function apiRequest(path, options = {}, canRetry = true) {
 
   const isJson = response.headers.get("content-type")?.includes("application/json");
   const payload = isJson ? await response.json() : null;
-  if (response.status === 401 && canRetry && getStoredRefreshToken()) {
-    try {
-      await refreshAccessToken();
-      return await apiRequest(path, options, false);
-    } catch {
-      clearStoredTokens();
-      clearStoredSession();
-    }
+  if (response.status === 401 && canRetry && getStoredRefreshToken() && !["/auth/login", "/auth/register", "/auth/refresh"].includes(path)) {
+    await refreshAccessToken(token);
+    const retryHeaders = new Headers(options.headers || {});
+    retryHeaders.set("Authorization", `Bearer ${getStoredAccessToken()}`);
+    return apiRequest(path, { ...options, headers: retryHeaders }, false);
   }
 
   if (!response.ok) {
+    if (response.status === 401 && !["/auth/login", "/auth/register", "/auth/refresh"].includes(path)) {
+      const { tokenSession } = await tokenSessionModule;
+      await tokenSession.invalidate(requestCredentials);
+    }
     const message = payload?.error?.message || payload?.message || "Une erreur est survenue.";
     throw new Error(Array.isArray(message) ? message.join(", ") : message);
   }
@@ -401,8 +384,6 @@ async function loadCurrentSession() {
       authState.professionalProfile = null;
     }
   } catch {
-    clearStoredTokens();
-    clearStoredSession();
     authState.currentUser = null;
     authState.professionalProfile = null;
   }
@@ -905,7 +886,7 @@ function bindAuthForms() {
         method: "POST",
         body: JSON.stringify({ identifier, password }),
       });
-      setStoredTokens(tokens);
+      await setStoredTokens(tokens);
       await loadCurrentSession();
       const target = getRedirectAfterLogin(authState.currentUser?.role || "client", getNextParam());
       window.location.href = authRouteHref(target);
@@ -949,7 +930,7 @@ function bindAuthForms() {
         method: "POST",
         body: JSON.stringify(payload),
       });
-      setStoredTokens(tokens);
+      await setStoredTokens(tokens);
       await loadCurrentSession();
 
       const accountType = registerForm.querySelector('input[name="accountType"]:checked')?.value;

@@ -34,12 +34,11 @@ l’expiration du JWT signé, et non d’une durée différente fixée à 30 jou
 Un identifiant aléatoire `jti` évite les collisions de hashes lorsque plusieurs
 tokens sont créés pour la même session pendant une même seconde.
 
-La politique de réutilisation existante des refresh tokens est conservée :
-un renouvellement n’invalide pas automatiquement le token précédent. Tous
-les refresh tokens de la session deviennent inutilisables à sa révocation.
-La rotation à usage unique et la détection de réutilisation restent des
-évolutions distinctes. Les secrets d’accès et de renouvellement doivent être
-forts et distincts.
+Chaque refresh token est désormais utilisable une seule fois. La consommation,
+la création du successeur et la détection de rejeu sont décrites dans
+`refresh-rotation.md`. Tous les refresh tokens de la session deviennent
+inutilisables à sa révocation. Les secrets d’accès et de renouvellement
+doivent être forts et distincts.
 
 ## Déconnexion
 
