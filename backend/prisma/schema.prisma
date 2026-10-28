@@ -442,6 +442,7 @@ model HotelApiKey {
   integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
   name          String
   keyHash       String           @unique
+  active        Boolean          @default(true)
   permissions   String[]
   revokedAt     DateTime?
   lastUsedAt    DateTime?

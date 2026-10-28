@@ -74,6 +74,7 @@ async function bootstrap() {
     .setDescription('API backend Péncmi')
     .setVersion('1.0')
     .addBearerAuth()
+    .addApiKey({ type: 'apiKey', in: 'header', name: 'X-API-Key' }, 'hotel-partner-key')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup(`${apiPrefix}/docs`, app, document);
