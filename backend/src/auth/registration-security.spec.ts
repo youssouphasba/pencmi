@@ -26,7 +26,7 @@ describe('Public registration security', () => {
     userSession: { create: jest.fn(), findUnique: jest.fn() },
     refreshToken: { create: jest.fn() },
   };
-  const jwt = { signAsync: jest.fn(), verifyAsync: jest.fn() };
+  const jwt = { signAsync: jest.fn(), verifyAsync: jest.fn(), decode: jest.fn() };
   const admin = { overview: jest.fn() };
 
   beforeAll(async () => {
@@ -54,7 +54,12 @@ describe('Public registration security', () => {
     prisma.user.create.mockImplementation(async ({ data }) => ({ id: 'created-user', ...data }));
     prisma.userSession.create.mockResolvedValue({ id: 'session' });
     jwt.signAsync.mockResolvedValue('test-token');
-    jwt.verifyAsync.mockResolvedValue({ id: 'client-id', role: 'client' });
+    jwt.decode.mockReturnValue({ exp: Math.floor(Date.now() / 1000) + 3600 });
+    jwt.verifyAsync.mockResolvedValue({ id: 'client-id', role: 'client', sessionId: 'session', exp: Math.floor(Date.now() / 1000) + 3600 });
+    prisma.userSession.findUnique.mockResolvedValue({
+      id: 'session', userId: 'client-id', revokedAt: null,
+      user: { id: 'client-id', role: 'client', status: 'active', deletedAt: null },
+    });
   });
 
   afterAll(async () => { await app.close(); });
@@ -109,7 +114,11 @@ describe('Public registration security', () => {
     await request(app.getHttpServer()).post('/auth/login')
       .send({ identifier: 'admin@example.test', password: 'Test-password-123' }).expect(201);
     expect(jwt.signAsync).toHaveBeenCalledWith(expect.objectContaining({ role: 'admin' }), expect.anything());
-    jwt.verifyAsync.mockResolvedValue({ id: 'existing-admin', role: 'admin' });
+    jwt.verifyAsync.mockResolvedValue({ id: 'existing-admin', role: 'admin', sessionId: 'session', exp: Math.floor(Date.now() / 1000) + 3600 });
+    prisma.userSession.findUnique.mockResolvedValue({
+      id: 'session', userId: 'existing-admin', revokedAt: null,
+      user: { id: 'existing-admin', role: 'admin', status: 'active', deletedAt: null },
+    });
     admin.overview.mockResolvedValue({});
     await request(app.getHttpServer()).get('/admin/overview').set('Authorization', 'Bearer test-token').expect(200);
   });

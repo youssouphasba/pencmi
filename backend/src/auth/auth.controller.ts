@@ -54,6 +54,6 @@ export class AuthController {
   @ApiBearerAuth()
   @Post('logout')
   logout(@CurrentUser() user: AuthenticatedUser) {
-    return this.authService.logout(user.sessionId);
+    return this.authService.logout(user.id, user.sessionId);
   }
 }
