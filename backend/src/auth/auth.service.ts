@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { AccountStatus, UserRole } from '@prisma/client';
@@ -6,6 +6,7 @@ import { createHash } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../database/prisma/prisma.service';
 import { getPermissionsForRole } from '../common/constants/permissions';
+import { PUBLIC_REGISTRATION_ROLES } from '../common/constants/roles';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -21,6 +22,9 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto, userAgent?: string) {
+    if (!PUBLIC_REGISTRATION_ROLES.includes(dto.role)) {
+      throw new BadRequestException('Type de compte non autorisé pour cette inscription.');
+    }
     if (!dto.email && !dto.phone) {
       throw new ConflictException('Un email ou un téléphone est obligatoire.');
     }

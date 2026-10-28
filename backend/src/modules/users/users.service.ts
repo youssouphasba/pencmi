@@ -42,7 +42,14 @@ export class UsersService {
   updateProfile(id: string, dto: UpdateUserProfileDto) {
     return this.prisma.user.update({
       where: { id },
-      data: dto,
+      data: {
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        phone: dto.phone,
+        email: dto.email,
+        city: dto.city,
+        avatarUrl: dto.avatarUrl,
+      },
       select: {
         id: true,
         role: true,

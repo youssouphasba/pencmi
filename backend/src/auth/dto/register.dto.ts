@@ -1,9 +1,9 @@
 import { IsEmail, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
-import { USER_ROLES, UserRole } from '../../common/constants/roles';
+import { PUBLIC_REGISTRATION_ROLES, PublicRegistrationRole } from '../../common/constants/roles';
 
 export class RegisterDto {
-  @IsIn(USER_ROLES)
-  role: UserRole;
+  @IsIn(PUBLIC_REGISTRATION_ROLES)
+  role: PublicRegistrationRole;
 
   @IsOptional()
   @IsString()
