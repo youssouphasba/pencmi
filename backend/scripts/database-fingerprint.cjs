@@ -5,6 +5,8 @@ const quote = (value) => '"' + value.replace(/"/g, '""') + '"';
 const addedColumns = {
   HotelApiKey: ['active'],
   RefreshToken: ['consumedAt', 'parentTokenId'],
+  HotelRoom: ['metadata'],
+  HotelRoomAvailability: ['status'],
 };
 
 async function fingerprint(url) {

@@ -26,6 +26,12 @@ const hotelDashboardData = {
 const HOTEL_ACCESS_TOKEN_STORAGE_KEY = "pencmi_access_token";
 const HOTEL_REFRESH_TOKEN_STORAGE_KEY = "pencmi_refresh_token";
 const HOTEL_SESSION_STORAGE_KEY = "pencmi_current_session";
+const hotelDashboardEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+const hotelEditHref = (id, step = 0) => `/publier/?category=hotel&id=${encodeURIComponent(id)}&step=${step}`;
+function HotelStatusBadge(status) {
+  const labels = { draft: 'Brouillon', pending_review: 'En attente de validation', active: 'Actif', refused: 'Refusé', suspended: 'Suspendu', expired: 'Expiré', deleted: 'Supprimé' };
+  return `<span class="hotel-status-badge">${hotelDashboardEscape(labels[status] || status)}</span>`;
+}
 
 function hotelApiBaseUrl() {
   return String(window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || window.PencmiApiBaseUrl || window.localStorage.getItem("pencmi_api_base_url") || "").replace(/\/+$/, "");
@@ -60,24 +66,8 @@ function listFromPayload(payload) {
 }
 
 async function hotelApiRequest(path, options = {}) {
-  const baseUrl = hotelApiBaseUrl();
-  const token = hotelAccessToken();
-  if (!baseUrl || !token) {
-    throw new Error("Connexion annonceur requise.");
-  }
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      Authorization: `Bearer ${token}`,
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-    },
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || "Chargement impossible.");
-  }
-  return payload?.data ?? payload;
+  const { publicationRequest } = await import('/publier/real-estate-api.mjs');
+  return publicationRequest(path, { ...options, body: typeof options.body === 'string' ? JSON.parse(options.body) : options.body });
 }
 
 const hotelReservationStatusLabels = {
@@ -99,7 +89,7 @@ function formatHotelDate(value) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("fr-FR");
+  return date.toLocaleDateString("fr-FR", { timeZone: 'Africa/Dakar' });
 }
 
 function hotelDashboardRouteHref(path) {
@@ -193,12 +183,14 @@ function AvailabilityStatusBadge(status) {
 }
 
 function HotelAvailabilityDashboard() {
-  return `<section class="hotel-dashboard-card"><h2>Disponibilités à mettre à jour</h2><p class="dashboard-muted">Aucune alerte de disponibilité pour le moment.</p></section>`;
+  const rooms = hotelDashboardData.hotels.flatMap(hotel => hotel.rooms || []);
+  const missing = rooms.filter(room => !room.availability?.length).length;
+  return `<section class="hotel-dashboard-card"><h2>Disponibilités</h2><p>${missing} catégorie(s) sans calendrier renseigné.</p><a class="btn btn-light" href="${hotelDashboardRoutes.availability}">Gérer les disponibilités</a></section>`;
 }
 
 function AvailabilityAlerts() {
-  const alerts = ["Réservation à confirmer", "Disponibilité faible", "Chambre complète", "Chambre en maintenance", "Arrivée client aujourd’hui", "Départ client aujourd’hui", "Calendrier non mis à jour", "Prix manquant", "Chambre sans photo", "Chambre sans équipements"];
-  return `<section class="hotel-dashboard-card"><h2>Alertes prévues</h2><div class="hotel-chip-row">${alerts.map((alert) => `<span class="hotel-chip">${alert}</span>`).join("")}</div></section>`;
+  const drafts = hotelDashboardData.hotels.filter(hotel => hotel.status === 'draft');
+  return `<section class="hotel-dashboard-card"><h2>Brouillons</h2>${drafts.map(hotel => `<p><a href="${hotelEditHref(hotel.id)}">${hotelDashboardEscape(hotel.name || 'Hébergement sans nom')}</a></p>`).join('') || '<p>Aucun brouillon.</p>'}</section>`;
 }
 
 function HotelsDashboardPage() {
@@ -237,24 +229,18 @@ function HotelListingsDashboardPage() {
 function HotelListingsTable() {
   return `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Hébergement</th><th>Statut</th><th>Ville</th><th>Type</th><th>Chambres</th><th>Demandes</th><th>Actions</th></tr></thead><tbody>${hotelDashboardData.hotels.map((hotel) => {
     const requests = hotelDashboardData.reservations.filter((request) => request.property?.id === hotel.id).length;
-    return `<tr><td>${hotel.name}</td><td>${hotel.status}</td><td>${hotel.city || ""}</td><td>${hotel.propertyType || ""}</td><td>${Array.isArray(hotel.rooms) ? hotel.rooms.length : 0}</td><td>${requests}</td><td><a class="btn btn-ghost" href="${hotelDashboardRouteHref(`/hotels/${hotel.id}`)}">Voir</a></td></tr>`;
+    return `<tr><td>${hotelDashboardEscape(hotel.name || 'Hébergement sans nom')}</td><td>${HotelStatusBadge(hotel.status)}</td><td>${hotelDashboardEscape(hotel.city)}</td><td>${hotelDashboardEscape(hotel.propertyType)}</td><td>${Array.isArray(hotel.rooms) ? hotel.rooms.length : 0}</td><td>${requests}</td><td><a class="btn btn-light" href="${hotelEditHref(hotel.id)}">${hotel.status === 'draft' ? 'Reprendre' : 'Modifier'}</a>${hotel.status === 'active' ? `<a class="btn btn-ghost" href="${hotelDashboardRouteHref(`/hotels/${hotel.id}`)}">Voir</a>` : ''}<a class="btn btn-ghost" href="${hotelEditHref(hotel.id, 8)}">Disponibilités</a></td></tr>`;
   }).join("")}</tbody></table></section>`;
 }
 
 function HotelAvailabilityCalendar() {
-  return `<section class="hotel-dashboard-card"><h2>Calendrier de disponibilités</h2><div class="hotel-chart-placeholder">Calendrier prévu par chambre, date, stock, prix et statut</div></section>`;
-}
-
-function RoomAvailabilityManager() {
-  return `<section class="hotel-dashboard-card"><h2>Gestion des chambres</h2><div class="hotel-chip-row">${["Modifier disponibilité", "Bloquer une période", "Ouvrir une période", "Modifier le prix", "Marquer complet", "Marquer en maintenance"].map((action) => `<button class="btn btn-ghost" type="button">${action}</button>`).join("")}</div></section>`;
+  return hotelDashboardData.hotels.map(hotel => `<section class="hotel-dashboard-card"><h2>${hotelDashboardEscape(hotel.name || 'Hébergement sans nom')}</h2><a class="btn btn-primary" href="${hotelEditHref(hotel.id, 8)}">Modifier les disponibilités</a><a class="btn btn-light" href="${hotelEditHref(hotel.id, 4)}">Modifier les tarifs</a>${(hotel.rooms || []).map(room => `<h3>${hotelDashboardEscape(room.name)}</h3>${room.availability?.length ? `<div class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Date</th><th>État</th><th>Quantité</th><th>Ventes</th></tr></thead><tbody>${room.availability.map(day => `<tr><td>${formatHotelDate(day.date)}</td><td>${hotelDashboardEscape(({ open: 'Ouvert', closed: 'Fermé', full: 'Complet', maintenance: 'Maintenance' })[day.status] || 'À confirmer')}</td><td>${Number(day.available)}</td><td>${room.restrictions?.some(item => item.date === day.date && item.stopSell) ? 'Suspendues' : 'Sur demande'}</td></tr>`).join('')}</tbody></table></div>` : '<p>Disponibilité à confirmer.</p>'}`).join('')}</section>`).join('') || EmptyState('Aucun hébergement enregistré.');
 }
 
 function HotelAvailabilityPage() {
   return HotelsDashboardLayout(`
-    ${DashboardHeader("Disponibilités", "Gérez les dates, prix, stocks, saisons et statuts de vos chambres.", `<button class="btn btn-primary" type="button">Ajouter des disponibilités</button>`)}
+    ${DashboardHeader("Disponibilités", "Gérez les dates, prix, stocks et statuts de vos chambres.")}
     ${HotelAvailabilityCalendar()}
-    ${RoomAvailabilityManager()}
-    ${EmptyState("Aucune disponibilité renseignée pour le moment.", "", `<button class="btn btn-primary" type="button">Ajouter des disponibilités</button>`)}
   `, "availability");
 }
 
@@ -320,33 +306,9 @@ function HotelStatisticsPage() {
 }
 
 function HotelContactSettingsPage() {
-  const notificationTriggers = ["Nouveau message", "Nouvelle demande de réservation", "Nouveau formulaire", "Nouveau contact", "Réservation acceptée", "Réservation annulée"];
   return HotelsDashboardLayout(`
-    ${DashboardHeader("Moyens de contact", "Configurez les contacts et notifications email pour vos hébergements.", `<a class="btn btn-light" href="${hotelDashboardRouteHref(hotelDashboardRoutes.emailSettings)}">Emails automatiques</a>`)}
-    <section class="hotel-dashboard-card">
-      <h2>Paramètres de contact hôtels</h2>
-      <div class="hotel-form-grid">
-        ${["WhatsApp", "Téléphone", "Email", "Messagerie interne", "Formulaire", "Demande de réservation", "Notifications email", "Emails automatiques client"].map((item) => `<label class="choice-card"><input type="checkbox"><span>${item}</span></label>`).join("")}
-        <label class="hotel-form-field"><span>Numéro WhatsApp</span><input type="tel"></label>
-        <label class="hotel-form-field"><span>Numéro téléphone</span><input type="tel"></label>
-        <label class="hotel-form-field"><span>Email de contact</span><input type="email"></label>
-        <label class="hotel-form-field"><span>Email de notification</span><input type="email"></label>
-        <label class="hotel-form-field"><span>Méthode préférée</span><select><option>WhatsApp</option><option>Téléphone</option><option>Email</option><option>Message interne</option><option>Formulaire</option></select></label>
-      </div>
-      <div class="hotel-form-actions"><button class="btn btn-primary" type="button" data-save-contact-settings>Enregistrer</button></div>
-      <p id="contact-settings-message" hidden>Vos moyens de contact ont été mis à jour.</p>
-    </section>
-    <section class="hotel-dashboard-card">
-      <h2>Résumé et aperçu client</h2>
-      <p class="dashboard-muted">Les boutons visibles côté client dépendront des moyens activés.</p>
-      <div class="hotel-chip-row">${["Demander une réservation", "Envoyer un message", "Appeler", "WhatsApp", "Email"].map((item) => `<span class="hotel-chip">${item}</span>`).join("")}</div>
-    </section>
-    <section class="hotel-dashboard-card">
-      <h2>Notifications email prévues</h2>
-      <p class="dashboard-muted">Objet futur : Nouveau contact sur votre hébergement Péncmi.</p>
-      <div class="hotel-chip-row">${notificationTriggers.map((trigger) => `<span class="hotel-chip">${trigger}</span>`).join("")}</div>
-      <p class="dashboard-muted">L’email contiendra le nom de l’hébergement, la chambre concernée, le type de demande, un extrait du message et un lien vers le dashboard.</p>
-    </section>
+    ${DashboardHeader('Moyens de contact', 'Contacts de vos hébergements.')}
+    ${hotelDashboardData.hotels.map(hotel => `<section class="hotel-dashboard-card"><h2>${hotelDashboardEscape(hotel.name || 'Hébergement sans nom')}</h2><a class="btn btn-primary" href="${hotelEditHref(hotel.id, 10)}">Configurer les moyens de contact</a></section>`).join('') || EmptyState('Aucun hébergement enregistré.')}
   `, "contactSettings");
 }
 
@@ -366,9 +328,6 @@ function renderDashboard() {
   document.querySelector("[data-open-sidebar]")?.addEventListener("click", () => document.querySelector("#hotel-sidebar").classList.toggle("is-open"));
   document.querySelector("[data-dashboard-logout]")?.addEventListener("click", () => {
     void hotelLogout();
-  });
-  document.querySelector("[data-save-contact-settings]")?.addEventListener("click", () => {
-    document.querySelector("#contact-settings-message").hidden = false;
   });
   document.querySelectorAll("[data-reservation-status]").forEach((button) => {
     button.addEventListener("click", () => {

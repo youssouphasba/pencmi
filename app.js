@@ -302,16 +302,12 @@ function mapHomeHotelListing(listing) {
   const photos = Array.isArray(metadata.photos) ? metadata.photos.filter(Boolean) : [];
   const image = metadata.coverPhoto || photos[0] || "";
 
-  if (!image) {
-    return null;
-  }
-
   return {
     image,
     category: [listing.propertyType, listing.city].filter(Boolean).join(" · "),
     name: listing.name,
     city: listing.city,
-    priceFrom: formatPriceFCFA(metadata.nightlyPrice || metadata.priceFrom),
+    priceFrom: formatPriceFCFA(metadata.nightlyPrice ?? metadata.priceFrom),
     rating: metadata.stars ? `${metadata.stars} étoiles` : "",
     verified: Boolean(listing.owner?.professionalProfile?.verified),
     href: routeHref(`/hotels/${listing.id}`),
@@ -575,8 +571,8 @@ function HorizontalListingSection(section) {
   `;
 }
 
+const escapeValue = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 function RealEstateCard(listing) {
-  const escapeValue = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   return `
     <article class="listing-card">
       <a href="${listing.href}" aria-label="${escapeValue(listing.title)}">
@@ -595,12 +591,12 @@ function RealEstateCard(listing) {
 function HotelCard(listing) {
   return `
     <article class="listing-card">
-      <a href="${listing.href}" aria-label="${listing.name}">
-        <img src="${listing.image}" alt="${listing.name}">
+      <a href="${escapeValue(listing.href)}" aria-label="${escapeValue(listing.name)}">
+        ${listing.image ? `<img src="${escapeValue(listing.image)}" alt="${escapeValue(listing.name)}">` : '<div class="real-estate-photo-placeholder" role="img" aria-label="Aucune photo disponible">Aucune photo disponible</div>'}
       </a>
-      <p>${listing.category}</p>
-      <h3><a href="${listing.href}">${listing.name}</a></h3>
-      <span>${listing.city}</span>
+      <p>${escapeValue(listing.category)}</p>
+      <h3><a href="${escapeValue(listing.href)}">${escapeValue(listing.name)}</a></h3>
+      <span>${escapeValue(listing.city)}</span>
       <strong>${listing.priceFrom}</strong>
       ${listing.rating ? `<span>${listing.rating}</span>` : ""}
       ${listing.verified ? "<span>Vérifié</span>" : ""}

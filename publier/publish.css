@@ -333,9 +333,22 @@ body[data-real-estate-publication] .photo-dropzone input { box-sizing: border-bo
     grid-template-columns: 1fr 1fr;
   }
 
-  body[data-real-estate-publication] .publish-nav { position: static; }
+  body[data-real-estate-publication] .publish-nav,
+  body[data-hotel-publication] .publish-nav { position: static; }
 
   .publish-nav .btn {
     width: 100%;
   }
 }
+
+body[data-hotel-publication] fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+body[data-hotel-publication] .publish-main { min-width: 0; }
+body[data-hotel-publication] .stepper { flex-wrap: wrap; overflow: visible; }
+body[data-hotel-publication] .step-pill { white-space: normal; text-align: left; max-width: 100%; cursor: pointer; }
+.hotel-room-editor { padding-block: 18px; border-bottom: 1px solid var(--border, #dce3eb); }
+.hotel-period { padding-block: 16px; border-top: 1px solid var(--border, #dce3eb); }
+.hotel-photo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 16px; }
+.hotel-photo-grid figure { margin: 0; min-width: 0; }
+.hotel-photo-grid img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #f1f5f9; }
+.hotel-photo-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+body[data-hotel-publication] input, body[data-hotel-publication] select, body[data-hotel-publication] textarea { min-width: 0; max-width: 100%; }

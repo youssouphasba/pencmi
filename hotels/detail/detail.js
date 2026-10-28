@@ -8,6 +8,8 @@ const hotelDetailRoutes = {
 let hotelDetailState = {
   listing: null,
 };
+const hotelDetailEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+const hotelCalendarDate = value => new Intl.DateTimeFormat('fr-FR', { timeZone: 'Africa/Dakar' }).format(new Date(value));
 
 function hotelDetailRouteHref(path) {
   return window.PencmiConfig?.routeHref ? window.PencmiConfig.routeHref(path) : path;
@@ -18,7 +20,10 @@ function hotelDetailMetadata() {
 }
 
 function hotelDetailAdvertiser() {
-  return pencmiBuildAdvertiser(hotelDetailState.listing?.owner);
+  const advertiser = pencmiBuildAdvertiser(hotelDetailState.listing?.owner);
+  const preferences = hotelDetailMetadata().contactPreferences;
+  if (!preferences || !Object.keys(preferences).length) return advertiser;
+  return { ...advertiser, phone: preferences.phoneEnabled ? preferences.phoneNumber : '', whatsapp: preferences.whatsappEnabled ? preferences.whatsappNumber : '', email: preferences.emailEnabled ? preferences.contactEmail : '' };
 }
 
 function hotelDetailPhotos() {
@@ -65,8 +70,8 @@ function hotelGallery() {
 
   return `
     <section class="hotel-detail-card">
-      <img src="${firstPhoto}" alt="${hotelDetailState.listing.name}" id="hotel-main-photo" style="width:100%;max-height:420px;object-fit:cover;border-radius:18px;">
-      ${photos.length > 1 ? `<div class="hotel-chip-row">${photos.map((photo, index) => `<button class="btn btn-ghost" type="button" data-hotel-photo="${photo}"${index === 0 ? ' aria-current="true"' : ""}>Photo ${index + 1}</button>`).join("")}</div>` : ""}
+      <img src="${hotelDetailEscape(firstPhoto)}" alt="${hotelDetailEscape(hotelDetailState.listing.name)}" id="hotel-main-photo" style="width:100%;max-height:420px;object-fit:cover;border-radius:8px;">
+      ${photos.length > 1 ? `<div class="hotel-chip-row">${photos.map((photo, index) => `<button class="btn btn-ghost" type="button" data-hotel-photo="${hotelDetailEscape(photo)}"${index === 0 ? ' aria-current="true"' : ""}>Photo ${index + 1}</button>`).join("")}</div>` : ""}
     </section>
   `;
 }
@@ -75,13 +80,18 @@ function hotelRooms() {
   const rooms = Array.isArray(hotelDetailState.listing?.rooms) ? hotelDetailState.listing.rooms : [];
   return `
     <section class="hotel-detail-card" id="reservation">
-      <h2>Chambres et logements disponibles</h2>
+      <h2>Chambres et logements</h2>
       ${rooms.length ? `<div class="hotel-room-grid">${rooms.map((room) => `
         <article class="hotel-detail-card">
-          <h2>${room.name}</h2>
-          <p>${[room.roomType, room.capacity ? `${room.capacity} personnes` : ""].filter(Boolean).join(" · ")}</p>
-          <div class="hotel-chip-row">${room.status ? `<span class="hotel-chip">${room.status}</span>` : ""}</div>
-          <button class="btn btn-primary" type="button" data-open-reservation data-room-name="${room.name}">Demander une réservation</button>
+          <h3>${hotelDetailEscape(room.name)}</h3>
+          ${room.photos?.length ? `<div class="hotel-chip-row">${room.photos.map((url, i) => `<button class="btn btn-ghost" type="button" data-hotel-photo="${hotelDetailEscape(url)}">Photo de la chambre ${i + 1}</button>`).join('')}</div>` : ''}
+          <p>${hotelDetailEscape([room.roomType, room.capacity ? `${room.capacity} personnes` : ""].filter(Boolean).join(" · "))}</p>
+          <p>${pencmiFormatPrice(room.basePrice, 'FCFA')} / nuit</p>
+          <p>${(room.amenities || []).map(hotelDetailEscape).join(' · ')}</p>
+          <p>Disponibilité à confirmer</p>
+          ${room.rates?.length ? `<details><summary>Tarifs datés</summary>${room.rates.map(rate => `<p>${hotelCalendarDate(rate.date)} : ${pencmiFormatPrice(rate.price, rate.currency)}</p>`).join('')}</details>` : ''}
+          ${room.availability?.length ? `<details><summary>Calendrier renseigné</summary>${room.availability.map(day => `<p>${hotelCalendarDate(day.date)} : ${hotelDetailEscape(({ open: day.stopSell ? 'Ventes suspendues' : 'Sur demande', closed: 'Fermé', full: 'Complet', maintenance: 'Maintenance', unconfirmed: 'À confirmer' })[day.status] || 'À confirmer')}${day.available !== undefined ? ` · ${Number(day.available)} unité(s)` : ''}</p>`).join('')}</details>` : ''}
+          <button class="btn btn-primary" type="button" data-open-reservation data-room-name="${hotelDetailEscape(room.name)}">Demander une réservation</button>
         </article>
       `).join("")}</div>` : `<p>Aucune chambre ou logement renseigné pour le moment.</p>`}
     </section>
@@ -90,12 +100,12 @@ function hotelRooms() {
 
 function hotelAmenitiesSection() {
   const amenities = Array.isArray(hotelDetailMetadata().amenities) ? hotelDetailMetadata().amenities : [];
-  return `<section class="hotel-detail-card"><h2>Commodités</h2>${amenities.length ? `<div class="hotel-chip-row">${amenities.map((item) => `<span class="hotel-chip">${item}</span>`).join("")}</div>` : `<p>Aucune commodité renseignée pour le moment.</p>`}</section>`;
+  return `<section class="hotel-detail-card"><h2>Commodités</h2>${amenities.length ? `<div class="hotel-chip-row">${amenities.map((item) => `<span class="hotel-chip">${hotelDetailEscape(item)}</span>`).join("")}</div>` : `<p>Aucune commodité renseignée pour le moment.</p>`}</section>`;
 }
 
 function hotelConditionsSection() {
   const conditions = Array.isArray(hotelDetailMetadata().conditions) ? hotelDetailMetadata().conditions : [];
-  return `<section class="hotel-detail-card"><h2>Conditions</h2>${conditions.length ? `<div class="hotel-chip-row">${conditions.map((item) => `<span class="hotel-chip">${item}</span>`).join("")}</div>` : `<p>Aucune condition renseignée pour le moment.</p>`}</section>`;
+  return `<section class="hotel-detail-card"><h2>Conditions</h2>${conditions.length ? `<div class="hotel-chip-row">${conditions.map((item) => `<span class="hotel-chip">${hotelDetailEscape(item)}</span>`).join("")}</div>` : `<p>Aucune condition renseignée pour le moment.</p>`}</section>`;
 }
 
 function hotelAdvertiserCard() {
@@ -103,15 +113,15 @@ function hotelAdvertiserCard() {
   return `
     <aside class="hotel-detail-card">
       <h2>Profil annonceur</h2>
-      ${advertiser.logoUrl ? `<img src="${advertiser.logoUrl}" alt="${advertiser.name}" style="width:72px;height:72px;object-fit:contain;border-radius:18px;border:1px solid var(--border);background:var(--surface-soft);">` : ""}
-      <p><strong>${advertiser.name}</strong></p>
-      ${advertiser.type ? `<p>${advertiser.type}</p>` : ""}
-      ${advertiser.city ? `<p>${advertiser.city}</p>` : ""}
-      ${advertiser.openingHours ? `<p>${advertiser.openingHours}</p>` : ""}
+      ${advertiser.logoUrl ? `<img src="${hotelDetailEscape(advertiser.logoUrl)}" alt="${hotelDetailEscape(advertiser.name)}" style="width:72px;height:72px;object-fit:contain;border-radius:8px;border:1px solid var(--border);background:var(--surface-soft);">` : ""}
+      <p><strong>${hotelDetailEscape(advertiser.name)}</strong></p>
+      ${advertiser.type ? `<p>${hotelDetailEscape(advertiser.type)}</p>` : ""}
+      ${advertiser.city ? `<p>${hotelDetailEscape(advertiser.city)}</p>` : ""}
+      ${advertiser.openingHours ? `<p>${hotelDetailEscape(advertiser.openingHours)}</p>` : ""}
       ${advertiser.verified ? `<div class="hotel-chip-row"><span class="hotel-chip">Professionnel vérifié</span></div>` : ""}
       <div class="hotel-detail-actions">
         <a class="btn btn-light" href="${pencmiAdvertiserHref(advertiser.id)}">Voir le profil</a>
-        ${advertiser.phone ? `<a class="btn btn-ghost" href="tel:${advertiser.phone}">Téléphone</a>` : ""}
+        ${advertiser.phone ? `<a class="btn btn-ghost" href="tel:${hotelDetailEscape(advertiser.phone)}">Téléphone</a>` : ""}
         ${advertiser.whatsapp ? `<a class="btn btn-primary" target="_blank" rel="noreferrer" href="https://wa.me/${advertiser.whatsapp.replace(/\D/g, "")}">WhatsApp</a>` : ""}
       </div>
     </aside>
@@ -139,7 +149,7 @@ function hotelReservationModal() {
           </div>
         </form>
         <p id="reservation-message" hidden>Votre demande a été envoyée. L’établissement vous confirmera la disponibilité.</p>
-        ${listing ? `<p style="margin-top:12px;color:var(--muted);">${listing.name}</p>` : ""}
+        ${listing ? `<p style="margin-top:12px;color:var(--muted);">${hotelDetailEscape(listing.name)}</p>` : ""}
       </section>
     </div>
   `;
@@ -153,9 +163,9 @@ function hotelContactModal() {
       <section class="hotel-modal-card" role="dialog" aria-modal="true" aria-labelledby="contact-title">
         <h2 id="contact-title">Contacter l’établissement</h2>
         <div class="hotel-chip-row">
-          ${advertiser.phone ? `<a class="btn btn-light" href="tel:${advertiser.phone}">Appeler</a>` : ""}
+          ${advertiser.phone ? `<a class="btn btn-light" href="tel:${hotelDetailEscape(advertiser.phone)}">Appeler</a>` : ""}
           ${advertiser.whatsapp ? `<a class="btn btn-primary" target="_blank" rel="noreferrer" href="https://wa.me/${advertiser.whatsapp.replace(/\D/g, "")}">WhatsApp</a>` : ""}
-          ${advertiser.email ? `<a class="btn btn-ghost" href="${emailHref}">Email</a>` : ""}
+          ${advertiser.email ? `<a class="btn btn-ghost" href="${hotelDetailEscape(emailHref)}">Email</a>` : ""}
         </div>
         <div class="hotel-form-actions">
           <button class="btn btn-ghost" type="button" data-close-contact>Fermer</button>
@@ -179,13 +189,13 @@ function hotelDetailPage() {
       <div>
         ${hotelGallery()}
         <section class="hotel-detail-card">
-          <h1>${listing.name}</h1>
+          <h1>${hotelDetailEscape(listing.name)}</h1>
           <div class="hotel-chip-row">
-            ${listing.propertyType ? `<span class="hotel-chip">${listing.propertyType}</span>` : ""}
-            ${listing.city ? `<span class="hotel-chip">${listing.city}</span>` : ""}
-            ${metadata.stars ? `<span class="hotel-chip">${metadata.stars} étoiles</span>` : ""}
+            ${listing.propertyType ? `<span class="hotel-chip">${hotelDetailEscape(listing.propertyType)}</span>` : ""}
+            ${listing.city ? `<span class="hotel-chip">${hotelDetailEscape(listing.city)}</span>` : ""}
+            ${metadata.stars ? `<span class="hotel-chip">${hotelDetailEscape(metadata.stars)} étoiles</span>` : ""}
           </div>
-          ${listing.description ? `<p>${listing.description}</p>` : ""}
+          ${listing.description ? `<p>${hotelDetailEscape(listing.description)}</p>` : ""}
           <div class="hotel-detail-actions">
             <button class="btn btn-ghost" type="button" data-share>Partager</button>
             ${typeof ReportButton === "function" ? ReportButton("Signaler") : ""}

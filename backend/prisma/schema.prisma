@@ -353,6 +353,7 @@ model HotelRoom {
   name       String
   roomType   String?
   capacity   Int?
+  metadata   Json?
   status     ListingStatus @default(active)
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
@@ -383,6 +384,7 @@ model HotelRoomAvailability {
   room      HotelRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
   date      DateTime
   available Int
+  status    String    @default("open")
   reliableUntil DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

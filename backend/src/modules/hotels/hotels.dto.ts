@@ -1,5 +1,18 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsArray,
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  Min,
+  ArrayMaxSize,
+  ArrayUnique,
+} from 'class-validator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 
 export class HotelSearchDto extends PaginationDto {
@@ -13,17 +26,22 @@ export class HotelSearchDto extends PaginationDto {
 }
 
 export class CreateHotelDto {
-  @IsString()
-  slug: string;
+  @IsOptional()
+  @IsUUID()
+  requestId?: string;
 
+  @IsOptional()
   @IsString()
-  name: string;
+  @MaxLength(200)
+  name?: string;
 
+  @IsOptional()
   @IsString()
-  propertyType: string;
+  propertyType?: string;
 
+  @IsOptional()
   @IsString()
-  city: string;
+  city?: string;
 
   @IsOptional()
   @IsString()
@@ -36,9 +54,41 @@ export class CreateHotelDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  rooms?: unknown[];
 }
 
 export class UpdateHotelDto extends CreateHotelDto {}
+
+export class HotelPhotoDto {
+  @IsUUID()
+  uploadId: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  roomId?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  replacePhotoId?: string;
+}
+
+export class HotelPhotoOrderDto {
+  @IsArray()
+  @ArrayMaxSize(30)
+  @ArrayUnique()
+  @IsString({ each: true })
+  photoIds: string[];
+}
 
 export class CreateHotelReservationRequestDto {
   @IsOptional()
@@ -72,7 +122,13 @@ export class CreateHotelReservationRequestDto {
   message?: string;
 }
 
-const hotelReservationStatuses = ['pending', 'accepted', 'refused', 'cancelled', 'requires_more_info'] as const;
+const hotelReservationStatuses = [
+  'pending',
+  'accepted',
+  'refused',
+  'cancelled',
+  'requires_more_info',
+] as const;
 
 export class UpdateHotelReservationStatusDto {
   @IsIn(hotelReservationStatuses)

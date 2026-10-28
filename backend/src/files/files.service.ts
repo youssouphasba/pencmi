@@ -105,15 +105,16 @@ export class FilesService {
     listingId: string,
     id: string,
     file: UploadedImage,
+    module: 'real_estate' | 'hotels' = 'real_estate',
   ) {
-    const storageKey = `real-estate/${ownerUserId}/${id}/${randomUUID()}.${file.mimetype.split('/')[1]}`;
+    const storageKey = `${module === 'real_estate' ? 'real-estate' : 'hotels'}/${ownerUserId}/${id}/${randomUUID()}.${file.mimetype.split('/')[1]}`;
     try {
       await this.persistBinary(storageKey, file);
       return await tx.fileAsset.create({
         data: {
           id,
           ownerUserId,
-          module: PencmiModule.real_estate,
+          module,
           visibility: FileVisibility.public,
           mimeType: file.mimetype,
           sizeBytes: file.size,
@@ -126,9 +127,7 @@ export class FilesService {
       });
     } catch (error) {
       await this.deleteBinary({ storageKey } as FileAsset).catch(() =>
-        this.logger.warn(
-          `Nettoyage du fichier immobilier à reprendre : ${storageKey}`,
-        ),
+        this.logger.warn(`Nettoyage du fichier à reprendre : ${storageKey}`),
       );
       throw error;
     }
@@ -143,12 +142,16 @@ export class FilesService {
     return { asset, buffer: await this.readBinary(asset) };
   }
 
-  async purgeDeletedListingPhoto(id: string, ownerUserId: string) {
+  async purgeDeletedListingPhoto(
+    id: string,
+    ownerUserId: string,
+    module: 'real_estate' | 'hotels' = 'real_estate',
+  ) {
     const asset = await this.prisma.fileAsset.findFirst({
       where: {
         id,
         ownerUserId,
-        module: PencmiModule.real_estate,
+        module,
         deletedAt: { not: null },
       },
     });
@@ -160,7 +163,7 @@ export class FilesService {
         data: { sizeBytes: 0 },
       });
     } catch {
-      this.logger.warn(`Nettoyage du fichier immobilier à reprendre : ${id}`);
+      this.logger.warn(`Nettoyage du fichier à reprendre : ${id}`);
     }
   }
 
@@ -233,20 +236,32 @@ export class FilesService {
       throw new NotFoundException('Fichier introuvable.');
     }
 
-    if (asset.module === PencmiModule.real_estate) {
+    if (
+      asset.module === PencmiModule.real_estate ||
+      asset.module === PencmiModule.hotels
+    ) {
       const usage = await this.prisma.fileUsage.findFirst({
         where: { fileId: id, targetType: TargetType.listing },
       });
       const listing =
         usage &&
-        (await this.prisma.realEstateListing.findFirst({
-          where: {
-            id: usage.targetId,
-            status: ListingStatus.active,
-            deletedAt: null,
-          },
-          select: { id: true },
-        }));
+        (await (asset.module === PencmiModule.hotels
+          ? this.prisma.hotelProperty.findFirst({
+              where: {
+                id: usage.targetId,
+                status: ListingStatus.active,
+                deletedAt: null,
+              },
+              select: { id: true },
+            })
+          : this.prisma.realEstateListing.findFirst({
+              where: {
+                id: usage.targetId,
+                status: ListingStatus.active,
+                deletedAt: null,
+              },
+              select: { id: true },
+            })));
       if (!listing) throw new NotFoundException('Fichier introuvable.');
     }
 
@@ -266,7 +281,10 @@ export class FilesService {
       throw new NotFoundException('Fichier introuvable.');
     }
 
-    if (asset.module === PencmiModule.real_estate) {
+    if (
+      asset.module === PencmiModule.real_estate ||
+      asset.module === PencmiModule.hotels
+    ) {
       throw new BadRequestException('Gérez cette photo depuis son annonce.');
     }
 

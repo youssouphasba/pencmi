@@ -20,6 +20,11 @@ const requiredArtifacts = {
     ['index', 'RefreshToken_parentTokenId_key'],
     ['constraint', 'RefreshToken_parentTokenId_fkey'],
   ],
+  '20261029000000_hotel_publication': [
+    ['column', 'HotelRoom.metadata'],
+    ['column', 'HotelRoomAvailability.status'],
+    ['constraint', 'HotelRoomAvailability_nonnegative'],
+  ],
 };
 
 function checksumMatches(sql, checksum) {

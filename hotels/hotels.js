@@ -12,11 +12,13 @@ let hotelState = {
   all: [],
   filtered: [],
 };
+let hotelTypeLabels = {};
 
 function hotelRouteHref(path) {
   return window.PencmiConfig?.routeHref ? window.PencmiConfig.routeHref(path) : path;
 }
 
+const hotelEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 function hotelMetadata(listing) {
   return listing.metadata || {};
 }
@@ -31,7 +33,7 @@ function hotelAdvertiser(listing) {
 
 function hotelNightlyPrice(listing) {
   const metadata = hotelMetadata(listing);
-  return metadata.nightlyPrice || metadata.priceFrom || null;
+  return metadata.nightlyPrice ?? metadata.priceFrom ?? null;
 }
 
 function hotelStars(listing) {
@@ -110,12 +112,12 @@ function hotelHero() {
       <h1>Trouvez un hôtel, une auberge ou une résidence au Sénégal</h1>
       <p>Comparez les hébergements selon votre ville, votre budget, vos dates et vos besoins.</p>
       <form class="hotel-search-card" id="hotel-search-form">
-        <label class="hotel-field"><span>Destination</span><input name="query" type="search" value="${values.query || values.city}" placeholder="Ville, quartier ou région"></label>
-        <label class="hotel-field"><span>Arrivée</span><input name="checkIn" type="date" value="${values.checkIn}"></label>
-        <label class="hotel-field"><span>Départ</span><input name="checkOut" type="date" value="${values.checkOut}"></label>
-        <label class="hotel-field"><span>Adultes</span><input name="adults" type="number" min="1" value="${values.adults}"></label>
-        <label class="hotel-field"><span>Enfants</span><input name="children" type="number" min="0" value="${values.children}"></label>
-        <label class="hotel-field"><span>Chambres</span><input name="rooms" type="number" min="1" value="${values.rooms}"></label>
+        <label class="hotel-field"><span>Destination</span><input name="query" type="search" value="${hotelEscape(values.query || values.city)}" placeholder="Ville, quartier ou région"></label>
+        <label class="hotel-field"><span>Arrivée</span><input name="checkIn" type="date" value="${hotelEscape(values.checkIn)}"></label>
+        <label class="hotel-field"><span>Départ</span><input name="checkOut" type="date" value="${hotelEscape(values.checkOut)}"></label>
+        <label class="hotel-field"><span>Adultes</span><input name="adults" type="number" min="1" value="${hotelEscape(values.adults)}"></label>
+        <label class="hotel-field"><span>Enfants</span><input name="children" type="number" min="0" value="${hotelEscape(values.children)}"></label>
+        <label class="hotel-field"><span>Chambres</span><input name="rooms" type="number" min="1" value="${hotelEscape(values.rooms)}"></label>
         <button class="btn btn-primary" type="submit">Rechercher</button>
       </form>
     </div>
@@ -162,25 +164,22 @@ function hotelFiltersMarkup() {
         <fieldset class="hotel-filter-group">
           <legend>Recherche</legend>
           <div class="hotel-filter-grid">
-            <input name="query" value="${values.query}" placeholder="Nom, ville ou quartier">
-            <input name="city" value="${values.city}" placeholder="Ville">
+            <input name="query" value="${hotelEscape(values.query)}" placeholder="Nom, ville ou quartier">
+            <input name="city" value="${hotelEscape(values.city)}" placeholder="Ville">
           </div>
         </fieldset>
         <fieldset class="hotel-filter-group">
           <legend>Type d’hébergement</legend>
           <select name="type">
             <option value="">Tous les types</option>
-            <option value="hotel"${values.type === "hotel" ? " selected" : ""}>Hôtel</option>
-            <option value="auberge"${values.type === "auberge" ? " selected" : ""}>Auberge</option>
-            <option value="residence"${values.type === "residence" ? " selected" : ""}>Résidence</option>
-            <option value="appartement_meuble"${values.type === "appartement_meuble" ? " selected" : ""}>Appartement meublé</option>
+            ${Object.entries(hotelTypeLabels).map(([type, label]) => `<option value="${hotelEscape(type)}"${values.type === type ? ' selected' : ''}>${hotelEscape(label)}</option>`).join('')}
           </select>
         </fieldset>
         <fieldset class="hotel-filter-group">
           <legend>Budget par nuit</legend>
           <div class="hotel-filter-grid">
-            <input name="minPrice" type="number" min="0" value="${values.minPrice}" placeholder="Minimum">
-            <input name="maxPrice" type="number" min="0" value="${values.maxPrice}" placeholder="Maximum">
+            <input name="minPrice" type="number" min="0" value="${hotelEscape(values.minPrice)}" placeholder="Minimum">
+            <input name="maxPrice" type="number" min="0" value="${hotelEscape(values.maxPrice)}" placeholder="Maximum">
           </div>
         </fieldset>
         <fieldset class="hotel-filter-group">
@@ -224,21 +223,22 @@ function hotelCard(listing) {
   return `
     <article class="hotel-card">
       <div class="hotel-card-photo">
-        ${image ? `<img src="${image}" alt="${listing.name}" style="width:100%;height:100%;object-fit:cover;">` : "Aucune image"}
+        ${image ? `<img src="${hotelEscape(image)}" alt="${hotelEscape(listing.name)}" style="width:100%;height:100%;object-fit:cover;">` : "Aucune photo disponible"}
       </div>
       <div class="hotel-card-body">
-        <h3>${listing.name}</h3>
-        <p>${[listing.propertyType, listing.city, metadata.district].filter(Boolean).join(" · ")}</p>
+        <h3>${hotelEscape(listing.name)}</h3>
+        <p>${hotelEscape([hotelTypeLabels[listing.propertyType] || listing.propertyType, listing.city, metadata.district].filter(Boolean).join(" · "))}</p>
         <div class="hotel-chip-row">
-          ${metadata.stars ? `<span class="hotel-chip">${metadata.stars} étoiles</span>` : ""}
+          ${metadata.stars ? `<span class="hotel-chip">${hotelEscape(metadata.stars)} étoiles</span>` : ""}
           ${rooms ? `<span class="hotel-chip">${rooms} chambre${rooms > 1 ? "s" : ""}</span>` : ""}
           ${advertiser.verified ? `<span class="hotel-chip">Vérifié</span>` : ""}
         </div>
-        ${amenities.length ? `<div class="hotel-chip-row">${amenities.map((item) => `<span class="hotel-chip">${item}</span>`).join("")}</div>` : ""}
+        ${amenities.length ? `<div class="hotel-chip-row">${amenities.map((item) => `<span class="hotel-chip">${hotelEscape(item)}</span>`).join("")}</div>` : ""}
+        <p>Disponibilité à confirmer</p>
         <div class="hotel-card-actions">
           <strong>${pencmiFormatPrice(hotelNightlyPrice(listing), listing.currency || "FCFA")}</strong>
           <a class="btn btn-light" href="${hotelRouteHref(`/hotels/${listing.id}`)}">Voir détails</a>
-          <a class="btn btn-primary" href="${hotelRouteHref(`/hotels/${listing.id}`)}#reservation">Réserver</a>
+          <a class="btn btn-primary" href="${hotelRouteHref(`/hotels/${listing.id}`)}#reservation">Demander une réservation</a>
         </div>
       </div>
     </article>
@@ -383,6 +383,8 @@ async function loadHotels() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  const { hotelCatalog } = await import('../publier/hotel-publication.mjs');
+  hotelTypeLabels = hotelCatalog.types;
   hotelHeader();
   hotelHero();
   hotelQuickSuggestions();
