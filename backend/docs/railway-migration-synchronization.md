@@ -1,8 +1,30 @@
 # Railway : diagnostic et synchronisation des migrations — étape 6.2
 
-## État vérifié le 28 octobre 2026
+## Résultat après autorisation et exécution le 28 octobre 2026
 
-**Aucune migration appliquée pendant cette intervention. Aucune donnée modifiée. Déploiement non validé.**
+**Les trois migrations manquantes ont été appliquées en production après restauration et essais sur un serveur PostgreSQL isolé. Aucun changement des données métier existantes détecté.**
+
+- La recette `migration-check-20261028` a finalement pu être créée, avec uniquement un service PostgreSQL 18.6, sans backend, worker, emails ni intégration active de production.
+- La sauvegarde initiale a été restaurée avec `pg_restore` natif dans `pencmi_verified_test`. Les empreintes des données restaurées étaient identiques à celles de production.
+- Les trois migrations ont été appliquées sur cette copie. Audit Prisma : quatre migrations appliquées, checksums conformes, aucune dérive. Les données existantes avaient la même empreinte après migration.
+- Suite backend sur PostgreSQL réel : **225 tests réussis, aucun ignoré**. Inclut connexion sur un compte copié existant, refresh, rotation, rejeu, déconnexion, concurrence, isolation des sessions, authentification et désactivation d’une clé partenaire, avis annonceurs, création/reprise et soumission de brouillons avec photos. Aucune donnée de recette n’a été injectée en production.
+- Un export récent a ensuite été créé : `%LOCALAPPDATA%\Pencmi\backups\pencmi-20261028-203103.dump.dpapi`, archive de 130 650 octets avant chiffrement. SHA-256 : `DD3880E42FA6663EF23052B1FC8F83A054432C2E6338C4F90F2F8AD6CB1B94DD`. Cette archive a aussi été restaurée avec succès dans `pencmi_fresh_test`.
+- Juste avant la migration de production, les données de cette restauration récente ont été comparées à la production : identiques.
+- Exécution depuis le backend Railway actif, par le réseau privé : `npm run prisma:deploy`. Les trois SQL versionnés ont réussi, sans `reset`, `db push`, `resolve` ni modification de leur contenu.
+- Contrôle après migration : les quatre migrations sont appliquées, leurs checksums sont conformes, aucune dérive ni index invalide détecté. `active`, `consumedAt`, `parentTokenId` et les contraintes attendues existent.
+- Empreinte des données existantes avant et après : `ffe9fb9076fc43e14ca91e9ebb8daadf0d87f6a4d85479da34042146eee72752`. Les six utilisateurs, deux annonces immobilières et les données des autres modules sont conservés. Le calcul exclut uniquement la nouvelle table d’avis, les trois nouvelles colonnes et l’historique des migrations, dont les changements sont attendus ; il compare toutes les autres lignes et colonnes.
+- Configuration Railway confirmée : pré-déploiement `["npm run prisma:deploy"]`, démarrage `npm run start:prod`, healthcheck `/api/v1/health`. Présence du CLI Prisma dans l’image active vérifiée. Les futures migrations devront toujours être revues et précédées d’une stratégie de sauvegarde.
+- Vérifications HTTP de production : santé, listes et premières fiches réelles des quatre modules, ainsi que lecture des avis d’un annonceur existant : HTTP 200. Accès à `/auth/me` sans session et requête partenaire avec clé inconnue : HTTP 401, pas d’erreur SQL.
+- Contrôle TypeScript complet sans émission et build NestJS réussis. Outils d’audit : 11 tests réussis. Trois refus de restauration dangereux vérifiés avant tout accès à une archive ou serveur.
+- Après les vérifications, l’environnement temporaire, son service et son volume ont été supprimés pour arrêter leur facturation. Les sauvegardes chiffrées locales et toutes les ressources de production sont conservées.
+
+Les tests de connexion avec mot de passe et de clé partenaire valide ont utilisé uniquement la copie de production : aucun mot de passe réel n’a été demandé ou changé en production, et aucune clé partenaire réelle n’a été utilisée. Les vérifications HTTP ci-dessus ne prétendent donc pas être une connexion manuelle sur le site avec les identifiants du propriétaire.
+
+Les sauvegardes DPAPI restent liées au compte Windows et à ses clés. Elles sont conservées hors Git ; prévoir une politique durable de sauvegarde hors machine. Les snapshots Railway restent indisponibles sur l’offre actuelle, et aucune souscription Pro n’a été activée.
+
+## Diagnostic initial, avant autorisation d’exécution
+
+Les sections suivantes conservent les observations et blocages initiaux. Le résultat final ci-dessus les remplace pour l’état actuel des migrations.
 
 La CLI Railway authentifiée a permis de vérifier :
 
@@ -156,4 +178,11 @@ Aucun compte créé, aucune session révoquée, aucune clé générée, aucun av
 - `backend/scripts/backup-railway-postgres.ps1` : export logique, chiffrement DPAPI et vérification de relecture, sans restauration ni migration.
 - `backend/docs/railway-migration-synchronization.md` : ce diagnostic et le plan conditionnel d’exécution.
 
-Ni `schema.prisma`, ni les SQL versionnés, ni les données existantes, ni les variables du backend de production n’ont été modifiés.
+Complément livré lors de l’exécution autorisée :
+
+- `backend/scripts/database-fingerprint.cjs` et son test : comparaison des données métier préexistantes, en transaction de lecture seule avec snapshot cohérent, sans afficher les lignes.
+- `backend/scripts/restore-railway-test-backup.ps1` : restauration native d’une archive chiffrée vers une nouvelle base `_test`, dans un environnement et un service distincts. Contrôle du cluster avant création, validation du SHA-256, refus des cibles de production et des bases existantes.
+- `backend/scripts/test-backup-transport.cjs` : acheminement binaire paramétré via une table privée temporaire de recette, afin de ne pas placer l’archive dans les arguments SSH ou écrire un fichier local en clair. Chiffrement TLS utilisé pour la connexion de recette ; transport supprimé après restauration. Le probe utilise la base système `postgres`, remplaçable par `TEST_SERVER_DATABASE`.
+- `backend/src/database/migration-readiness-postgres.spec.ts` : tests fonctionnels sur la copie migrée. `TEST_DATABASE_URL` doit viser une base `_test` d’un autre cluster et `PRODUCTION_CLUSTER_ID` doit être fourni. Ces tests modifient uniquement la copie et nettoient leurs données temporaires.
+
+Les fichiers `schema.prisma` et les SQL versionnés n’ont pas été modifiés. La configuration de déploiement Railway a été mise à jour ; le schéma de production a été modifié uniquement par les migrations revues. L’identité de connexion et les autres variables du backend sont inchangées.
