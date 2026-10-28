@@ -580,14 +580,15 @@ function HorizontalListingSection(section) {
 }
 
 function RealEstateCard(listing) {
+  const escapeValue = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   return `
     <article class="listing-card">
-      <a href="${listing.href}" aria-label="${listing.title}">
-        <img src="${listing.image}" alt="${listing.title}">
+      <a href="${listing.href}" aria-label="${escapeValue(listing.title)}">
+        <img src="${escapeValue(listing.image)}" alt="${escapeValue(listing.title)}">
       </a>
-      <p>${listing.category}</p>
-      <h3><a href="${listing.href}">${listing.title}</a></h3>
-      <span>${listing.city}${listing.district ? `, ${listing.district}` : ""}</span>
+      <p>${escapeValue(listing.category)}</p>
+      <h3><a href="${listing.href}">${escapeValue(listing.title)}</a></h3>
+      <span>${escapeValue([listing.city, listing.district].filter(Boolean).join(', '))}</span>
       <strong>${listing.price}</strong>
       ${listing.verified ? "<span>Vérifié</span>" : ""}
       <a href="${listing.href}">Voir détails</a>

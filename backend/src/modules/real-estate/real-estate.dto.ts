@@ -1,5 +1,17 @@
-import { IsDateString, IsIn, IsOptional, IsString } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayUnique,
+  IsArray,
+  IsDateString,
+  IsIn,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+} from 'class-validator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
+import { MAX_LISTING_PHOTOS } from '../../files/listing-photo.constants';
 
 export class RealEstateSearchDto extends PaginationDto {
   @IsOptional()
@@ -16,14 +28,13 @@ export class RealEstateSearchDto extends PaginationDto {
 }
 
 export class CreateRealEstateDto {
-  @IsString()
-  slug: string;
+  @IsOptional()
+  @IsUUID()
+  requestId?: string;
 
+  @IsOptional()
   @IsString()
-  title: string;
-
-  @IsString()
-  city: string;
+  title?: string;
 
   @IsOptional()
   @IsString()
@@ -38,11 +49,29 @@ export class CreateRealEstateDto {
   propertyType?: string;
 
   @IsOptional()
-  @IsString()
-  neighborhood?: string;
+  @IsObject()
+  metadata?: Record<string, unknown>;
 }
 
 export class UpdateRealEstateDto extends CreateRealEstateDto {}
+
+export class PhotoOrderDto {
+  @IsArray()
+  @ArrayMaxSize(MAX_LISTING_PHOTOS)
+  @ArrayUnique()
+  @IsString({ each: true })
+  photoIds: string[];
+}
+
+export class UploadListingPhotoDto {
+  @IsUUID()
+  uploadId: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  replacePhotoId?: string;
+}
 
 export class CreateVisitRequestDto {
   @IsOptional()
@@ -66,7 +95,14 @@ export class CreateVisitRequestDto {
   message?: string;
 }
 
-const visitRequestStatuses = ['pending', 'accepted', 'refused', 'cancelled', 'completed', 'requires_more_info'] as const;
+const visitRequestStatuses = [
+  'pending',
+  'accepted',
+  'refused',
+  'cancelled',
+  'completed',
+  'requires_more_info',
+] as const;
 
 export class UpdateVisitRequestStatusDto {
   @IsIn(visitRequestStatuses)

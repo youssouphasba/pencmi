@@ -12,6 +12,9 @@ const routes = {
 };
 
 let advertiserListings = [];
+function escapeListingValue(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
 let activeStatus = "all";
 let filters = {
   query: "",
@@ -53,21 +56,8 @@ function listFromPayload(payload) {
 }
 
 async function apiRequest(path) {
-  const baseUrl = getApiBaseUrl();
-  const token = getAccessToken();
-  if (!baseUrl || !token) {
-    throw new Error("Connexion annonceur requise.");
-  }
-  const response = await fetch(`${baseUrl}${path}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || "Chargement impossible.");
-  }
-  return payload?.data ?? payload;
+  const { publicationRequest } = await import('/publier/real-estate-api.mjs');
+  return publicationRequest(path);
 }
 
 function mapApiListing(listing, visits = []) {
@@ -298,7 +288,7 @@ function selectOptions(values, selectedValue, labeler = (value) => value) {
 function ListingSearchAndFilters() {
   return `
     <section class="listings-toolbar">
-      <input class="listing-search" type="search" data-filter="query" value="${filters.query}" placeholder="Rechercher par titre, ville ou quartier">
+      <input class="listing-search" type="search" data-filter="query" value="${escapeListingValue(filters.query)}" placeholder="Rechercher par titre, ville ou quartier">
       <div class="filters-grid">
         <select data-filter="status">
           <option value="all">Statut</option>
@@ -312,8 +302,8 @@ function ListingSearchAndFilters() {
           <option value="all">Type d’annonce</option>
           ${selectOptions(transactions, filters.transaction, (value) => value.charAt(0).toUpperCase() + value.slice(1))}
         </select>
-        <input data-filter="region" value="${filters.region}" placeholder="Région">
-        <input data-filter="city" value="${filters.city}" placeholder="Ville">
+        <input data-filter="region" value="${escapeListingValue(filters.region)}" placeholder="Région">
+        <input data-filter="city" value="${escapeListingValue(filters.city)}" placeholder="Ville">
         <select data-filter="period">
           <option value="all">Toutes les périodes</option>
           <option value="today"${filters.period === "today" ? " selected" : ""}>Aujourd’hui</option>
@@ -375,13 +365,13 @@ function AdvertiserListingRow(listing) {
         <div class="listing-title-cell">
           <span class="listing-thumb">Photo</span>
           <div>
-            <strong>${listing.title}</strong>
-            <div>${listing.propertyType} · ${listing.transaction}</div>
+            <strong>${escapeListingValue(listing.title || 'Brouillon sans titre')}</strong>
+            <div>${escapeListingValue(listing.propertyType)} · ${escapeListingValue(listing.transaction)}</div>
           </div>
         </div>
       </td>
       <td>${ListingStatusBadge(listing.status)}</td>
-      <td>${[listing.city, listing.district].filter(Boolean).join(", ")}</td>
+      <td>${escapeListingValue([listing.city, listing.district].filter(Boolean).join(", "))}</td>
       <td>${formatPriceFCFA(listing.price)}</td>
       <td>${listing.quickStats.views}</td>
       <td>${listing.quickStats.contacts}</td>
@@ -397,11 +387,11 @@ function AdvertiserListingRow(listing) {
 function AdvertiserListingCard(listing) {
   return `
     <article class="listing-card">
-      <h3>${listing.title}</h3>
+      <h3>${escapeListingValue(listing.title || 'Brouillon sans titre')}</h3>
       ${ListingStatusBadge(listing.status)}
       <div class="listing-card-grid">
-        <div><span>Ville</span><strong>${listing.city || ""}</strong></div>
-        <div><span>Quartier</span><strong>${listing.district || ""}</strong></div>
+        <div><span>Ville</span><strong>${escapeListingValue(listing.city)}</strong></div>
+        <div><span>Quartier</span><strong>${escapeListingValue(listing.district)}</strong></div>
         <div><span>Prix</span><strong>${formatPriceFCFA(listing.price)}</strong></div>
         <div><span>Vues</span><strong>${listing.quickStats.views}</strong></div>
         <div><span>Contacts</span><strong>${listing.quickStats.contacts}</strong></div>
@@ -444,7 +434,7 @@ function ListingRecommendationsPreview(listing) {
 function ListingActionsMenu(listing) {
   return `
     <div class="listing-actions">
-      <a href="${routeHref(`/immobilier/annonce/${listing.id}`)}">Voir</a>
+      <a href="${routeHref(listing.status === 'active' ? `/immobilier/annonce/${listing.id}` : `/dashboard/immobilier/annonces/${listing.id}/edit`)}">${listing.status === 'active' ? 'Voir' : 'Reprendre'}</a>
       <a href="${routeHref(`/dashboard/immobilier/annonces/${listing.id}/edit`)}">Modifier</a>
       <a href="${routeHref(`/dashboard/immobilier/statistiques?listingId=${listing.id}`)}">Statistiques</a>
       <button type="button" data-open-disable="${listing.id}">Désactiver</button>

@@ -1,12 +1,35 @@
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { FileAsset, FileVisibility, PencmiModule } from '@prisma/client';
+import {
+  FileAsset,
+  FileVisibility,
+  ListingStatus,
+  PencmiModule,
+  Prisma,
+  TargetType,
+} from '@prisma/client';
+import type SharpFactory from 'sharp';
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
 import { dirname, extname, join } from 'path';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../database/prisma/prisma.service';
+import { MAX_PHOTO_BYTES, MAX_PHOTO_PIXELS } from './listing-photo.constants';
 
-type UploadedImage = {
+const sharp: typeof SharpFactory = require('sharp');
+
+export type UploadedImage = {
   buffer: Buffer;
   mimetype: string;
   originalname: string;
@@ -15,10 +38,124 @@ type UploadedImage = {
 
 @Injectable()
 export class FilesService {
+  private readonly logger = new Logger(FilesService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
   ) {}
+
+  async prepareListingPhoto(file: UploadedImage) {
+    if (!file?.buffer?.length || file.buffer.length > MAX_PHOTO_BYTES) {
+      throw new BadRequestException('Choisissez une photo de 5 Mo maximum.');
+    }
+    try {
+      const bytes = file.buffer;
+      const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+      const png = bytes
+        .subarray(0, 8)
+        .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+      const webp =
+        bytes.toString('ascii', 0, 4) === 'RIFF' &&
+        bytes.toString('ascii', 8, 12) === 'WEBP';
+      if (!jpeg && !png && !webp) throw new Error('format');
+      const image = sharp(bytes, {
+        limitInputPixels: MAX_PHOTO_PIXELS,
+        failOn: 'warning',
+      });
+      const metadata = await image.metadata();
+      const mimeTypes: Record<string, string> = {
+        jpeg: 'image/jpeg',
+        png: 'image/png',
+        webp: 'image/webp',
+      };
+      if (
+        !metadata.format ||
+        !mimeTypes[metadata.format] ||
+        (metadata.pages ?? 1) > 1
+      )
+        throw new Error('format');
+      const buffer = await image
+        .rotate()
+        .toFormat(metadata.format as 'jpeg' | 'png' | 'webp')
+        .toBuffer();
+      if (buffer.length > MAX_PHOTO_BYTES) throw new Error('size');
+      return {
+        buffer,
+        size: buffer.length,
+        mimetype: mimeTypes[metadata.format],
+        originalname: `photo.${metadata.format}`,
+      };
+    } catch {
+      throw new BadRequestException(
+        'Photo invalide. Formats acceptés : JPEG, PNG et WebP, sans animation.',
+      );
+    }
+  }
+
+  async storeListingPhoto(
+    tx: Prisma.TransactionClient,
+    ownerUserId: string,
+    listingId: string,
+    id: string,
+    file: UploadedImage,
+  ) {
+    const storageKey = `real-estate/${ownerUserId}/${id}/${randomUUID()}.${file.mimetype.split('/')[1]}`;
+    try {
+      await this.persistBinary(storageKey, file);
+      return await tx.fileAsset.create({
+        data: {
+          id,
+          ownerUserId,
+          module: PencmiModule.real_estate,
+          visibility: FileVisibility.public,
+          mimeType: file.mimetype,
+          sizeBytes: file.size,
+          storageKey,
+          publicUrl: this.buildPublicUrl(id),
+          usages: {
+            create: { targetType: TargetType.listing, targetId: listingId },
+          },
+        },
+      });
+    } catch (error) {
+      await this.deleteBinary({ storageKey } as FileAsset).catch(() =>
+        this.logger.warn(
+          `Nettoyage du fichier immobilier à reprendre : ${storageKey}`,
+        ),
+      );
+      throw error;
+    }
+  }
+
+  async discardPhotoBinary(asset: FileAsset) {
+    await this.deleteBinary(asset);
+  }
+
+  async streamOwnedContent(id: string, ownerUserId: string) {
+    const asset = await this.findOwned(id, ownerUserId);
+    return { asset, buffer: await this.readBinary(asset) };
+  }
+
+  async purgeDeletedListingPhoto(id: string, ownerUserId: string) {
+    const asset = await this.prisma.fileAsset.findFirst({
+      where: {
+        id,
+        ownerUserId,
+        module: PencmiModule.real_estate,
+        deletedAt: { not: null },
+      },
+    });
+    if (!asset) return;
+    try {
+      await this.deleteBinary(asset);
+      await this.prisma.fileAsset.update({
+        where: { id },
+        data: { sizeBytes: 0 },
+      });
+    } catch {
+      this.logger.warn(`Nettoyage du fichier immobilier à reprendre : ${id}`);
+    }
+  }
 
   createUploadPlaceholder(ownerUserId: string) {
     return this.prisma.fileAsset.create({
@@ -33,13 +170,19 @@ export class FilesService {
     });
   }
 
-  findOwned(id: string, ownerUserId: string) {
-    return this.prisma.fileAsset.findFirstOrThrow({
+  async findOwned(id: string, ownerUserId: string) {
+    const asset = await this.prisma.fileAsset.findFirst({
       where: { id, ownerUserId, deletedAt: null },
     });
+    if (!asset) throw new NotFoundException('Fichier introuvable.');
+    return asset;
   }
 
-  async uploadPublicImage(ownerUserId: string, file: UploadedImage, scope: 'avatar' | 'logo') {
+  async uploadPublicImage(
+    ownerUserId: string,
+    file: UploadedImage,
+    scope: 'avatar' | 'logo',
+  ) {
     this.validateImage(file);
     const draft = await this.prisma.fileAsset.create({
       data: {
@@ -66,7 +209,9 @@ export class FilesService {
         },
       });
     } catch (error) {
-      await this.prisma.fileAsset.delete({ where: { id: draft.id } }).catch(() => undefined);
+      await this.prisma.fileAsset
+        .delete({ where: { id: draft.id } })
+        .catch(() => undefined);
       throw error;
     }
   }
@@ -77,6 +222,23 @@ export class FilesService {
     });
     if (!asset) {
       throw new NotFoundException('Fichier introuvable.');
+    }
+
+    if (asset.module === PencmiModule.real_estate) {
+      const usage = await this.prisma.fileUsage.findFirst({
+        where: { fileId: id, targetType: TargetType.listing },
+      });
+      const listing =
+        usage &&
+        (await this.prisma.realEstateListing.findFirst({
+          where: {
+            id: usage.targetId,
+            status: ListingStatus.active,
+            deletedAt: null,
+          },
+          select: { id: true },
+        }));
+      if (!listing) throw new NotFoundException('Fichier introuvable.');
     }
 
     const buffer = await this.readBinary(asset);
@@ -93,6 +255,10 @@ export class FilesService {
 
     if (!asset) {
       throw new NotFoundException('Fichier introuvable.');
+    }
+
+    if (asset.module === PencmiModule.real_estate) {
+      throw new BadRequestException('Gérez cette photo depuis son annonce.');
     }
 
     await this.deleteBinary(asset).catch(() => undefined);
@@ -119,7 +285,9 @@ export class FilesService {
       throw new BadRequestException('Le fichier doit être une image.');
     }
     if (file.size > 5 * 1024 * 1024) {
-      throw new BadRequestException('L’image dépasse la taille maximale autorisée de 5 Mo.');
+      throw new BadRequestException(
+        'L’image dépasse la taille maximale autorisée de 5 Mo.',
+      );
     }
   }
 
@@ -142,7 +310,9 @@ export class FilesService {
 
   private buildPublicUrl(fileId: string) {
     const baseUrl = this.config.get<string>('BACKEND_URL')?.replace(/\/+$/, '');
-    const apiPrefix = (this.config.get<string>('API_PREFIX') ?? 'api/v1').replace(/^\/+|\/+$/g, '');
+    const apiPrefix = (
+      this.config.get<string>('API_PREFIX') ?? 'api/v1'
+    ).replace(/^\/+|\/+$/g, '');
     const path = `/${apiPrefix}/files/public/${fileId}`;
     return baseUrl ? `${baseUrl}${path}` : path;
   }
@@ -157,7 +327,7 @@ export class FilesService {
 
   private async persistBinary(storageKey: string, file: UploadedImage) {
     if (this.getStorageDriver() === 'local') {
-      const targetPath = join(process.cwd(), 'uploads', storageKey);
+      const targetPath = join(this.localDirectory(), storageKey);
       await mkdir(dirname(targetPath), { recursive: true });
       await writeFile(targetPath, file.buffer);
       return;
@@ -166,7 +336,9 @@ export class FilesService {
     const client = this.getS3Client();
     const bucket = this.config.get<string>('S3_BUCKET');
     if (!client || !bucket) {
-      throw new InternalServerErrorException('Le stockage de fichiers n’est pas configuré.');
+      throw new InternalServerErrorException(
+        'Le stockage de fichiers n’est pas configuré.',
+      );
     }
 
     await client.send(
@@ -181,13 +353,15 @@ export class FilesService {
 
   private async readBinary(asset: FileAsset) {
     if (this.getStorageDriver() === 'local') {
-      return readFile(join(process.cwd(), 'uploads', asset.storageKey));
+      return readFile(join(this.localDirectory(), asset.storageKey));
     }
 
     const client = this.getS3Client();
     const bucket = this.config.get<string>('S3_BUCKET');
     if (!client || !bucket) {
-      throw new InternalServerErrorException('Le stockage de fichiers n’est pas configuré.');
+      throw new InternalServerErrorException(
+        'Le stockage de fichiers n’est pas configuré.',
+      );
     }
 
     const response = await client.send(
@@ -207,15 +381,19 @@ export class FilesService {
 
   private async deleteBinary(asset: FileAsset) {
     if (this.getStorageDriver() === 'local') {
-      const targetPath = join(process.cwd(), 'uploads', asset.storageKey);
-      await unlink(targetPath).catch(() => undefined);
+      const targetPath = join(this.localDirectory(), asset.storageKey);
+      await unlink(targetPath).catch((error) => {
+        if (error.code !== 'ENOENT') throw error;
+      });
       return;
     }
 
     const client = this.getS3Client();
     const bucket = this.config.get<string>('S3_BUCKET');
     if (!client || !bucket) {
-      return;
+      throw new InternalServerErrorException(
+        'Le stockage de fichiers n’est pas configuré.',
+      );
     }
 
     await client.send(
@@ -229,6 +407,13 @@ export class FilesService {
   private getStorageDriver() {
     const driver = this.config.get<string>('STORAGE_DRIVER');
     return driver === 'r2' || driver === 's3' ? driver : 'local';
+  }
+
+  private localDirectory() {
+    return (
+      this.config.get<string>('LOCAL_UPLOAD_DIRECTORY') ||
+      join(process.cwd(), 'uploads')
+    );
   }
 
   private getS3Client() {

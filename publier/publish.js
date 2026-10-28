@@ -5,7 +5,7 @@ const routes = {
   vehicles: "/voitures",
   trips: "/voyages",
   dashboard: "/dashboard",
-  dashboardListings: "/dashboard/listings/immobilier",
+  dashboardListings: "/dashboard/immobilier/annonces",
   loginRedirect: "/login?next=/publier?category=immobilier"
 };
 
@@ -57,6 +57,20 @@ const contactOptions = [
 
 let currentStep = 0;
 let statusMessage = "";
+const publicationModule = import(new URL('./real-estate-api.mjs', document.currentScript.src).href);
+let listingId = new URLSearchParams(location.search).get('id');
+let creationRequestId;
+let publicationBusy = false;
+let publicationReady = false;
+let publicationErrors = [];
+let publicationNeedsLogin = false;
+const photoPreviews = new Map();
+const pendingPhotoUploads = new Map();
+const publicationStatusLabels = { draft: 'Brouillon', pending_review: 'En attente de validation', active: 'Active',
+  refused: 'Refusée', suspended: 'Suspendue', expired: 'Expirée', deleted: 'Supprimée' };
+function escapePublication(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+}
 let draft = {
   status: "draft",
   location: { country: "SN", isApproximateLocation: false },
@@ -188,7 +202,7 @@ function optionLabel(value) {
     total: "Prix total"
   };
 
-  return labels[value] || value || "Non renseigné";
+  return labels[value] || escapePublication(value) || "Non renseigné";
 }
 
 function setNested(path, value) {
@@ -316,7 +330,7 @@ function CitySelect() {
 }
 
 function DistrictInput() {
-  return `<input type="text" data-path="location.district" value="${draft.location.district || ""}" placeholder="Quartier">`;
+  return `<input type="text" data-path="location.district" value="${escapePublication(draft.location.district)}" placeholder="Quartier">`;
 }
 
 function ApproximateLocationToggle() {
@@ -335,9 +349,9 @@ function SenegalLocationSelector() {
       <label class="form-field"><span>Département</span>${DepartmentSelect()}</label>
       <label class="form-field"><span>Ville</span>${CitySelect()}</label>
       <label class="form-field"><span>Quartier</span>${DistrictInput()}</label>
-      <label class="form-field full"><span>Adresse ou indication</span><input type="text" data-path="location.addressHint" value="${draft.location.addressHint || ""}" placeholder="Repère, axe ou indication utile"></label>
-      <label class="form-field"><span>Latitude</span><input type="number" step="any" data-path="location.latitude" value="${draft.location.latitude || ""}"></label>
-      <label class="form-field"><span>Longitude</span><input type="number" step="any" data-path="location.longitude" value="${draft.location.longitude || ""}"></label>
+      <label class="form-field full"><span>Adresse ou indication</span><input type="text" data-path="location.addressHint" value="${escapePublication(draft.location.addressHint)}" placeholder="Repère, axe ou indication utile"></label>
+      <label class="form-field"><span>Latitude</span><input type="number" step="any" data-path="location.latitude" value="${escapePublication(draft.location.latitude ?? '')}"></label>
+      <label class="form-field"><span>Longitude</span><input type="number" step="any" data-path="location.longitude" value="${escapePublication(draft.location.longitude ?? '')}"></label>
       <div class="form-field full">${ApproximateLocationToggle()}</div>
     </div>
   `;
@@ -357,7 +371,7 @@ function StepPricing() {
     <section class="step-card">
       <h2>Quel est le prix ?</h2>
       <div class="form-grid">
-        <label class="form-field"><span>Prix</span><input type="number" min="0" data-path="pricing.price" value="${draft.pricing.price || ""}"></label>
+        <label class="form-field"><span>Prix</span><input type="number" min="0" step="1" data-path="pricing.price" value="${escapePublication(draft.pricing.price ?? '')}"></label>
         <label class="form-field"><span>Devise</span><input type="text" value="FCFA" disabled></label>
         <label class="form-field"><span>Période</span><select data-path="pricing.pricePeriod">
           <option value="month"${draft.pricing.pricePeriod === "month" ? " selected" : ""}>Par mois</option>
@@ -384,7 +398,7 @@ function StepFeatures() {
     <section class="step-card">
       <h2>Ajoutez les caractéristiques du bien</h2>
       <div class="form-grid">
-        ${numericFields.map(([key, label]) => `<label class="form-field"><span>${label}</span><input type="number" min="0" data-path="features.${key}" value="${draft.features[key] || ""}"></label>`).join("")}
+        ${numericFields.map(([key, label]) => `<label class="form-field"><span>${label}</span><input type="number" min="0" data-path="features.${key}" value="${escapePublication(draft.features[key] ?? '')}"></label>`).join("")}
       </div>
       <div class="checkbox-list">
         ${featureOptions.map(([key, label]) => `<label class="choice-card"><input type="checkbox" data-path="features.${key}"${draft.features[key] ? " checked" : ""}><span>${label}</span></label>`).join("")}
@@ -400,11 +414,22 @@ function StepPhotos() {
       <p>Ajoutez des photos claires du bien pour augmenter vos chances d’être contacté.</p>
       <div class="photo-dropzone">
         <div>
-          <strong>Sélection ou glisser-déposer prévu</strong>
-          <p>Les annonces avec photos reçoivent plus de contacts.</p>
-          <input type="file" multiple accept=".jpg,.jpeg,.png,.webp">
+          <strong>Sélectionner des photos</strong>
+          <p>JPEG, PNG ou WebP · 5 Mo par photo · 12 photos maximum</p>
+          <input type="file" data-photo-upload multiple accept="image/jpeg,image/png,image/webp" aria-label="Ajouter des photos">
         </div>
       </div>
+      <div class="publication-photos">${draft.photos.map((photo, index) => `
+        <figure class="publication-photo">
+          ${photoPreviews.has(photo.id) ? `<img src="${escapePublication(photoPreviews.get(photo.id))}" alt="Photo ${index + 1}">` : '<span>Chargement de la photo…</span>'}
+          <figcaption>${index === 0 ? 'Photo principale' : `Photo ${index + 1}`}</figcaption>
+          <div class="photo-actions">
+            <button type="button" class="btn btn-ghost" data-photo-move="${photo.id}" data-direction="-1" aria-label="Déplacer avant" title="Déplacer avant" ${index === 0 ? 'disabled' : ''}>←</button>
+            <button type="button" class="btn btn-ghost" data-photo-move="${photo.id}" data-direction="1" aria-label="Déplacer après" title="Déplacer après" ${index === draft.photos.length - 1 ? 'disabled' : ''}>→</button>
+            <button type="button" class="btn btn-ghost" data-photo-replace="${photo.id}">Remplacer</button>
+            <button type="button" class="btn btn-ghost" data-photo-delete="${photo.id}">Supprimer</button>
+          </div>
+        </figure>`).join('')}</div>
     </section>
   `;
 }
@@ -414,8 +439,8 @@ function StepDescription() {
     <section class="step-card">
       <h2>Décrivez votre bien</h2>
       <div class="form-grid single">
-        <label class="form-field"><span>Titre de l’annonce</span><input type="text" data-path="content.title" value="${draft.content.title || ""}" placeholder="Exemple : Appartement F3 lumineux à Dakar"></label>
-        <label class="form-field"><span>Description</span><textarea data-path="content.description" maxlength="1200" placeholder="Décrivez le bien, le quartier, les conditions et les points forts.">${draft.content.description || ""}</textarea></label>
+        <label class="form-field"><span>Titre de l’annonce</span><input type="text" maxlength="200" data-path="content.title" value="${escapePublication(draft.content.title)}" placeholder="Exemple : Appartement F3 lumineux à Dakar"></label>
+        <label class="form-field"><span>Description</span><textarea data-path="content.description" maxlength="1200" placeholder="Décrivez le bien, le quartier, les conditions et les points forts.">${escapePublication(draft.content.description)}</textarea></label>
       </div>
       <p>${(draft.content.description || "").length}/1200 caractères</p>
     </section>
@@ -435,8 +460,8 @@ function StepConditions() {
     <section class="step-card">
       <h2>Ajoutez les conditions</h2>
       <div class="form-grid">
-        ${fields.map(([key, label]) => `<label class="form-field"><span>${label}</span><input type="number" min="0" data-path="conditions.${key}" value="${draft.conditions[key] || ""}"></label>`).join("")}
-        <label class="form-field"><span>Disponible à partir de</span><input type="date" data-path="conditions.availableFrom" value="${draft.conditions.availableFrom || ""}"></label>
+        ${fields.map(([key, label]) => `<label class="form-field"><span>${label}</span><input type="number" min="0" data-path="conditions.${key}" value="${escapePublication(draft.conditions[key] ?? '')}"></label>`).join("")}
+        <label class="form-field"><span>Disponible à partir de</span><input type="date" data-path="conditions.availableFrom" value="${escapePublication(draft.conditions.availableFrom)}"></label>
       </div>
       <div class="checkbox-list">
         <label class="choice-card"><input type="checkbox" data-path="conditions.noAgencyFee"${draft.conditions.noAgencyFee ? " checked" : ""}><span>Pas de commission agence</span></label>
@@ -451,7 +476,7 @@ function StepDocuments() {
   return `
     <section class="step-card">
       <h2>Documents disponibles</h2>
-      <p>Indiquez les documents disponibles pour rassurer les clients.</p>
+      <p>Indiquez uniquement les documents disponibles. Aucun document n’est téléversé ni vérifié à cette étape.</p>
       <div class="checkbox-list">
         ${draft.documents.map((document, index) => `<label class="choice-card"><input type="checkbox" data-document-index="${index}"${document.available ? " checked" : ""}><span>${document.label}</span></label>`).join("")}
       </div>
@@ -469,10 +494,10 @@ function StepContactPreferences() {
         ${contactOptions.map(([key, label]) => `<label class="choice-card"><input type="checkbox" data-path="contactPreferences.${key}"${preferences[key] ? " checked" : ""}><span>${label}</span></label>`).join("")}
       </div>
       <div class="form-grid">
-        <label class="form-field"><span>Numéro WhatsApp</span><input type="tel" data-path="contactPreferences.whatsappNumber" value="${preferences.whatsappNumber || ""}"></label>
-        <label class="form-field"><span>Numéro de téléphone</span><input type="tel" data-path="contactPreferences.phoneNumber" value="${preferences.phoneNumber || ""}"></label>
-        <label class="form-field"><span>Email de contact</span><input type="email" data-path="contactPreferences.contactEmail" value="${preferences.contactEmail || ""}"></label>
-        <label class="form-field"><span>Email de notification</span><input type="email" data-path="contactPreferences.notificationEmail" value="${preferences.notificationEmail || ""}"></label>
+        <label class="form-field"><span>Numéro WhatsApp</span><input type="tel" data-path="contactPreferences.whatsappNumber" value="${escapePublication(preferences.whatsappNumber)}"></label>
+        <label class="form-field"><span>Numéro de téléphone</span><input type="tel" data-path="contactPreferences.phoneNumber" value="${escapePublication(preferences.phoneNumber)}"></label>
+        <label class="form-field"><span>Email de contact</span><input type="email" data-path="contactPreferences.contactEmail" value="${escapePublication(preferences.contactEmail)}"></label>
+        <label class="form-field"><span>Email de notification</span><input type="email" data-path="contactPreferences.notificationEmail" value="${escapePublication(preferences.notificationEmail)}"></label>
       </div>
       <div class="checkbox-list">
         <label class="choice-card"><input type="checkbox" data-path="contactPreferences.emailNotificationsEnabled"${preferences.emailNotificationsEnabled ? " checked" : ""}><span>Recevoir une notification par email quand un client m’écrit</span></label>
@@ -488,14 +513,13 @@ function StepPreview() {
       <h2>Prévisualisez votre annonce</h2>
       <p>Vérifiez les informations avant de soumettre votre annonce.</p>
       <div class="preview-box">
-        <div class="preview-photo">Aperçu photo principale</div>
-        <strong>${draft.content.title || "Titre de l’annonce"}</strong>
+        <div class="preview-photo">${photoPreviews.has(draft.photos[0]?.id) ? `<img src="${escapePublication(photoPreviews.get(draft.photos[0].id))}" alt="Photo principale">` : 'Aucune photo'}</div>
+        <strong>${escapePublication(draft.content.title || "Titre de l’annonce")}</strong>
         <span>${formatPriceFCFA(draft.pricing.price) || "Prix non renseigné"}</span>
-        <span>${[draft.location.city, draft.location.district].filter(Boolean).join(", ") || "Localisation non renseignée"}</span>
+        <span>${escapePublication([draft.location.city, draft.location.district].filter(Boolean).join(", ") || "Localisation non renseignée")}</span>
         <span>${optionLabel(draft.propertyType)} · ${optionLabel(draft.transaction)}</span>
-        <p>${draft.content.description || "Description non renseignée."}</p>
+        <p>${escapePublication(draft.content.description || "Description non renseignée.")}</p>
         <div class="badge-row">${contactOptions.filter(([key]) => draft.contactPreferences[key]).map(([, label]) => `<span class="badge">${label}</span>`).join("")}</div>
-        <button class="btn btn-ghost" type="button">Ajouter aux favoris</button>
       </div>
     </section>
   `;
@@ -514,7 +538,7 @@ function StepSubmit() {
           <a class="btn btn-primary" href="${routes.dashboardListings}">Voir mes annonces</a>
         </div>
       ` : `
-        <p>Votre annonce sera enregistrée plus tard avec le statut en attente de validation.</p>
+        <p>Votre annonce sera examinée avant d’apparaître dans les résultats publics.</p>
         <button class="btn btn-primary" type="button" data-submit-listing>Soumettre l’annonce</button>
       `}
     </section>
@@ -535,10 +559,10 @@ function ListingDraftSummary() {
       <h2>Résumé</h2>
       ${ListingCompletionScore()}
       <div class="summary-list">
-        <div class="summary-item"><span>Statut</span><strong>Brouillon</strong></div>
+        <div class="summary-item"><span>Statut</span><strong>${publicationStatusLabels[draft.status] || 'Brouillon'}</strong></div>
         <div class="summary-item"><span>Type d’annonce</span><strong>${optionLabel(draft.transaction)}</strong></div>
         <div class="summary-item"><span>Type de bien</span><strong>${optionLabel(draft.propertyType)}</strong></div>
-        <div class="summary-item"><span>Ville</span><strong>${draft.location.city || "Non renseignée"}</strong></div>
+        <div class="summary-item"><span>Ville</span><strong>${escapePublication(draft.location.city || "Non renseignée")}</strong></div>
         <div class="summary-item"><span>Prix</span><strong>${formatPriceFCFA(draft.pricing.price) || "Non renseigné"}</strong></div>
         <div class="summary-item"><span>Photos</span><strong>${draft.photos.length}</strong></div>
         <div class="summary-item"><span>Contacts</span><strong>${enabledContacts.join(", ") || "Aucun"}</strong></div>
@@ -588,15 +612,17 @@ function PublishRealEstatePage(errorMessage = "") {
     <div class="publish-shell">
       <section class="publish-main">
         <div class="publish-top">
-          <h1>Publier une annonce immobilière</h1>
+          <h1>${listingId ? 'Modifier mon annonce immobilière' : 'Publier une annonce immobilière'}</h1>
           <p>Étape ${currentStep + 1} sur 12</p>
           <div class="progress-track"><div class="progress-bar" style="width:${progress}%"></div></div>
           <button class="btn btn-ghost mobile-summary-toggle" type="button" data-toggle-summary>Voir le résumé</button>
         </div>
         ${PublishStepper()}
         ${currentStepContent()}
-        ${FormErrorMessage(errorMessage)}
-        ${statusMessage ? `<div class="status-message">${statusMessage}</div>` : ""}
+        ${publicationBusy ? '<p class="publication-loading" role="status">Traitement en cours…</p>' : ''}
+        ${FormErrorMessage(escapePublication(errorMessage))}
+        ${publicationNeedsLogin ? `<a class="btn btn-light" target="_blank" rel="noopener" href="/login?next=${encodeURIComponent(location.pathname + location.search)}">Se reconnecter</a>` : ''}
+        ${statusMessage ? `<div class="status-message" role="status">${escapePublication(statusMessage)}</div>` : ""}
         ${PublishNavigationButtons()}
       </section>
       ${ListingDraftSummary()}
@@ -604,6 +630,29 @@ function PublishRealEstatePage(errorMessage = "") {
   `;
 
   bindPublishEvents();
+  document.querySelector('#publish-page').setAttribute('aria-busy', String(publicationBusy));
+  if (publicationBusy || !publicationReady) document.querySelectorAll('#publish-page button, #publish-page input, #publish-page select, #publish-page textarea').forEach(element => { element.disabled = true; });
+  if (!publicationBusy && !publicationReady) {
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.className = 'btn btn-light';
+    retry.textContent = 'Réessayer le chargement';
+    retry.addEventListener('click', initializeRealEstatePublication);
+    document.querySelector('.publish-main').append(retry);
+  }
+  publicationErrors.forEach(error => {
+    if (error.step !== currentStep) return;
+    const field = document.querySelector(`[data-path="${CSS.escape(error.path)}"]`);
+    const message = document.createElement('small');
+    message.className = 'publication-field-error';
+    message.textContent = error.message;
+    if (!field) {
+      document.querySelector('.step-card').append(message);
+      return;
+    }
+    field.setAttribute('aria-invalid', 'true');
+    field.after(message);
+  });
 }
 
 function coerceValue(input) {
@@ -620,6 +669,10 @@ function coerceValue(input) {
 
 function bindDraftInputs() {
   document.querySelectorAll("[data-path]").forEach((input) => {
+    input.addEventListener("input", () => {
+      setNested(input.dataset.path, coerceValue(input));
+      statusMessage = '';
+    });
     input.addEventListener("change", () => {
       setNested(input.dataset.path, coerceValue(input));
 
@@ -628,8 +681,7 @@ function bindDraftInputs() {
         draft.location.city = "";
       }
 
-      statusMessage = "";
-      PublishRealEstatePage();
+      if (input.dataset.path === 'location.region') PublishRealEstatePage();
     });
   });
 
@@ -675,32 +727,156 @@ function bindPublishEvents() {
     PublishRealEstatePage();
   });
 
-  document.querySelector("[data-save-draft]")?.addEventListener("click", () => {
-    draft.status = "draft";
-    statusMessage = "Brouillon enregistré.";
-    PublishRealEstatePage();
-  });
+  document.querySelector("[data-save-draft]")?.addEventListener("click", () => runPublicationOperation(async () => {
+    await savePublication();
+    statusMessage = 'Brouillon enregistré.';
+  }));
 
   document.querySelectorAll("[data-submit-listing]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const requiredSteps = [0, 1, 2, 3, 6, 9];
-      const error = requiredSteps.map(validatePublishStep).find(Boolean);
-      if (error) {
-        PublishRealEstatePage(error);
-        return;
-      }
-
-      draft.status = "pending_review";
+    button.addEventListener("click", () => runPublicationOperation(async () => {
+      await savePublication();
+      const { publicationRequest } = await publicationModule;
+      const saved = await publicationRequest(`/dashboard/immobilier/${listingId}/submit`, { method: 'POST' });
+      draft.status = saved.status;
       currentStep = 11;
       statusMessage = "";
-      PublishRealEstatePage();
-    });
+    }));
   });
 
   document.querySelector("[data-toggle-summary]")?.addEventListener("click", () => {
     document.querySelector("#draft-summary").classList.toggle("is-open");
   });
+  bindPhotoEvents();
 }
 
-PublishHeader();
-PublishRealEstatePage();
+async function savePublication() {
+  if (!publicationReady) throw new Error('Veuillez charger votre annonce avant de la modifier.');
+  const { publicationRequest, publicationPayload, publicationOperationId } = await publicationModule;
+  const body = publicationPayload(draft);
+  if (!listingId) {
+    creationRequestId ||= sessionStorage.getItem('pencmi_real_estate_creation') || publicationOperationId();
+    sessionStorage.setItem('pencmi_real_estate_creation', creationRequestId);
+    const created = await publicationRequest('/dashboard/immobilier', { method: 'POST', body: { ...body, requestId: creationRequestId } });
+    listingId = created.id;
+    const url = new URL(location.href);
+    url.searchParams.set('id', listingId);
+    history.replaceState(null, '', url);
+    sessionStorage.removeItem('pencmi_real_estate_creation');
+  }
+  const saved = await publicationRequest(`/dashboard/immobilier/${listingId}`, { method: 'PATCH', body });
+  draft.status = saved.status;
+}
+
+async function runPublicationOperation(operation) {
+  if (publicationBusy) return;
+  publicationBusy = true;
+  statusMessage = '';
+  publicationErrors = [];
+  publicationNeedsLogin = false;
+  PublishRealEstatePage();
+  let message = '';
+  try { await operation(); }
+  catch (error) {
+    message = error.message;
+    publicationNeedsLogin = error.status === 401 || ['SESSION_INVALID', 'COORDINATION_UNAVAILABLE', 'REFRESH_UNCERTAIN'].includes(error.code);
+    const { fieldLocation } = await publicationModule;
+    publicationErrors = (error.fields || []).map(field => ({ ...fieldLocation(field.path), message: field.message }));
+    if (publicationErrors.length) currentStep = publicationErrors[0].step;
+  } finally {
+    publicationBusy = false;
+    PublishRealEstatePage(message);
+  }
+}
+
+async function loadPhotoPreviews() {
+  const { publicationRequest } = await publicationModule;
+  for (const [id, url] of photoPreviews) {
+    if (draft.photos.some(photo => photo.id === id)) continue;
+    if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+    photoPreviews.delete(id);
+  }
+  for (const photo of draft.photos) {
+    if (photoPreviews.has(photo.id)) continue;
+    if (photo.legacy) {
+      photoPreviews.set(photo.id, photo.url);
+      continue;
+    }
+    const blob = await publicationRequest(`/files/${photo.id}/content`, { binary: true });
+    photoPreviews.set(photo.id, URL.createObjectURL(blob));
+  }
+}
+
+async function uploadPublicationPhotos(files, replacePhotoId) {
+  const { publicationRequest, publicationOperationId } = await publicationModule;
+  await savePublication();
+  for (const file of files) {
+    const key = `${replacePhotoId || ''}:${file.name}:${file.size}:${file.lastModified}`;
+    const uploadId = pendingPhotoUploads.get(key) || publicationOperationId();
+    pendingPhotoUploads.set(key, uploadId);
+    const body = new FormData();
+    body.append('photo', file);
+    body.append('uploadId', uploadId);
+    if (replacePhotoId) body.append('replacePhotoId', replacePhotoId);
+    await publicationRequest(`/dashboard/immobilier/${listingId}/photos`, { method: 'POST', body });
+    const saved = await publicationRequest(`/dashboard/immobilier/${listingId}`);
+    draft.photos = saved.photos;
+    draft.status = saved.status;
+    pendingPhotoUploads.delete(key);
+  }
+  await loadPhotoPreviews();
+}
+
+function bindPhotoEvents() {
+  document.querySelector('[data-photo-upload]')?.addEventListener('change', event => {
+    const files = [...event.target.files];
+    if (files.length) runPublicationOperation(() => uploadPublicationPhotos(files));
+  });
+  document.querySelectorAll('[data-photo-delete]').forEach(button => button.addEventListener('click', () => runPublicationOperation(async () => {
+    const { publicationRequest } = await publicationModule;
+    const id = button.dataset.photoDelete;
+    await publicationRequest(`/dashboard/immobilier/${listingId}/photos/${id}`, { method: 'DELETE' });
+    draft.photos = draft.photos.filter(photo => photo.id !== id);
+    draft.status = 'draft';
+    if (photoPreviews.get(id)?.startsWith('blob:')) URL.revokeObjectURL(photoPreviews.get(id));
+    photoPreviews.delete(id);
+  })));
+  document.querySelectorAll('[data-photo-move]').forEach(button => button.addEventListener('click', () => runPublicationOperation(async () => {
+    const photos = [...draft.photos];
+    const from = photos.findIndex(photo => photo.id === button.dataset.photoMove);
+    const to = from + Number(button.dataset.direction);
+    if (to < 0 || to >= photos.length) return;
+    [photos[from], photos[to]] = [photos[to], photos[from]];
+    const { publicationRequest } = await publicationModule;
+    await publicationRequest(`/dashboard/immobilier/${listingId}/photos/order`, { method: 'PATCH', body: { photoIds: photos.map(photo => photo.id) } });
+    draft.photos = photos;
+    draft.status = 'draft';
+  })));
+  document.querySelectorAll('[data-photo-replace]').forEach(button => button.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/png,image/webp';
+    input.addEventListener('change', () => { if (input.files.length) runPublicationOperation(() => uploadPublicationPhotos([...input.files], button.dataset.photoReplace)); });
+    input.click();
+  }));
+}
+
+async function initializeRealEstatePublication() {
+  document.body.dataset.realEstatePublication = '';
+  PublishHeader();
+  await runPublicationOperation(async () => {
+    const { publicationRequest, publicationFromListing } = await publicationModule;
+    if (!localStorage.getItem('pencmi_access_token')) {
+      location.replace(`/login?next=${encodeURIComponent(location.pathname + location.search)}`);
+      return;
+    }
+    if (!listingId) { publicationReady = true; return; }
+    const saved = await publicationRequest(`/dashboard/immobilier/${encodeURIComponent(listingId)}`);
+    draft = publicationFromListing(saved, draft);
+    await loadPhotoPreviews();
+    publicationReady = true;
+  });
+}
+
+if (!new URLSearchParams(location.search).get('category') || new URLSearchParams(location.search).get('category') === 'immobilier') {
+  initializeRealEstatePublication();
+}

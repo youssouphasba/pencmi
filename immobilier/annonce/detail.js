@@ -105,6 +105,7 @@ function mapListing(listing) {
     city: listing.city,
     district: listing.neighborhood,
     description: listing.description,
+    contactPreferences: metadata.contactPreferences || {},
     price: listing.price,
     createdAt: listing.createdAt,
     updatedAt: listing.updatedAt,
@@ -126,6 +127,10 @@ function mapListing(listing) {
       openingHours: profile.openingHours,
     },
   };
+}
+
+function escapeListingDetail(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 }
 
 function RealEstateHeader() {
@@ -181,7 +186,7 @@ function RealEstatePhotoGallery(listing) {
 
   return `
     <section class="detail-card photo-gallery">
-      <img class="gallery-main-image" data-photo-main src="${listing.coverPhoto}" alt="${listing.title}">
+      <img class="gallery-main-image" data-photo-main src="${escapeListingDetail(listing.coverPhoto)}" alt="${escapeListingDetail(listing.title)}">
       <div class="badge-row"><span class="badge">${listing.photos.length} photo${listing.photos.length > 1 ? "s" : ""}</span></div>
       <div class="gallery-thumbnails">
         ${listing.photos.map((photo, index) => `
@@ -205,9 +210,9 @@ function ListingMainInfo(listing) {
   return `
     <section class="detail-card main-info">
       <div class="badge-row">${badges.map((badge) => `<span class="badge">${badge}</span>`).join("")}</div>
-      <h1>${listing.title}</h1>
+      <h1>${escapeListingDetail(listing.title)}</h1>
       ${listing.price ? `<div class="price">${formatPriceFCFA(listing.price)}</div>` : ""}
-      <p>${[listing.district, listing.city].filter(Boolean).join(", ")}</p>
+      <p>${escapeListingDetail([listing.district, listing.city].filter(Boolean).join(", "))}</p>
       <p>Mis à jour le ${formatDate(listing.updatedAt || listing.createdAt)}</p>
       <div class="action-row">
         <a class="btn btn-ghost" href="${routes.favorites}">Ajouter aux favoris</a>
@@ -233,7 +238,7 @@ function PropertyFeaturesGrid(listing) {
 }
 
 function DescriptionSection(listing) {
-  return `<section class="detail-card"><h2>Description</h2><p>${listing.description || "Aucune description disponible pour le moment."}</p></section>`;
+  return `<section class="detail-card"><h2>Description</h2><p>${escapeListingDetail(listing.description || "Aucune description disponible pour le moment.")}</p></section>`;
 }
 
 function ContactCard(listing) {
@@ -252,7 +257,7 @@ function ContactCard(listing) {
       ${advertiser.openingHours ? `<p>${advertiser.openingHours}</p>` : ""}
       <div class="contact-actions">
         <a class="btn btn-light" href="${advertiserHref}">Voir le profil</a>
-        <button class="btn btn-ghost" type="button" data-open-visit>Demander une visite</button>
+        ${listing.contactPreferences.visitRequestEnabled !== false ? '<button class="btn btn-ghost" type="button" data-open-visit>Demander une visite</button>' : ''}
       </div>
     </aside>
   `;

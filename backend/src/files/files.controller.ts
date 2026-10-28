@@ -23,7 +23,24 @@ export class FilesController {
     const { asset, buffer } = await this.service.streamPublicContent(id);
     response.setHeader('Content-Type', asset.mimeType);
     response.setHeader('Content-Length', String(buffer.length));
-    response.setHeader('Cache-Control', 'public, max-age=86400');
+    response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.send(buffer);
+  }
+
+  @Get(':id/content')
+  async streamOwned(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthenticatedUser,
+    @Res() response: Response,
+  ) {
+    const { asset, buffer } = await this.service.streamOwnedContent(
+      id,
+      user.id,
+    );
+    response.setHeader('Content-Type', asset.mimeType);
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
     response.send(buffer);
   }
 

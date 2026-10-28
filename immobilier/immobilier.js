@@ -469,8 +469,9 @@ function SavedSearchButton() {
 }
 
 function RealEstateListingCard(listing) {
+  const escapeValue = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const media = listing.coverPhoto
-    ? `<img src="${listing.coverPhoto}" alt="${listing.title}" style="width:100%;height:220px;object-fit:cover;border-radius:8px;">`
+    ? `<img src="${escapeValue(listing.coverPhoto)}" alt="${escapeValue(listing.title)}" style="width:100%;height:220px;object-fit:cover;border-radius:8px;">`
     : `<div class="map-placeholder" style="min-height:220px;">Aucune photo disponible</div>`;
 
   const badges = [
@@ -486,8 +487,8 @@ function RealEstateListingCard(listing) {
         ${badges.map((badge) => `<span class="status-badge">${badge}</span>`).join("")}
       </div>
       <div style="display:grid;gap:8px;">
-        <h3 style="margin:0;color:var(--blue-dark);">${listing.title}</h3>
-        <p style="margin:0;color:var(--muted);">${[listing.district, listing.city].filter(Boolean).join(", ")}</p>
+        <h3 style="margin:0;color:var(--blue-dark);">${escapeValue(listing.title)}</h3>
+        <p style="margin:0;color:var(--muted);">${escapeValue([listing.district, listing.city].filter(Boolean).join(", "))}</p>
         ${listing.price ? `<strong style="font-size:1.1rem;color:var(--blue-dark);">${formatPriceFCFA(listing.price)}</strong>` : ""}
         ${formatPropertyFeatures(listing) ? `<p style="margin:0;color:var(--muted);">${formatPropertyFeatures(listing)}</p>` : ""}
         <p style="margin:0;color:var(--muted);">Annonceur : ${listing.advertiser.name}</p>

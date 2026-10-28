@@ -269,6 +269,25 @@
   display: none;
 }
 
+.publication-photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.publication-photo { margin: 0; min-width: 0; }
+body[data-real-estate-publication] .photo-dropzone > div { width: 100%; min-width: 0; }
+body[data-real-estate-publication] .photo-dropzone input { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; }
+.publication-photo img, .preview-photo img { width: 100%; height: 180px; object-fit: contain; }
+.publication-photo figcaption { margin: 8px 0; }
+.photo-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.photo-actions .btn { padding: 8px; min-width: 0; }
+.publication-field-error { color: #9f2424; }
+.publication-loading { margin: 16px 28px; color: var(--blue-dark); }
+[aria-invalid="true"] { border-color: #9f2424; }
+.publish-main, .step-card { min-width: 0; }
+
 @media (max-width: 980px) {
   .publish-shell {
     grid-template-columns: 1fr;
@@ -313,6 +332,8 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
+
+  body[data-real-estate-publication] .publish-nav { position: static; }
 
   .publish-nav .btn {
     width: 100%;
