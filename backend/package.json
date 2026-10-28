@@ -16,6 +16,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "prisma:audit": "node scripts/audit-migrations.cjs",
     "prisma:studio": "prisma studio",
     "admin:create": "node scripts/create-admin.cjs",
     "seed:demo:real-estate": "node scripts/seed-real-estate-demo.cjs",
