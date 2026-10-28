@@ -285,10 +285,6 @@ function mapHomeRealEstateListing(listing) {
   const photos = Array.isArray(metadata.photos) ? metadata.photos.filter(Boolean) : [];
   const image = metadata.coverPhoto || photos[0] || "";
 
-  if (!image) {
-    return null;
-  }
-
   return {
     image,
     category: formatRealEstateCategory(listing),
@@ -584,7 +580,7 @@ function RealEstateCard(listing) {
   return `
     <article class="listing-card">
       <a href="${listing.href}" aria-label="${escapeValue(listing.title)}">
-        <img src="${escapeValue(listing.image)}" alt="${escapeValue(listing.title)}">
+        ${listing.image ? `<img src="${escapeValue(listing.image)}" alt="${escapeValue(listing.title)}">` : '<div class="real-estate-photo-placeholder" role="img" aria-label="Aucune photo disponible">Aucune photo disponible</div>'}
       </a>
       <p>${escapeValue(listing.category)}</p>
       <h3><a href="${listing.href}">${escapeValue(listing.title)}</a></h3>

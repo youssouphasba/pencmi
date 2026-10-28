@@ -94,6 +94,9 @@ function formatDate(value) {
 
 function mapListing(listing) {
   const metadata = listing.metadata || {};
+  const photos = Array.isArray(metadata.photos) ? metadata.photos.filter(photo => typeof photo === 'string' && photo) : [];
+  const coverPhoto = metadata.coverPhoto || photos[0] || '';
+  if (coverPhoto && !photos.includes(coverPhoto)) photos.unshift(coverPhoto);
   const profile = listing.owner?.professionalProfile || {};
   const advertiserName = profile.businessName || [listing.owner?.firstName, listing.owner?.lastName].filter(Boolean).join(" ");
 
@@ -109,8 +112,8 @@ function mapListing(listing) {
     price: listing.price,
     createdAt: listing.createdAt,
     updatedAt: listing.updatedAt,
-    photos: metadata.photos || [],
-    coverPhoto: metadata.coverPhoto || metadata.photos?.[0] || "",
+    photos,
+    coverPhoto,
     surface: metadata.surface,
     bedrooms: metadata.bedrooms,
     bathrooms: metadata.bathrooms,

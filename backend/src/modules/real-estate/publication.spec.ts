@@ -32,6 +32,7 @@ describe('Real estate publication API', () => {
   let db: ReturnType<typeof publicationDatabase>;
   let image: Buffer;
   let directory: string;
+  let storageSettings: Record<string, string>;
   const owner = 'owner-a';
   const payload = () => ({
     title: 'Appartement à Dakar',
@@ -91,6 +92,12 @@ describe('Real estate publication API', () => {
   });
   beforeEach(async () => {
     db = publicationDatabase();
+    storageSettings = {
+      NODE_ENV: 'test',
+      STORAGE_DRIVER: 'local',
+      API_PREFIX: 'api/v1',
+      LOCAL_UPLOAD_DIRECTORY: directory,
+    };
     const module = await Test.createTestingModule({
       controllers: [RealEstateController, FilesController],
       providers: [
@@ -100,14 +107,7 @@ describe('Real estate publication API', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: (key: string) =>
-              (
-                ({
-                  STORAGE_DRIVER: 'local',
-                  API_PREFIX: 'api/v1',
-                  LOCAL_UPLOAD_DIRECTORY: directory,
-                }) as any
-              )[key],
+            get: (key: string) => storageSettings[key],
           },
         },
         {
@@ -250,6 +250,61 @@ describe('Real estate publication API', () => {
       result.body.error.details.fields.map((field: any) => field.path),
     ).toContain('transaction');
     expect(db.listings()[0].status).toBe('draft');
+  });
+
+  it.each([
+    ['active', false, true, 200],
+    ['active', false, false, 200],
+    ['draft', false, false, 404],
+    ['pending_review', false, false, 404],
+    ['deleted', false, false, 404],
+    ['active', true, false, 404],
+  ])(
+    'public visibility for status=%s deleted=%s photo=%s',
+    async (status, deleted, hasPhoto, expected) => {
+      const created = await create(payload());
+      if (hasPhoto) await photo(created.id).expect(201);
+      db.listings()[0].status = status;
+      db.listings()[0].deletedAt = deleted ? new Date() : null;
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/immobilier')
+        .expect(200);
+      expect(response.body.data).toHaveLength(expected === 200 ? 1 : 0);
+      await request(app.getHttpServer())
+        .get(`/api/v1/immobilier/${created.id}`)
+        .expect(expected as number);
+    },
+  );
+
+  it.each(['draft', 'pending_review', 'deleted'])(
+    'refuses public photos for a %s listing',
+    async (status) => {
+      const created = await create(payload());
+      const uploaded = (await photo(created.id).expect(201)).body;
+      db.listings()[0].status = status;
+      await request(app.getHttpServer())
+        .get(`/api/v1/files/public/${uploaded.id}`)
+        .expect(404);
+    },
+  );
+
+  it('refuses uploads explicitly when production storage is not persistent', async () => {
+    const created = await create();
+    storageSettings.NODE_ENV = 'production';
+    const response = await photo(created.id).expect(503);
+    expect(response.body.error.message).toMatch(/stockage persistant/);
+    expect(db.assets()).toHaveLength(0);
+  });
+
+  it('does not serve an explicitly private photo even for an active listing', async () => {
+    const created = await create(payload());
+    const uploaded = (await photo(created.id).expect(201)).body;
+    db.listings()[0].status = 'active';
+    db.assets()[0].visibility = 'private';
+    await request(app.getHttpServer())
+      .get(`/api/v1/files/public/${uploaded.id}`)
+      .expect(404);
+    await api('get', `/files/${uploaded.id}/content`).expect(200);
   });
 
   it('does not expose a draft through public visit requests or ignore disabled visits', async () => {

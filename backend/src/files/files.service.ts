@@ -10,6 +10,7 @@ import {
   InternalServerErrorException,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -26,6 +27,11 @@ import { dirname, extname, join } from 'path';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../database/prisma/prisma.service';
 import { MAX_PHOTO_BYTES, MAX_PHOTO_PIXELS } from './listing-photo.constants';
+import {
+  assertUploadStorage,
+  remoteStorageConfig,
+  storageDriver,
+} from './storage.config';
 
 const sharp: typeof SharpFactory = require('sharp');
 
@@ -45,6 +51,7 @@ export class FilesService {
   ) {}
 
   async prepareListingPhoto(file: UploadedImage) {
+    assertUploadStorage(this.config);
     if (!file?.buffer?.length || file.buffer.length > MAX_PHOTO_BYTES) {
       throw new BadRequestException('Choisissez une photo de 5 Mo maximum.');
     }
@@ -158,6 +165,7 @@ export class FilesService {
   }
 
   createUploadPlaceholder(ownerUserId: string) {
+    assertUploadStorage(this.config);
     return this.prisma.fileAsset.create({
       data: {
         ownerUserId,
@@ -183,6 +191,7 @@ export class FilesService {
     file: UploadedImage,
     scope: 'avatar' | 'logo',
   ) {
+    assertUploadStorage(this.config);
     this.validateImage(file);
     const draft = await this.prisma.fileAsset.create({
       data: {
@@ -326,6 +335,7 @@ export class FilesService {
   }
 
   private async persistBinary(storageKey: string, file: UploadedImage) {
+    assertUploadStorage(this.config);
     if (this.getStorageDriver() === 'local') {
       const targetPath = join(this.localDirectory(), storageKey);
       await mkdir(dirname(targetPath), { recursive: true });
@@ -334,21 +344,28 @@ export class FilesService {
     }
 
     const client = this.getS3Client();
-    const bucket = this.config.get<string>('S3_BUCKET');
+    const bucket = this.config.get<string>('S3_BUCKET')?.trim();
     if (!client || !bucket) {
       throw new InternalServerErrorException(
         'Le stockage de fichiers n’est pas configuré.',
       );
     }
 
-    await client.send(
-      new PutObjectCommand({
-        Bucket: bucket,
-        Key: storageKey,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-      }),
-    );
+    try {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: storageKey,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        }),
+      );
+    } catch {
+      this.logger.warn('Échec du téléversement vers le stockage distant.');
+      throw new ServiceUnavailableException(
+        'Le stockage distant est indisponible ou sa configuration est invalide. Réessayez après vérification du service.',
+      );
+    }
   }
 
   private async readBinary(asset: FileAsset) {
@@ -357,7 +374,7 @@ export class FilesService {
     }
 
     const client = this.getS3Client();
-    const bucket = this.config.get<string>('S3_BUCKET');
+    const bucket = this.config.get<string>('S3_BUCKET')?.trim();
     if (!client || !bucket) {
       throw new InternalServerErrorException(
         'Le stockage de fichiers n’est pas configuré.',
@@ -389,7 +406,7 @@ export class FilesService {
     }
 
     const client = this.getS3Client();
-    const bucket = this.config.get<string>('S3_BUCKET');
+    const bucket = this.config.get<string>('S3_BUCKET')?.trim();
     if (!client || !bucket) {
       throw new InternalServerErrorException(
         'Le stockage de fichiers n’est pas configuré.',
@@ -405,8 +422,7 @@ export class FilesService {
   }
 
   private getStorageDriver() {
-    const driver = this.config.get<string>('STORAGE_DRIVER');
-    return driver === 'r2' || driver === 's3' ? driver : 'local';
+    return storageDriver(this.config);
   }
 
   private localDirectory() {
@@ -417,22 +433,17 @@ export class FilesService {
   }
 
   private getS3Client() {
-    const endpoint = this.config.get<string>('S3_ENDPOINT');
-    const accessKeyId = this.config.get<string>('S3_ACCESS_KEY_ID');
-    const secretAccessKey = this.config.get<string>('S3_SECRET_ACCESS_KEY');
-
-    if (!endpoint || !accessKeyId || !secretAccessKey) {
-      return null;
-    }
-
+    const driver = this.getStorageDriver();
+    if (driver === 'local') return null;
+    const { region, endpoint, credentials } = remoteStorageConfig(
+      this.config,
+      driver,
+    );
     return new S3Client({
-      region: 'auto',
+      region,
       endpoint,
+      credentials,
       forcePathStyle: false,
-      credentials: {
-        accessKeyId,
-        secretAccessKey,
-      },
     });
   }
 }
