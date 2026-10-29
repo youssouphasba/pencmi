@@ -333,11 +333,25 @@ export class RealEstateService {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .slice(0, 70)}-${randomUUID()}`;
-    const listing = await this.prisma.realEstateListing.upsert({
-      where: { id },
-      update: {},
-      create: { id, ownerUserId, slug, ...this.listingData(value) },
-    });
+    const listing = await this.prisma.realEstateListing
+      .upsert({
+        where: { id },
+        update: {},
+        create: { id, ownerUserId, slug, ...this.listingData(value) },
+      })
+      .catch(async (error) => {
+        if (
+          !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+          error.code !== 'P2002' ||
+          !Array.isArray(error.meta?.target) ||
+          error.meta.target.length !== 1 ||
+          error.meta.target[0] !== 'id'
+        )
+          throw error;
+        return this.prisma.realEstateListing.findFirstOrThrow({
+          where: { id, ownerUserId },
+        });
+      });
     if (listing.deletedAt)
       throw new ConflictException('Ce brouillon a été supprimé.');
     return listing;

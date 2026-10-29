@@ -7,6 +7,8 @@ const vehicleRoutes = {
   dashboard: "/dashboard/voitures",
   login: "/login",
 };
+let vehiclePresentation;
+const vehicleText = value => vehiclePresentation.vehicleEscape(value);
 
 let vehicleState = {
   all: [],
@@ -73,7 +75,7 @@ function vehiclesHeader() {
 }
 
 function vehiclesHero() {
-  const values = vehicleQueryValues();
+  const values = Object.fromEntries(Object.entries(vehicleQueryValues()).map(([key, value]) => [key, vehicleText(value)]));
   document.querySelector("#vehicle-hero").innerHTML = `
     <div class="vehicle-hero-inner">
       <h1>Trouvez une voiture au Sénégal</h1>
@@ -119,7 +121,7 @@ function vehicleQuickSuggestions() {
 }
 
 function vehicleFiltersMarkup() {
-  const values = vehicleQueryValues();
+  const values = Object.fromEntries(Object.entries(vehicleQueryValues()).map(([key, value]) => [key, vehicleText(value)]));
   return `
     <aside class="vehicle-filters">
       <form id="vehicle-filter-form">
@@ -140,14 +142,14 @@ function vehicleCard(listing) {
   const advertiser = vehicleAdvertiser(listing);
   return `
     <article class="vehicle-card">
-      <div class="vehicle-card-photo">${vehicleImage(listing) ? `<img src="${vehicleImage(listing)}" alt="${listing.title}" style="width:100%;height:100%;object-fit:cover;">` : "Aucune image"}</div>
+      <a class="vehicle-card-photo" href="${vehicleRouteHref(`/voitures/${encodeURIComponent(listing.id)}`)}">${vehicleImage(listing) ? `<img src="${vehicleText(vehiclePresentation.vehicleSafeUrl(vehicleImage(listing)))}" alt="${vehicleText(listing.title)}" style="width:100%;height:100%;object-fit:cover;">` : "Aucune photo"}</a>
       <div class="vehicle-card-body">
-        <h3>${metadata.brand || ""} ${metadata.model || listing.title}</h3>
-        <p>${[listing.vehicleMode, listing.city, metadata.year].filter(Boolean).join(" · ")}</p>
+        <h3><a href="${vehicleRouteHref(`/voitures/${encodeURIComponent(listing.id)}`)}">${vehicleText(metadata.brand || "")} ${vehicleText(metadata.model || listing.title)}</a></h3>
+        <p>${vehicleText([vehiclePresentation.vehicleModes[listing.vehicleMode], listing.city, metadata.year].filter(Boolean).join(" · "))}</p>
         <div class="vehicle-chip-row">
-          ${listing.price ? `<span class="vehicle-chip">${pencmiFormatPrice(listing.price, listing.currency || "FCFA")}</span>` : ""}
-          ${metadata.fuel ? `<span class="vehicle-chip">${metadata.fuel}</span>` : ""}
-          ${metadata.gearbox ? `<span class="vehicle-chip">${metadata.gearbox}</span>` : ""}
+          <span class="vehicle-chip">${vehicleText(vehiclePresentation.vehiclePrice(listing))}</span>
+          ${metadata.fuel ? `<span class="vehicle-chip">${vehicleText(metadata.fuel)}</span>` : ""}
+          ${metadata.gearbox ? `<span class="vehicle-chip">${vehicleText(metadata.gearbox)}</span>` : ""}
           ${advertiser.verified ? `<span class="vehicle-chip">Vérifié</span>` : ""}
         </div>
         <div class="vehicle-card-actions">
@@ -164,18 +166,31 @@ function vehicleEmptyState() {
 }
 
 function vehiclesPage() {
+  if (vehicleState.error) {
+    document.querySelector('#vehicle-results').innerHTML = `<section class="vehicle-empty"><div><h2>Chargement impossible</h2><p role="alert">${vehicleText(vehicleState.error)}</p><button class="btn btn-primary" type="button" data-retry-vehicles>Réessayer</button></div></section>`;
+    document.querySelector('[data-retry-vehicles]').onclick = async event => {
+      event.currentTarget.disabled = true;
+      vehicleState.error = '';
+      try { await loadVehicles(); } catch (error) { vehicleState.error = error.message; }
+      vehiclesPage();
+    };
+    return;
+  }
   const values = vehicleQueryValues();
   const filtersLabel = [values.brand, values.model, values.city, values.type].filter(Boolean).join(" · ");
   document.querySelector("#vehicle-results").innerHTML = `
     <div class="vehicle-results-layout">
       ${vehicleFiltersMarkup()}
       <section class="vehicle-list">
-        <section class="vehicle-detail-card" style="margin-bottom:16px;"><h2>Résultats</h2><p>${vehicleState.filtered.length} véhicule${vehicleState.filtered.length > 1 ? "s" : ""}${filtersLabel ? ` pour ${filtersLabel}` : ""}</p></section>
+        <section class="vehicle-detail-card" style="margin-bottom:16px;"><h2>Résultats</h2><p>${vehicleState.meta?.total ?? vehicleState.filtered.length} véhicule(s)${filtersLabel ? ` pour ${vehicleText(filtersLabel)}` : ""}</p></section>
         ${vehicleState.filtered.length ? vehicleState.filtered.map(vehicleCard).join("") : vehicleEmptyState()}
+        ${vehicleState.meta?.totalPages > 1 ? `<nav class="vehicle-card-actions" aria-label="Pagination">${vehicleState.meta.page > 1 ? `<button class="btn btn-ghost" data-vehicle-page="${vehicleState.meta.page - 1}">Précédent</button>` : ''}<span>Page ${vehicleState.meta.page} sur ${vehicleState.meta.totalPages}</span>${vehicleState.meta.page < vehicleState.meta.totalPages ? `<button class="btn btn-ghost" data-vehicle-page="${vehicleState.meta.page + 1}">Suivant</button>` : ''}</nav>` : ''}
       </section>
-      <aside class="vehicle-map"><div class="vehicle-map-placeholder">Localisation et points de retrait prévus ici.</div></aside>
     </div>
   `;
+  document.querySelectorAll('[data-vehicle-page]').forEach(button => button.onclick = () => {
+    const url = new URL(location.href); url.searchParams.set('page', button.dataset.vehiclePage); location.href = url;
+  });
 
   document.querySelector("#vehicle-filter-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -206,61 +221,30 @@ function vehiclesFooter() {
   `;
 }
 
-function filterVehicles(listings) {
-  const values = vehicleQueryValues();
-  const normalizedQuery = pencmiNormalizeText(values.query);
-  const normalizedCity = pencmiNormalizeText(values.city);
-  const normalizedBrand = pencmiNormalizeText(values.brand);
-  const normalizedModel = pencmiNormalizeText(values.model);
-  const normalizedFuel = pencmiNormalizeText(values.fuel);
-  const normalizedGearbox = pencmiNormalizeText(values.gearbox);
-  const minPrice = Number(values.minPrice || 0);
-  const maxPrice = Number(values.maxPrice || 0);
-
-  return listings.filter((listing) => {
-    const metadata = vehicleMetadata(listing);
-    const haystack = pencmiNormalizeText([
-      listing.title,
-      listing.description,
-      listing.city,
-      listing.vehicleMode,
-      metadata.brand,
-      metadata.model,
-      metadata.category,
-    ].filter(Boolean).join(" "));
-    const price = Number(listing.price || metadata.price || 0);
-
-    if (normalizedQuery && !haystack.includes(normalizedQuery)) return false;
-    if (normalizedCity && pencmiNormalizeText(listing.city) !== normalizedCity) return false;
-    if (values.type && pencmiNormalizeText(listing.vehicleMode) !== pencmiNormalizeText(values.type)) return false;
-    if (normalizedBrand && pencmiNormalizeText(metadata.brand) !== normalizedBrand) return false;
-    if (normalizedModel && pencmiNormalizeText(metadata.model) !== normalizedModel) return false;
-    if (minPrice && (!price || price < minPrice)) return false;
-    if (maxPrice && price > maxPrice) return false;
-    if (normalizedFuel && pencmiNormalizeText(metadata.fuel) !== normalizedFuel) return false;
-    if (normalizedGearbox && pencmiNormalizeText(metadata.gearbox) !== normalizedGearbox) return false;
-    return true;
-  });
-}
 
 async function loadVehicles() {
   const values = vehicleQueryValues();
   const apiParams = new URLSearchParams();
   if (values.city) apiParams.set("city", values.city);
   if (values.type) apiParams.set("vehicleMode", values.type);
-  const payload = await pencmiApiRequest(`/voitures${apiParams.toString() ? `?${apiParams.toString()}` : ""}`);
+  for (const key of ['query', 'brand', 'model', 'minPrice', 'maxPrice', 'fuel', 'gearbox']) if (values[key]) apiParams.set(key, values[key]);
+  apiParams.set('page', pencmiQueryValue('page', '1'));
+  const payload = await pencmiApiRequest(`/voitures?${apiParams}`, { includeMeta: true });
   const data = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.items) ? payload.items : [];
   vehicleState.all = data;
-  vehicleState.filtered = filterVehicles(data);
+  vehicleState.filtered = data;
+  vehicleState.meta = payload.meta || {};
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  vehiclePresentation = await import('./vehicle-content.mjs');
   vehiclesHeader();
   vehiclesHero();
   vehicleQuickSuggestions();
   try {
     await loadVehicles();
-  } catch {
+  } catch (error) {
+    vehicleState.error = error.message;
     vehicleState.all = [];
     vehicleState.filtered = [];
   }

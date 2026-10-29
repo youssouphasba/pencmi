@@ -7,6 +7,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { randomUUID } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { access, mkdir, mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -195,6 +196,28 @@ describe('Real estate publication API', () => {
     expect(
       (await api('get', '/dashboard/immobilier').expect(200)).body.data,
     ).toHaveLength(1);
+  });
+
+  it('recovers a concurrent idempotent primary-key collision without hiding other constraints', async () => {
+    const requestId = randomUUID();
+    const created = await create({ requestId });
+    db.prisma.realEstateListing.upsert.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Concurrent primary key', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: ['id'] },
+      }),
+    );
+    expect((await create({ requestId })).id).toBe(created.id);
+    expect(db.listings()).toHaveLength(1);
+    db.prisma.realEstateListing.upsert.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unrelated slug conflict', {
+        code: 'P2002',
+        clientVersion: 'test',
+        meta: { target: ['slug'] },
+      }),
+    );
+    await api('post', '/dashboard/immobilier').send({ requestId }).expect(500);
   });
 
   it('does not permit another owner to read, change, submit or delete photos', async () => {

@@ -3,6 +3,7 @@ function pencmiPublicApiBaseUrl() {
 }
 
 async function pencmiApiRequest(path, options = {}) {
+  const { includeMeta = false, ...fetchOptions } = options;
   const baseUrl = pencmiPublicApiBaseUrl();
   if (!baseUrl) {
     throw new Error("API inaccessible.");
@@ -13,7 +14,7 @@ async function pencmiApiRequest(path, options = {}) {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
-    ...options,
+    ...fetchOptions,
   });
   const payload = await response.json().catch(() => null);
 
@@ -21,7 +22,7 @@ async function pencmiApiRequest(path, options = {}) {
     throw new Error(payload?.error?.message || "Chargement impossible.");
   }
 
-  return payload?.data ?? payload;
+  return includeMeta ? payload : payload?.data ?? payload;
 }
 
 function pencmiQueryParams() {

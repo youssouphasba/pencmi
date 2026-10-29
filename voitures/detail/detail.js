@@ -1,266 +1,201 @@
-const vehicleDetailRoutes = {
-  home: "/",
-  vehicles: "/voitures",
-  alerts: "/voitures/alertes",
-  login: "/login",
-};
-
-let vehicleDetailState = {
-  listing: null,
-};
-
-function vehicleDetailRouteHref(path) {
-  return window.PencmiConfig?.routeHref ? window.PencmiConfig.routeHref(path) : path;
-}
-
-function vehicleDetailMetadata() {
-  return vehicleDetailState.listing?.metadata || {};
-}
-
-function vehicleDetailAdvertiser() {
-  return pencmiBuildAdvertiser(vehicleDetailState.listing?.owner);
-}
-
-function vehicleDetailPhotos() {
-  return pencmiListingPhotos(vehicleDetailMetadata());
-}
-
-function vehicleDetailHeader() {
-  document.querySelector("#vehicle-detail-header").innerHTML = `
-    <a class="brand" href="${vehicleDetailRouteHref(vehicleDetailRoutes.home)}"><span class="brand-mark">P</span><span><strong>Péncmi</strong><small>Détail voiture</small></span></a>
-    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="vehicle-detail-menu" aria-label="Ouvrir le menu"><span></span><span></span><span></span></button>
-    <div class="header-panel" id="vehicle-detail-menu"><nav class="main-nav"><a href="${vehicleDetailRouteHref(vehicleDetailRoutes.vehicles)}">Voitures</a><a href="${vehicleDetailRouteHref(vehicleDetailRoutes.alerts)}">Alertes</a></nav><div class="header-actions"><a class="btn btn-ghost" href="${vehicleDetailRouteHref(vehicleDetailRoutes.login)}">Se connecter</a></div></div>
-  `;
-
-  const toggle = document.querySelector(".menu-toggle");
-  const panel = document.querySelector(".header-panel");
-  toggle?.addEventListener("click", () => {
-    const isOpen = panel.classList.toggle("is-open");
-    toggle.setAttribute("aria-expanded", String(isOpen));
-  });
-}
-
-function vehicleNotFound() {
-  return `<section class="vehicle-empty"><div><h1>Annonce introuvable</h1><p>L’annonce demandée n’est pas disponible pour le moment.</p><div class="vehicle-empty-actions"><a class="btn btn-primary" href="${vehicleDetailRouteHref(vehicleDetailRoutes.vehicles)}">Retour aux voitures</a><a class="btn btn-ghost" href="${vehicleDetailRouteHref(vehicleDetailRoutes.alerts)}">Créer une alerte</a></div></div></section>`;
-}
-
-function vehicleGallery() {
-  const photos = vehicleDetailPhotos();
-  const firstPhoto = photos[0];
-  if (!firstPhoto) {
-    return `<section class="vehicle-detail-card"><div class="vehicle-photo-placeholder">Aucune photo disponible pour le moment.</div></section>`;
-  }
-
-  return `
-    <section class="vehicle-detail-card">
-      <img src="${firstPhoto}" alt="${vehicleDetailState.listing.title}" id="vehicle-main-photo" style="width:100%;max-height:420px;object-fit:cover;border-radius:18px;">
-      ${photos.length > 1 ? `<div class="vehicle-chip-row">${photos.map((photo, index) => `<button class="btn btn-ghost" type="button" data-vehicle-photo="${photo}"${index === 0 ? ' aria-current="true"' : ""}>Photo ${index + 1}</button>`).join("")}</div>` : ""}
-    </section>
-  `;
-}
-
-function vehicleSpecifications() {
-  const metadata = vehicleDetailMetadata();
-  const items = [
-    ["Marque", metadata.brand],
-    ["Modèle", metadata.model],
-    ["Année", metadata.year],
-    ["Kilométrage", metadata.mileage ? `${metadata.mileage} km` : ""],
-    ["Carburant", metadata.fuel],
-    ["Boîte", metadata.gearbox],
-    ["Catégorie", metadata.category],
-    ["Places", metadata.seats],
-  ].filter(([, value]) => value);
-
-  return `<section class="vehicle-detail-card"><h2>Caractéristiques</h2>${items.length ? `<div class="vehicle-chip-row">${items.map(([label, value]) => `<span class="vehicle-chip">${label} : ${value}</span>`).join("")}</div>` : `<p>Aucune caractéristique renseignée.</p>`}</section>`;
-}
-
-function vehicleDocumentsSection() {
-  const documents = Array.isArray(vehicleDetailMetadata().documents) ? vehicleDetailMetadata().documents : [];
-  return `<section class="vehicle-detail-card"><h2>Documents disponibles</h2>${documents.length ? `<div class="vehicle-chip-row">${documents.map((item) => `<span class="vehicle-chip">${item}</span>`).join("")}</div>` : `<p>Aucun document renseigné pour le moment.</p>`}</section>`;
-}
-
-function vehicleOptionsSection() {
-  const options = Array.isArray(vehicleDetailMetadata().options) ? vehicleDetailMetadata().options : [];
-  return `<section class="vehicle-detail-card"><h2>Équipements</h2>${options.length ? `<div class="vehicle-chip-row">${options.map((item) => `<span class="vehicle-chip">${item}</span>`).join("")}</div>` : `<p>Aucun équipement renseigné pour le moment.</p>`}</section>`;
-}
-
-function vehicleAdvertiserCard() {
-  const advertiser = vehicleDetailAdvertiser();
-  return `
-    <aside class="vehicle-detail-card" id="contact">
-      <h2>Profil vendeur ou loueur</h2>
-      ${advertiser.logoUrl ? `<img src="${advertiser.logoUrl}" alt="${advertiser.name}" style="width:72px;height:72px;object-fit:contain;border-radius:18px;border:1px solid var(--border);background:var(--surface-soft);">` : ""}
-      <p><strong>${advertiser.name}</strong></p>
-      ${advertiser.type ? `<p>${advertiser.type}</p>` : ""}
-      ${advertiser.city ? `<p>${advertiser.city}</p>` : ""}
-      ${advertiser.openingHours ? `<p>${advertiser.openingHours}</p>` : ""}
-      ${advertiser.verified ? `<div class="vehicle-chip-row"><span class="vehicle-chip">Professionnel vérifié</span></div>` : ""}
-      <div class="vehicle-detail-actions">
-        <a class="btn btn-light" href="${pencmiAdvertiserHref(advertiser.id)}">Voir le profil</a>
-        ${advertiser.phone ? `<a class="btn btn-ghost" href="tel:${advertiser.phone}">Téléphone</a>` : ""}
-        ${advertiser.whatsapp ? `<a class="btn btn-primary" target="_blank" rel="noreferrer" href="https://wa.me/${advertiser.whatsapp.replace(/\D/g, "")}">WhatsApp</a>` : ""}
-      </div>
-    </aside>
-  `;
-}
-
-function vehicleRequestModal() {
-  const mode = vehicleDetailState.listing?.vehicleMode;
-  const title = mode === "chauffeur" ? "Demander un chauffeur" : mode === "rental" ? "Demander une location" : "Contacter l’annonceur";
-  const dateLabel = mode === "chauffeur" ? "Date du service" : "Date de début";
-
-  return `
-    <div class="modal-backdrop" id="vehicle-contact-modal" aria-hidden="true">
-      <section class="vehicle-modal-card" role="dialog" aria-modal="true" aria-labelledby="vehicle-contact-title">
-        <h2 id="vehicle-contact-title">${title}</h2>
-        <form class="vehicle-form-grid" id="vehicle-request-form">
-          <label class="vehicle-form-field"><span>Nom</span><input type="text" name="clientName" required></label>
-          <label class="vehicle-form-field"><span>Téléphone</span><input type="tel" name="clientPhone"></label>
-          <label class="vehicle-form-field"><span>Email</span><input type="email" name="clientEmail"></label>
-          <label class="vehicle-form-field"><span>${dateLabel}</span><input type="date" name="startDate"></label>
-          ${mode === "rental" ? `<label class="vehicle-form-field"><span>Date de fin</span><input type="date" name="endDate"></label>` : ""}
-          <label class="vehicle-form-field"><span>Message</span><textarea name="message">${mode === "sale" ? "Bonjour, je suis intéressé par ce véhicule. Est-il toujours disponible ?" : "Bonjour, je souhaite obtenir plus d’informations sur cette annonce."}</textarea></label>
-          <div class="vehicle-form-actions" style="grid-column:1 / -1;">
-            <button class="btn btn-ghost" type="button" data-close-contact>Annuler</button>
-            <button class="btn btn-primary" type="submit">${mode === "sale" ? "Envoyer" : "Envoyer la demande"}</button>
-          </div>
-        </form>
-        <p id="vehicle-contact-confirmation" hidden>Votre demande a été envoyée.</p>
-      </section>
-    </div>
-  `;
-}
-
-function vehicleDetailPage() {
-  if (!vehicleDetailState.listing) {
-    document.querySelector("#vehicle-detail-page").innerHTML = vehicleNotFound();
-    return;
-  }
-
-  const listing = vehicleDetailState.listing;
-  const metadata = vehicleDetailMetadata();
-  const advertiser = vehicleDetailAdvertiser();
-
-  document.querySelector("#vehicle-detail-page").innerHTML = `
-    <div class="vehicle-detail-grid">
-      <div>
-        ${vehicleGallery()}
-        <section class="vehicle-detail-card">
-          <h1>${listing.title}</h1>
-          <div class="vehicle-chip-row">
-            ${listing.vehicleMode ? `<span class="vehicle-chip">${listing.vehicleMode}</span>` : ""}
-            ${listing.city ? `<span class="vehicle-chip">${listing.city}</span>` : ""}
-            ${listing.price ? `<span class="vehicle-chip">${pencmiFormatPrice(listing.price, listing.currency || "FCFA")}</span>` : ""}
-          </div>
-          ${listing.description ? `<p>${listing.description}</p>` : ""}
-          <div class="vehicle-detail-actions">
-            <button class="btn btn-ghost" type="button" data-share>Partager</button>
-            ${typeof ReportButton === "function" ? ReportButton("Signaler") : ""}
-            <button class="btn btn-primary" type="button" data-open-contact>${listing.vehicleMode === "sale" ? "Contacter" : "Envoyer une demande"}</button>
-          </div>
-          ${advertiser.email ? `<p style="margin-top:12px;color:var(--muted);">Email : ${advertiser.email}</p>` : ""}
-        </section>
-        ${vehicleSpecifications()}
-        ${vehicleOptionsSection()}
-        ${vehicleDocumentsSection()}
-        ${metadata.conditions ? `<section class="vehicle-detail-card"><h2>Conditions</h2><p>${metadata.conditions}</p></section>` : ""}
-        ${typeof SafetyTipsBox === "function" ? SafetyTipsBox("vehicles") : ""}
-      </div>
-      ${vehicleAdvertiserCard()}
-    </div>
-    ${vehicleRequestModal()}
-    ${typeof ReportModal === "function" ? ReportModal() : ""}
-  `;
-
-  bindVehicleDetailActions();
-  if (typeof bindReportModal === "function") {
-    bindReportModal(document);
-  }
-}
-
-function bindVehicleDetailActions() {
-  const mainPhoto = document.querySelector("#vehicle-main-photo");
-  document.querySelectorAll("[data-vehicle-photo]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (mainPhoto) {
-        mainPhoto.src = button.dataset.vehiclePhoto || "";
-      }
-    });
-  });
-
-  document.querySelector("[data-open-contact]")?.addEventListener("click", () => {
-    document.querySelector("#vehicle-contact-modal")?.classList.add("is-open");
-  });
-
-  document.querySelector("[data-close-contact]")?.addEventListener("click", () => {
-    document.querySelector("#vehicle-contact-modal")?.classList.remove("is-open");
-  });
-
-  document.querySelector("[data-share]")?.addEventListener("click", async () => {
-    const url = window.location.href;
-    if (navigator.share) {
-      await navigator.share({ title: vehicleDetailState.listing?.title || "Péncmi", url }).catch(() => undefined);
-      return;
-    }
-    await navigator.clipboard?.writeText(url).catch(() => undefined);
-  });
-
-  document.querySelector("#vehicle-request-form")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const listing = vehicleDetailState.listing;
-
-    if (listing.vehicleMode === "sale") {
-      const advertiser = vehicleDetailAdvertiser();
-      const email = advertiser.email ? `mailto:${advertiser.email}?subject=${encodeURIComponent(`Annonce ${listing.title}`)}&body=${encodeURIComponent(String(formData.get("message") || ""))}` : "";
-      if (email) {
-        window.location.href = email;
-      }
-      const confirmation = document.querySelector("#vehicle-contact-confirmation");
-      if (confirmation) {
-        confirmation.hidden = false;
-      }
-      return;
-    }
-
-    const path = listing.vehicleMode === "chauffeur" ? `/voitures/${encodeURIComponent(listing.id)}/chauffeur-requests` : `/voitures/${encodeURIComponent(listing.id)}/rental-requests`;
-    await pencmiApiRequest(path, {
-      method: "POST",
-      body: JSON.stringify({
-        clientName: formData.get("clientName"),
-        clientPhone: formData.get("clientPhone"),
-        clientEmail: formData.get("clientEmail"),
-        startDate: formData.get("startDate") || undefined,
-        endDate: formData.get("endDate") || undefined,
-        message: formData.get("message"),
-      }),
-    });
-
-    const confirmation = document.querySelector("#vehicle-contact-confirmation");
-    if (confirmation) {
-      confirmation.hidden = false;
-    }
-    event.currentTarget.reset();
-  });
-}
-
-async function loadVehicleDetail() {
-  const id = pencmiQueryValue("id");
-  if (!id) {
-    vehicleDetailState.listing = null;
-    return;
-  }
-
-  vehicleDetailState.listing = await pencmiApiRequest(`/voitures/${encodeURIComponent(id)}`);
-}
-
-document.addEventListener("DOMContentLoaded", async () => {
-  vehicleDetailHeader();
+document.addEventListener('DOMContentLoaded', async () => {
+  const {
+    vehicleEscape: esc,
+    vehicleModes,
+    vehiclePrice,
+    vehicleCopy,
+    vehicleSafeUrl,
+  } = await import('../vehicle-content.mjs');
+  const href = (path) => window.PencmiConfig?.routeHref?.(path) || path;
+  const root = document.querySelector('#vehicle-detail-page');
+  document.querySelector('#vehicle-detail-header').innerHTML =
+    `<a class="brand" href="/" aria-label="Accueil Péncmi"><img src="/Logo%20pencmi.jpeg" width="64" height="64" style="object-fit:contain" alt="Péncmi"></a><nav class="header-actions"><a class="btn btn-ghost" href="${href('/voitures')}">Voitures</a><a class="btn btn-ghost" href="${href('/dashboard/voitures')}">Mon espace</a></nav>`;
+  let listing;
   try {
-    await loadVehicleDetail();
-  } catch {
-    vehicleDetailState.listing = null;
+    const id = pencmiQueryValue('id');
+    if (!id) throw new Error('Annonce introuvable.');
+    listing = await pencmiApiRequest(`/voitures/${encodeURIComponent(id)}`);
+  } catch (failure) {
+    root.innerHTML = `<section class="vehicle-empty"><h1>Annonce indisponible</h1><p role="alert">${esc(failure.message)}</p><a class="btn btn-primary" href="${href('/voitures')}">Retour aux voitures</a></section>`;
+    return;
   }
-  vehicleDetailPage();
+  const metadata = listing.metadata || {},
+    advertiser = pencmiBuildAdvertiser(listing.owner);
+  document.title = `${listing.title} - Péncmi`;
+  const preferences = metadata.contactPreferences || {};
+  const photos = pencmiListingPhotos(metadata)
+    .map(vehicleSafeUrl)
+    .filter(Boolean);
+  const isRequest = ['rental', 'chauffeur'].includes(listing.vehicleMode);
+  const formEnabled = isRequest || preferences.contactFormEnabled !== false;
+  const phone = preferences.phoneNumber || advertiser.phone,
+    whatsapp = preferences.whatsappNumber || advertiser.whatsapp,
+    email = preferences.contactEmail || advertiser.email;
+  const specifications = [
+    ['Marque', metadata.brand],
+    ['Modèle', metadata.model],
+    ['Version', metadata.version],
+    ['Année', metadata.year],
+    ['Kilométrage', metadata.mileage == null ? null : `${metadata.mileage} km`],
+    ['Carburant', metadata.fuel],
+    ['Boîte', metadata.gearbox],
+    ['Catégorie', metadata.category],
+    ['Places', metadata.seats],
+    ['Couleur', metadata.color],
+    ['État', metadata.condition],
+    ['Puissance', metadata.power],
+  ].filter(
+    ([, value]) => value !== undefined && value !== null && value !== '',
+  );
+  const chips = (values) =>
+    `<div class="vehicle-chip-row">${values.map((value) => `<span class="vehicle-chip">${esc(value)}</span>`).join('')}</div>`;
+  const today = new Date().toLocaleDateString('en-CA', {
+    timeZone: 'Africa/Dakar',
+  });
+  const title =
+    listing.vehicleMode === 'rental'
+      ? 'Demander une location'
+      : listing.vehicleMode === 'chauffeur'
+        ? 'Demander un véhicule avec chauffeur'
+        : 'Contacter l’annonceur';
+  const conditions = [
+    metadata.conditions,
+    metadata.rentalConditions,
+    metadata.serviceConditions,
+    metadata.coveredAreas,
+  ].filter(Boolean);
+  const secondaryPrices =
+    listing.vehicleMode === 'rental'
+      ? [
+          ['Tarif hebdomadaire', metadata.pricePerWeek],
+          ['Tarif mensuel', metadata.pricePerMonth],
+          ['Caution', metadata.deposit],
+        ].filter(([, value]) => value !== undefined && value !== null)
+      : [];
+  root.innerHTML = `<div class="vehicle-detail-grid"><div>
+    <section class="vehicle-detail-card">${photos.length ? `<img id="vehicle-main-photo" src="${esc(photos[0])}" alt="${esc(listing.title)}" style="width:100%;max-height:420px;object-fit:contain"><div class="vehicle-chip-row">${photos.map((url, index) => `<button type="button" class="btn btn-ghost" data-vehicle-photo="${index}" aria-label="Photo ${index + 1}">Photo ${index + 1}</button>`).join('')}</div>` : '<div class="vehicle-photo-placeholder">Aucune photo disponible</div>'}</section>
+    <section class="vehicle-detail-card"><h1>${esc(listing.title)}</h1>${chips([vehicleModes[listing.vehicleMode], listing.city, vehiclePrice(listing)].filter(Boolean))}<p>${esc(listing.description)}</p><div class="vehicle-detail-actions"><button class="btn btn-ghost" type="button" data-share>Partager</button>${typeof ReportButton === 'function' ? ReportButton('Signaler') : ''}${formEnabled ? `<button class="btn btn-primary" type="button" data-open-contact>${title}</button>` : ''}</div><p>${secondaryPrices.map(([label, price]) => `${esc(label)} : ${esc(pencmiFormatPrice(price, 'FCFA'))}`).join(' · ')}</p>${metadata.includedMileage !== undefined ? `<p>Kilométrage inclus : ${esc(metadata.includedMileage)}</p>` : ''}</section>
+    <section class="vehicle-detail-card"><h2>Caractéristiques</h2>${chips(specifications.map(([label, value]) => `${label} : ${value}`))}</section>
+    <section class="vehicle-detail-card"><h2>Équipements</h2>${chips(Array.isArray(metadata.options) ? metadata.options : [])}</section>
+    <section class="vehicle-detail-card"><h2>Documents déclarés</h2><p>${esc(vehicleCopy.documents)}</p>${chips(Array.isArray(metadata.documents) ? metadata.documents : [])}</section>
+    ${conditions.length ? `<section class="vehicle-detail-card"><h2>Conditions et services</h2>${conditions.map((value) => `<p>${esc(value)}</p>`).join('')}</section>` : ''}
+    ${typeof SafetyTipsBox === 'function' ? SafetyTipsBox('vehicles') : ''}
+    </div><aside class="vehicle-detail-card" id="contact"><h2>Annonceur</h2>${advertiser.logoUrl && vehicleSafeUrl(advertiser.logoUrl) ? `<img src="${esc(vehicleSafeUrl(advertiser.logoUrl))}" alt="${esc(advertiser.name)}" width="72" height="72" style="object-fit:contain">` : ''}<p><strong>${esc(advertiser.name)}</strong></p><p>${esc(advertiser.type)}</p><p>${esc(advertiser.city)}</p><p>${esc(advertiser.openingHours)}</p>${advertiser.verified ? chips(['Professionnel vérifié']) : ''}<div class="vehicle-detail-actions"><a class="btn btn-light" href="${esc(pencmiAdvertiserHref(advertiser.id))}">Voir le profil</a>${phone && preferences.phoneEnabled !== false ? `<a class="btn btn-ghost" href="tel:${esc(phone.replace(/[^+\d]/g, ''))}">Téléphone</a>` : ''}${whatsapp && preferences.whatsappEnabled !== false ? `<a class="btn btn-ghost" href="https://wa.me/${esc(whatsapp.replace(/\D/g, ''))}" target="_blank" rel="noreferrer">WhatsApp</a>` : ''}${email && preferences.emailEnabled !== false ? `<a class="btn btn-ghost" href="mailto:${esc(encodeURIComponent(email))}">Email</a>` : ''}</div></aside></div>
+    ${formEnabled ? `<div class="modal-backdrop" id="vehicle-contact-modal" aria-hidden="true"><section class="vehicle-modal-card" role="dialog" aria-modal="true" aria-labelledby="vehicle-contact-title" tabindex="-1"><h2 id="vehicle-contact-title">${title}</h2><form id="vehicle-request-form" class="vehicle-form-grid"><label class="vehicle-form-field"><span>Nom</span><input name="clientName" required minlength="2" maxlength="120" autocomplete="name"></label><label class="vehicle-form-field"><span>Téléphone</span><input type="tel" name="clientPhone" maxlength="30" autocomplete="tel"></label><label class="vehicle-form-field"><span>Email</span><input type="email" name="clientEmail" maxlength="254" autocomplete="email"></label>${isRequest ? `<label class="vehicle-form-field"><span>${listing.vehicleMode === 'rental' ? 'Début de location' : 'Date du service'}</span><input type="date" name="startDate" required min="${today}"></label>` : ''}${listing.vehicleMode === 'rental' ? `<label class="vehicle-form-field"><span>Fin de location</span><input type="date" name="endDate" required min="${today}"></label>` : ''}<label class="vehicle-form-field"><span>Message</span><textarea name="message" maxlength="2000"></textarea></label><p class="full" id="vehicle-request-error" role="alert" hidden></p><div class="vehicle-form-actions"><button class="btn btn-ghost" type="button" data-close-contact>Fermer</button><button class="btn btn-primary" type="submit">Envoyer${isRequest ? ' la demande' : ''}</button></div></form><p id="vehicle-contact-confirmation" role="status" hidden></p><button class="btn btn-light" type="button" data-close-success hidden>Fermer</button></section></div>` : ''}
+    ${typeof ReportModal === 'function' ? ReportModal() : ''}`;
+  document.querySelectorAll('[data-vehicle-photo]').forEach(
+    (button) =>
+      (button.onclick = () => {
+        document.querySelector('#vehicle-main-photo').src =
+          photos[Number(button.dataset.vehiclePhoto)];
+      }),
+  );
+  const modal = document.querySelector('#vehicle-contact-modal'),
+    form = document.querySelector('#vehicle-request-form');
+  const close = () => {
+    modal?.classList.remove('is-open');
+    modal?.setAttribute('aria-hidden', 'true');
+    document.querySelector('[data-open-contact]')?.focus();
+  };
+  document
+    .querySelector('[data-open-contact]')
+    ?.addEventListener('click', () => {
+      modal.classList.add('is-open');
+      modal.setAttribute('aria-hidden', 'false');
+      modal.querySelector('input,button').focus();
+    });
+  document
+    .querySelector('[data-close-contact]')
+    ?.addEventListener('click', close);
+  document
+    .querySelector('[data-close-success]')
+    ?.addEventListener('click', close);
+  modal?.addEventListener('click', (event) => {
+    if (event.target === modal) close();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (!modal?.classList.contains('is-open')) return;
+    if (event.key === 'Escape') close();
+    if (event.key === 'Tab') {
+      const controls = [
+          ...modal.querySelectorAll('button,input,textarea'),
+        ].filter(
+          (element) => !element.disabled && element.getClientRects().length,
+        ),
+        first = controls[0],
+        last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  });
+  document
+    .querySelector('[data-share]')
+    ?.addEventListener('click', async () => {
+      if (navigator.share)
+        await navigator
+          .share({ title: listing.title, url: location.href })
+          .catch(() => {});
+      else await navigator.clipboard?.writeText(location.href).catch(() => {});
+    });
+  let busy = false;
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (busy) return;
+    const data = Object.fromEntries(new FormData(form)),
+      error = document.querySelector('#vehicle-request-error');
+    if (!data.clientPhone?.trim() && !data.clientEmail?.trim()) {
+      error.textContent = 'Renseignez un téléphone ou un email.';
+      error.hidden = false;
+      return;
+    }
+    const body = Object.fromEntries(
+      Object.entries(data)
+        .filter(([, value]) => String(value).trim())
+        .map(([key, value]) => [key, String(value).trim()]),
+    );
+    busy = true;
+    error.hidden = true;
+    form.querySelector('[type="submit"]').disabled = true;
+    try {
+      const route =
+        listing.vehicleMode === 'rental'
+          ? 'rental-requests'
+          : listing.vehicleMode === 'chauffeur'
+            ? 'chauffeur-requests'
+            : 'contact';
+      const receipt = await pencmiApiRequest(
+        `/voitures/${encodeURIComponent(listing.id)}/${route}`,
+        { method: 'POST', body: JSON.stringify(body) },
+      );
+      if (
+        !receipt?.id ||
+        (isRequest ? receipt.status !== 'new' : receipt.received !== true)
+      )
+        throw new Error(
+          'La réception n’a pas été confirmée. Vos informations sont conservées.',
+        );
+      form.hidden = true;
+      const confirmation = document.querySelector(
+        '#vehicle-contact-confirmation',
+      );
+      confirmation.textContent = isRequest
+        ? vehicleCopy.requestReceived
+        : vehicleCopy.contactReceived;
+      confirmation.hidden = false;
+      document.querySelector('[data-close-success]').hidden = false;
+      document.querySelector('[data-close-success]').focus();
+    } catch (failure) {
+      error.textContent = failure.message;
+      error.hidden = false;
+    } finally {
+      busy = false;
+      form.querySelector('[type="submit"]').disabled = false;
+    }
+  });
+  if (typeof bindReportModal === 'function') bindReportModal(document);
 });

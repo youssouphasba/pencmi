@@ -319,17 +319,13 @@ function mapHomeVehicleListing(listing) {
   const photos = Array.isArray(metadata.photos) ? metadata.photos.filter(Boolean) : [];
   const image = metadata.coverPhoto || photos[0] || "";
 
-  if (!image) {
-    return null;
-  }
-
   return {
     image,
-    category: [listing.vehicleMode, listing.city].filter(Boolean).join(" · "),
+    category: [{ sale: 'Vente', rental: 'Location', chauffeur: 'Avec chauffeur' }[listing.vehicleMode], listing.city].filter(Boolean).join(" · "),
     brand: metadata.brand || "",
     model: metadata.model || listing.title,
     city: listing.city,
-    price: formatPriceFCFA(listing.price ?? metadata.price),
+    price: `${formatPriceFCFA(listing.price)}${listing.vehicleMode === 'rental' ? ' / jour' : listing.vehicleMode === 'chauffeur' ? metadata.chauffeurPriceUnit === 'service' ? ' / service' : ' / trajet' : ''}`,
     transmission: metadata.gearbox || "",
     fuel: metadata.fuel || "",
     verified: Boolean(listing.owner?.professionalProfile?.verified),
@@ -608,15 +604,15 @@ function HotelCard(listing) {
 function VehicleCard(listing) {
   return `
     <article class="listing-card">
-      <a href="${listing.href}" aria-label="${listing.brand} ${listing.model}">
-        <img src="${listing.image}" alt="${listing.brand} ${listing.model}">
+      <a href="${escapeValue(listing.href)}" aria-label="${escapeValue(listing.brand)} ${escapeValue(listing.model)}">
+        ${listing.image ? `<img src="${escapeValue(listing.image)}" alt="${escapeValue(listing.brand)} ${escapeValue(listing.model)}">` : '<div class="real-estate-photo-placeholder" role="img" aria-label="Aucune photo disponible">Aucune photo disponible</div>'}
       </a>
-      <p>${listing.category}</p>
-      <h3><a href="${listing.href}">${listing.brand} ${listing.model}</a></h3>
-      <span>${listing.city}</span>
-      <strong>${listing.price}</strong>
-      ${listing.transmission ? `<span>${listing.transmission}</span>` : ""}
-      ${listing.fuel ? `<span>${listing.fuel}</span>` : ""}
+      <p>${escapeValue(listing.category)}</p>
+      <h3><a href="${escapeValue(listing.href)}">${escapeValue(listing.brand)} ${escapeValue(listing.model)}</a></h3>
+      <span>${escapeValue(listing.city)}</span>
+      <strong>${escapeValue(listing.price)}</strong>
+      ${listing.transmission ? `<span>${escapeValue(listing.transmission)}</span>` : ""}
+      ${listing.fuel ? `<span>${escapeValue(listing.fuel)}</span>` : ""}
       ${listing.verified ? "<span>Vérifié</span>" : ""}
       <a href="${listing.href}">Voir détails</a>
     </article>

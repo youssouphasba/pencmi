@@ -1,175 +1,489 @@
-const vehicleCategory = new URLSearchParams(window.location.search).get("category") === "voiture";
-
-if (vehicleCategory) {
-  const vehicleRoutes = {
-    home: "/",
-    vehicles: "/voitures",
-    dashboard: "/dashboard/voitures",
-    listings: "/dashboard/voitures/annonces"
-  };
-
-  const vehicleSteps = [
-    "Type d’annonce",
-    "Marque et modèle",
-    "Informations véhicule",
-    "Localisation",
-    "Prix",
-    "Photos",
-    "Équipements",
-    "Documents",
-    "Description",
-    "Moyens de contact",
-    "Prévisualisation",
-    "Soumission"
-  ];
-
-  const vehicleBrands = ["Toyota", "Hyundai", "Kia", "Peugeot", "Renault", "Mercedes-Benz", "BMW", "Audi", "Volkswagen", "Ford", "Nissan", "Mitsubishi", "Suzuki", "Honda", "Chevrolet", "Citroën", "Dacia", "Land Rover", "Lexus", "Mazda", "Opel", "Fiat", "Jeep", "Autre"];
-  const vehicleEquipment = ["Climatisation", "Caméra de recul", "Radar de recul", "GPS", "Bluetooth", "Cuir", "Toit ouvrant", "Jantes aluminium", "4 roues motrices", "Airbags", "ABS"];
-  const vehicleDocuments = ["Carte grise", "Assurance", "Visite technique", "Dédouanement", "Carnet d’entretien", "Facture disponible"];
-  const contactOptions = [["whatsappEnabled", "WhatsApp"], ["phoneEnabled", "Appel téléphonique"], ["emailEnabled", "Email"], ["internalMessagingEnabled", "Messagerie interne"], ["contactFormEnabled", "Formulaire"], ["emailNotificationsEnabled", "Notifications email"]];
-
-  let currentVehicleStep = 0;
-  let vehicleStatusMessage = "";
-  let vehicleDraft = {
-    listingType: "",
-    identity: {},
-    info: {},
-    location: {},
-    pricing: {},
-    equipment: [],
-    documents: [],
-    content: {},
-    contactPreferences: {
-      whatsappEnabled: false,
-      phoneEnabled: false,
-      emailEnabled: false,
-      internalMessagingEnabled: false,
-      contactFormEnabled: false,
-      emailNotificationsEnabled: false
+if (new URLSearchParams(location.search).get('category') === 'voiture') {
+  void (async () => {
+    const [
+      { publicationRequest: api, publicationOperationId: uuid },
+      {
+        emptyVehicleDraft,
+        vehicleDraftFromListing,
+        vehicleFieldStep,
+        vehicleSteps,
+        vehicleChoices,
+      },
+      {
+        vehicleModes,
+        vehicleStatuses,
+        vehicleCopy,
+        vehicleEscape: esc,
+        vehiclePrice,
+      },
+    ] = await Promise.all([
+      import('./real-estate-api.mjs'),
+      import('./vehicle-publication.mjs'),
+      import('../voitures/vehicle-content.mjs'),
+    ]);
+    const root = document.querySelector('#publish-page');
+    document.title = 'Publier une voiture - Péncmi';
+    document.body.dataset.vehiclePublication = '';
+    let step = Math.min(
+      11,
+      Math.max(
+        0,
+        Number(new URLSearchParams(location.search).get('step')) || 0,
+      ),
+    );
+    let draft = emptyVehicleDraft(),
+      id = new URLSearchParams(location.search).get('id'),
+      photos = [],
+      status = 'draft';
+    let busy = false,
+      dirty = false,
+      message = '',
+      error = '',
+      fields = [];
+    const blobs = new Map(),
+      uploads = new Map();
+    const requestId =
+      sessionStorage.getItem('pencmi_vehicle_creation') || uuid();
+    const get = (path) =>
+      path.split('.').reduce((value, key) => value?.[key], draft);
+    function set(path, value) {
+      const keys = path.split('.');
+      const key = keys.pop();
+      const target = keys.reduce(
+        (object, part) => (object[part] ||= {}),
+        draft,
+      );
+      if (value === undefined) delete target[key];
+      else target[key] = value;
+      dirty = true;
+      message = '';
     }
-  };
-
-  function routeHref(path) {
-    if (window.location.protocol !== "file:") return path;
-    if (path === vehicleRoutes.home) return "../index.html";
-    if (path === vehicleRoutes.vehicles) return "../voitures/";
-    if (path === vehicleRoutes.dashboard) return "../dashboard/voitures/";
-    if (path === vehicleRoutes.listings) return "../dashboard/voitures/annonces/";
-    return path;
-  }
-
-  function setVehicleValue(path, value) {
-    const keys = path.split(".");
-    let target = vehicleDraft;
-    keys.slice(0, -1).forEach((key) => {
-      target[key] = target[key] || {};
-      target = target[key];
-    });
-    target[keys[keys.length - 1]] = value;
-  }
-
-  function optionsGrid(values, path, currentValue = "") {
-    return `<div class="option-grid">${values.map((value) => `<label class="choice-card"><input type="radio" name="${path}" data-path="${path}" value="${value}"${currentValue === value ? " checked" : ""}><span>${value}</span></label>`).join("")}</div>`;
-  }
-
-  function checkList(values, storeKey) {
-    return `<div class="checkbox-list">${values.map((value) => `<label class="choice-card"><input type="checkbox" data-list="${storeKey}" value="${value}"${vehicleDraft[storeKey].includes(value) ? " checked" : ""}><span>${value}</span></label>`).join("")}</div>`;
-  }
-
-  function stepContent() {
-    const regions = (window.SENEGAL_LOCATIONS || []).map((item) => `<option>${item.region}</option>`).join("");
-    const steps = [
-      `<section class="step-card"><h2>Type d’annonce</h2>${optionsGrid(["Vente", "Location", "Avec chauffeur"], "listingType", vehicleDraft.listingType)}</section>`,
-      `<section class="step-card"><h2>Marque et modèle</h2><div class="form-grid"><label class="form-field"><span>Marque</span><select data-path="identity.brand"><option value="">Marque</option>${vehicleBrands.map((brand) => `<option>${brand}</option>`).join("")}</select></label><label class="form-field"><span>Modèle</span><input data-path="identity.model" type="text"></label><label class="form-field"><span>Version</span><input data-path="identity.version" type="text"></label><label class="form-field"><span>Année</span><input data-path="identity.year" type="number" min="1900"></label></div></section>`,
-      `<section class="step-card"><h2>Informations véhicule</h2><div class="form-grid"><label class="form-field"><span>Kilométrage</span><input data-path="info.mileage" type="number" min="0"></label><label class="form-field"><span>Carburant</span><select data-path="info.fuel"><option>Essence</option><option>Diesel</option><option>Hybride</option><option>Électrique</option><option>GPL</option></select></label><label class="form-field"><span>Boîte de vitesse</span><select data-path="info.gearbox"><option>Manuelle</option><option>Automatique</option></select></label><label class="form-field"><span>Type de véhicule</span><select data-path="info.category"><option>Citadine</option><option>Berline</option><option>SUV</option><option>4x4</option><option>Pick-up</option><option>Monospace</option><option>Utilitaire</option><option>Camion</option><option>Bus</option><option>Minibus</option><option>Moto</option><option>Autre</option></select></label><label class="form-field"><span>Nombre de places</span><input data-path="info.seats" type="number" min="1"></label><label class="form-field"><span>Couleur</span><input data-path="info.color" type="text"></label><label class="form-field"><span>État</span><select data-path="info.condition"><option>Neuf</option><option>Occasion</option><option>Importé</option><option>Déjà immatriculé au Sénégal</option><option>À dédouaner</option></select></label><label class="form-field"><span>Puissance</span><input data-path="info.power" type="text"></label></div></section>`,
-      `<section class="step-card"><h2>Localisation</h2><div class="form-grid"><label class="form-field"><span>Région</span><select data-path="location.region"><option value="">Sélectionner une région</option>${regions}</select></label><label class="form-field"><span>Ville</span><input data-path="location.city" type="text"></label><label class="form-field"><span>Quartier</span><input data-path="location.district" type="text"></label><label class="form-field full"><span>Adresse ou indication</span><input data-path="location.addressHint" type="text"></label><label class="choice-card"><input type="checkbox" data-path="location.approximate"><span>Localisation approximative</span></label></div></section>`,
-      `<section class="step-card"><h2>Prix</h2><div class="form-grid"><label class="form-field"><span>Prix total</span><input data-path="pricing.price" type="number" min="0"></label><label class="choice-card"><input type="checkbox" data-path="pricing.negotiable"><span>Prix négociable</span></label><label class="form-field"><span>Prix par jour</span><input data-path="pricing.pricePerDay" type="number" min="0"></label><label class="form-field"><span>Prix par semaine</span><input data-path="pricing.pricePerWeek" type="number" min="0"></label><label class="form-field"><span>Prix par mois</span><input data-path="pricing.pricePerMonth" type="number" min="0"></label><label class="form-field"><span>Caution</span><input data-path="pricing.deposit" type="number" min="0"></label><label class="form-field"><span>Kilométrage inclus</span><input data-path="pricing.includedMileage" type="text"></label><label class="form-field"><span>Prix par course</span><input data-path="pricing.pricePerTrip" type="number" min="0"></label><label class="form-field full"><span>Zones couvertes / services proposés</span><textarea data-path="pricing.coveredAreas"></textarea></label></div></section>`,
-      `<section class="step-card"><h2>Photos</h2><div class="photo-dropzone"><div><strong>Upload multiple prévu</strong><p>Photo principale, aperçu, ordre, suppression et limite future de 30 photos.</p><input type="file" multiple accept=".jpg,.jpeg,.png,.webp"></div></div></section>`,
-      `<section class="step-card"><h2>Équipements</h2>${checkList(vehicleEquipment, "equipment")}</section>`,
-      `<section class="step-card"><h2>Documents</h2>${checkList(vehicleDocuments, "documents")}</section>`,
-      `<section class="step-card"><h2>Description</h2><div class="form-grid single"><label class="form-field"><span>Titre</span><input data-path="content.title" type="text"></label><label class="form-field"><span>Description</span><textarea data-path="content.description"></textarea></label></div></section>`,
-      `<section class="step-card"><h2>Moyens de contact</h2><div class="checkbox-list">${contactOptions.map(([key, label]) => `<label class="choice-card"><input type="checkbox" data-path="contactPreferences.${key}"${vehicleDraft.contactPreferences[key] ? " checked" : ""}><span>${label}</span></label>`).join("")}</div><div class="form-grid"><label class="form-field"><span>Numéro WhatsApp</span><input type="tel"></label><label class="form-field"><span>Numéro téléphone</span><input type="tel"></label><label class="form-field"><span>Email de contact</span><input type="email"></label><label class="form-field"><span>Email de notification</span><input type="email"></label></div></section>`,
-      `<section class="step-card"><h2>Prévisualisation</h2><div class="preview-box"><div class="preview-photo">Aperçu véhicule</div><strong>${vehicleDraft.content.title || "Titre de l’annonce"}</strong><span>${[vehicleDraft.identity.brand, vehicleDraft.identity.model].filter(Boolean).join(" ") || "Marque et modèle"}</span><p>${vehicleDraft.content.description || "Description non renseignée."}</p></div></section>`,
-      `<section class="step-card"><h2>Soumission</h2><p>Votre annonce voiture sera soumise avec le statut en attente de validation.</p><button class="btn btn-primary" type="button" data-submit-vehicle>Soumettre l’annonce</button></section>`
-    ];
-    return steps[currentVehicleStep];
-  }
-
-  function hasContactMethod() {
-    return contactOptions.some(([key]) => vehicleDraft.contactPreferences[key]);
-  }
-
-  function validateVehicleSubmit() {
-    if (!vehicleDraft.listingType) return "Veuillez sélectionner un type d’annonce.";
-    if (!vehicleDraft.identity.brand || !vehicleDraft.identity.model) return "Veuillez renseigner la marque et le modèle.";
-    if (!vehicleDraft.location.city) return "Veuillez renseigner la ville.";
-    if (!vehicleDraft.content.title) return "Veuillez ajouter un titre.";
-    if (!hasContactMethod()) return "Veuillez activer au moins un moyen de contact.";
-    return "";
-  }
-
-  function PublishVehiclePage(error = "") {
-    const progress = Math.round(((currentVehicleStep + 1) / vehicleSteps.length) * 100);
-    document.querySelector("#publish-header").innerHTML = `<a class="brand" href="${routeHref(vehicleRoutes.home)}"><span class="brand-mark">P</span><span><strong>Péncmi</strong><small>Publication voiture</small></span></a><div class="header-actions"><a class="btn btn-ghost" href="${routeHref(vehicleRoutes.vehicles)}">Voitures</a><a class="btn btn-light" href="${routeHref(vehicleRoutes.dashboard)}">Dashboard voitures</a></div>`;
-    document.querySelector("#publish-page").innerHTML = `
-      <div class="publish-shell">
-        <section class="publish-main">
-          <div class="publish-top"><h1>Publier une voiture</h1><p>Étape ${currentVehicleStep + 1} sur 12</p><div class="progress-track"><div class="progress-bar" style="width:${progress}%"></div></div></div>
-          <div class="stepper">${vehicleSteps.map((step, index) => `<span class="step-pill${index === currentVehicleStep ? " is-active" : ""}">${index + 1}. ${step}</span>`).join("")}</div>
-          ${stepContent()}
-          ${error ? `<div class="form-error">${error}</div>` : ""}
-          ${vehicleStatusMessage ? `<div class="status-message">${vehicleStatusMessage}</div>` : ""}
-          <div class="publish-nav"><div class="publish-nav-group"><button class="btn btn-ghost" type="button" data-prev-vehicle${currentVehicleStep === 0 ? " disabled" : ""}>Retour</button><button class="btn btn-light" type="button" data-draft-vehicle>Enregistrer en brouillon</button></div><div class="publish-nav-group"><button class="btn btn-ghost" type="button" data-preview-vehicle>Prévisualiser</button><button class="btn btn-primary" type="button" data-next-vehicle>${currentVehicleStep < vehicleSteps.length - 1 ? "Suivant" : "Soumettre"}</button></div></div>
-        </section>
-        <aside class="draft-summary"><h2>Résumé</h2><div class="summary-list"><div class="summary-item"><span>Type</span><strong>${vehicleDraft.listingType || "Non renseigné"}</strong></div><div class="summary-item"><span>Véhicule</span><strong>${[vehicleDraft.identity.brand, vehicleDraft.identity.model].filter(Boolean).join(" ") || "Non renseigné"}</strong></div><div class="summary-item"><span>Ville</span><strong>${vehicleDraft.location.city || "Non renseignée"}</strong></div></div></aside>
-      </div>
-    `;
-    bindVehiclePublishEvents();
-  }
-
-  function bindVehiclePublishEvents() {
-    document.querySelectorAll("[data-path]").forEach((input) => {
-      input.addEventListener("change", () => {
-        const value = input.type === "checkbox" ? input.checked : input.value;
-        setVehicleValue(input.dataset.path, value);
-        vehicleStatusMessage = "";
-        PublishVehiclePage();
-      });
-    });
-    document.querySelectorAll("[data-list]").forEach((input) => {
-      input.addEventListener("change", () => {
-        const key = input.dataset.list;
-        vehicleDraft[key] = input.checked ? [...vehicleDraft[key], input.value] : vehicleDraft[key].filter((item) => item !== input.value);
-        PublishVehiclePage();
-      });
-    });
-    document.querySelector("[data-prev-vehicle]")?.addEventListener("click", () => {
-      currentVehicleStep = Math.max(0, currentVehicleStep - 1);
-      PublishVehiclePage();
-    });
-    document.querySelector("[data-next-vehicle]")?.addEventListener("click", () => {
-      if (currentVehicleStep === vehicleSteps.length - 1) {
-        const error = validateVehicleSubmit();
-        if (error) {
-          PublishVehiclePage(error);
-          return;
+    function field(path, label, type = 'text', choices) {
+      const value = get(path) ?? '',
+        issue = fields.find((item) => item.path === path);
+      const attribute = `data-vehicle-field="${path}"${issue ? ' aria-invalid="true"' : ''}`;
+      const control = choices
+        ? `<select ${attribute}><option value="">Sélectionner</option>${choices
+            .map((option) => {
+              const [key, text] = Array.isArray(option)
+                ? option
+                : [option, option];
+              return `<option value="${esc(key)}"${value === key ? ' selected' : ''}>${esc(text)}</option>`;
+            })
+            .join('')}</select>`
+        : type === 'textarea'
+          ? `<textarea ${attribute} maxlength="6000">${esc(value)}</textarea>`
+          : `<input ${attribute} type="${type}" value="${esc(value)}"${type === 'number' ? ' min="0" step="1" max="2147483647"' : ''} maxlength="${type === 'email' ? 254 : 500}">`;
+      return `<label class="form-field"><span>${esc(label)}</span>${control}${issue ? `<small class="form-error">${esc(issue.message)}</small>` : ''}</label>`;
+    }
+    const checkbox = (path, label) =>
+      `<label class="choice-card"><input type="checkbox" data-vehicle-field="${path}"${get(path) ? ' checked' : ''}><span>${esc(label)}</span></label>`;
+    const collection = (key) =>
+      `<div class="checkbox-list">${vehicleChoices[key].map((value) => `<label class="choice-card"><input type="checkbox" data-vehicle-list="${key}" value="${esc(value)}"${draft.metadata[key].includes(value) ? ' checked' : ''}><span>${esc(value)}</span></label>`).join('')}</div>`;
+    function stepContent() {
+      const m = 'metadata.';
+      switch (step) {
+        case 0:
+          return `<div class="option-grid">${Object.entries(vehicleModes)
+            .map(
+              ([value, label]) =>
+                `<label class="choice-card"><input type="radio" name="vehicleMode" data-vehicle-field="vehicleMode" value="${value}"${draft.vehicleMode === value ? ' checked' : ''}><span>${label}</span></label>`,
+            )
+            .join('')}</div>`;
+        case 1:
+          return (
+            field(
+              `${m}identity.brand`,
+              'Marque',
+              'text',
+              vehicleChoices.brand,
+            ) +
+            field(`${m}identity.model`, 'Modèle') +
+            field(`${m}identity.version`, 'Version') +
+            field(`${m}identity.year`, 'Année', 'number')
+          );
+        case 2:
+          return [
+            'mileage',
+            'fuel',
+            'gearbox',
+            'category',
+            'seats',
+            'color',
+            'condition',
+            'power',
+          ]
+            .map((key, index) =>
+              field(
+                `${m}info.${key}`,
+                [
+                  'Kilométrage',
+                  'Carburant',
+                  'Boîte de vitesses',
+                  'Type de véhicule',
+                  'Nombre de places',
+                  'Couleur',
+                  'État',
+                  'Puissance',
+                ][index],
+                ['mileage', 'seats'].includes(key) ? 'number' : 'text',
+                vehicleChoices[key],
+              ),
+            )
+            .join('');
+        case 3:
+          return (
+            field(
+              `${m}location.region`,
+              'Région',
+              'text',
+              (window.SENEGAL_LOCATIONS || []).map((item) => item.region),
+            ) +
+            field(`${m}location.city`, 'Ville') +
+            field(`${m}location.district`, 'Quartier') +
+            field(`${m}location.addressHint`, 'Indication privée') +
+            checkbox(`${m}location.approximate`, 'Localisation approximative')
+          );
+        case 4: {
+          const prefix = `${m}pricing.`;
+          if (draft.vehicleMode === 'sale')
+            return (
+              field(prefix + 'price', 'Prix total (FCFA)', 'number') +
+              checkbox(prefix + 'negotiable', 'Prix négociable')
+            );
+          if (draft.vehicleMode === 'rental')
+            return (
+              [
+                ['pricePerDay', 'Tarif journalier (FCFA)'],
+                ['pricePerWeek', 'Tarif hebdomadaire (FCFA)'],
+                ['pricePerMonth', 'Tarif mensuel (FCFA)'],
+                ['deposit', 'Caution (FCFA)'],
+              ]
+                .map(([key, label]) => field(prefix + key, label, 'number'))
+                .join('') +
+              field(prefix + 'includedMileage', 'Kilométrage inclus') +
+              field(
+                prefix + 'rentalConditions',
+                'Conditions de location',
+                'textarea',
+              )
+            );
+          if (draft.vehicleMode === 'chauffeur')
+            return (
+              field(prefix + 'pricePerTrip', 'Tarif (FCFA)', 'number') +
+              field(prefix + 'chauffeurPriceUnit', 'Unité tarifaire', 'text', [
+                ['trip', 'Par trajet'],
+                ['service', 'Par service'],
+              ]) +
+              field(prefix + 'coveredAreas', 'Zones desservies', 'textarea') +
+              field(
+                prefix + 'serviceConditions',
+                'Conditions du service',
+                'textarea',
+              )
+            );
+          return '<p>Choisissez d’abord le type d’annonce.</p>';
         }
-        vehicleStatusMessage = "Votre annonce voiture a été soumise avec succès.";
-        PublishVehiclePage();
-        return;
+        case 5:
+          return `<div class="form-field full"><p>${esc(vehicleCopy.photoLimits)}</p><input type="file" data-upload-vehicle multiple accept="image/jpeg,image/png,image/webp"><div class="vehicle-publication-photos">${photos.map((photo, index) => `<figure><img src="${esc(blobs.get(photo.id) || (photo.managed ? '' : photo.url))}" alt="Photo ${index + 1}"><figcaption>${index === 0 ? 'Couverture' : `Photo ${index + 1}`}</figcaption><div class="publish-nav-group"><button type="button" class="btn btn-ghost" data-photo-move="${index}" data-direction="-1"${index === 0 ? ' disabled' : ''} aria-label="Déplacer avant">←</button><button type="button" class="btn btn-ghost" data-photo-move="${index}" data-direction="1"${index === photos.length - 1 ? ' disabled' : ''} aria-label="Déplacer après">→</button><button type="button" class="btn btn-ghost" data-photo-cover="${index}">Couverture</button><button type="button" class="btn btn-ghost" data-photo-delete="${esc(photo.id)}">Supprimer</button><label class="btn btn-light">Remplacer<input type="file" data-photo-replace="${esc(photo.id)}" accept="image/jpeg,image/png,image/webp" hidden></label></div></figure>`).join('')}</div></div>`;
+        case 6:
+          return collection('equipment');
+        case 7:
+          return `<div class="full"><p>${esc(vehicleCopy.documents)}</p><p>${esc(vehicleCopy.documentUpload)}</p>${collection('documents')}</div>`;
+        case 8:
+          return (
+            field('title', 'Titre') +
+            field('description', 'Description', 'textarea') +
+            field(`${m}conditions`, 'Conditions générales', 'textarea')
+          );
+        case 9:
+          return (
+            checkbox(`${m}contactPreferences.phoneEnabled`, 'Téléphone') +
+            field(`${m}contactPreferences.phoneNumber`, 'Téléphone', 'tel') +
+            checkbox(`${m}contactPreferences.whatsappEnabled`, 'WhatsApp') +
+            field(
+              `${m}contactPreferences.whatsappNumber`,
+              'Numéro WhatsApp',
+              'tel',
+            ) +
+            checkbox(`${m}contactPreferences.emailEnabled`, 'Email') +
+            field(
+              `${m}contactPreferences.contactEmail`,
+              'Email de contact',
+              'email',
+            ) +
+            checkbox(
+              `${m}contactPreferences.contactFormEnabled`,
+              'Formulaire de contact',
+            )
+          );
+        case 10:
+          return `<div class="preview-box full">${photos[0] && (blobs.get(photos[0].id) || !photos[0].managed) ? `<img class="vehicle-publication-preview" src="${esc(blobs.get(photos[0].id) || photos[0].url)}" alt="Photo de couverture">` : '<div class="preview-photo">Aucune photo</div>'}<h3>${esc(draft.title || 'Titre non renseigné')}</h3><p>${esc([draft.metadata.identity.brand, draft.metadata.identity.model, draft.metadata.location.city].filter(Boolean).join(' · '))}</p><strong>${esc(vehiclePrice({ vehicleMode: draft.vehicleMode, price: draft.metadata.pricing[draft.vehicleMode === 'sale' ? 'price' : draft.vehicleMode === 'rental' ? 'pricePerDay' : 'pricePerTrip'], metadata: draft.metadata.pricing }))}</strong><p>${esc(draft.description)}</p><p>${esc(draft.metadata.equipment.join(' · '))}</p><p>${esc(draft.metadata.conditions)}</p></div>`;
+        default:
+          return `<div class="full"><p>Votre annonce sera examinée avant sa mise en ligne.</p><p>Statut : ${esc(vehicleStatuses[status] || status)}</p><button class="btn btn-primary" type="button" data-submit-vehicle>Soumettre l’annonce</button></div>`;
       }
-      currentVehicleStep += 1;
-      PublishVehiclePage();
+    }
+    function render() {
+      root.innerHTML = `<div class="publish-shell"><section class="publish-main"><div class="publish-top"><h1>Publier une voiture</h1><p>Étape ${step + 1} sur 12</p><div class="progress-track"><div class="progress-bar" style="width:${Math.round(((step + 1) / 12) * 100)}%"></div></div></div><div class="stepper">${vehicleSteps.map((label, index) => `<button type="button" class="step-pill${step === index ? ' is-active' : ''}" data-step-vehicle="${index}">${index + 1}. ${esc(label)}</button>`).join('')}</div><section class="step-card"><h2>${esc(vehicleSteps[step])}</h2><div class="form-grid">${stepContent()}</div></section>${error ? `<div class="form-error" role="alert">${esc(error)}</div>` : ''}${message ? `<div class="status-message" role="status">${esc(message)}</div>` : ''}<div class="publish-nav"><div class="publish-nav-group"><button class="btn btn-ghost" data-prev-vehicle${step === 0 ? ' disabled' : ''}>Retour</button><button class="btn btn-light" data-draft-vehicle>Enregistrer en brouillon</button></div><div class="publish-nav-group"><button class="btn btn-ghost" data-preview-vehicle>Prévisualiser</button><button class="btn btn-primary" data-next-vehicle>${step === 11 ? 'Soumettre' : 'Suivant'}</button></div></div><a href="/dashboard/voitures/annonces/">Mes annonces</a></section><aside class="draft-summary"><h2>Résumé</h2><p>${esc(vehicleModes[draft.vehicleMode] || 'Type non renseigné')}</p><p>${esc(draft.metadata.location.city || 'Ville non renseignée')}</p><p>${esc(vehicleStatuses[status] || status)}</p></aside></div>`;
+      root
+        .querySelectorAll('[data-vehicle-field]')
+        .forEach((input) =>
+          input.addEventListener(
+            input.type === 'checkbox' ||
+              input.type === 'radio' ||
+              input.tagName === 'SELECT'
+              ? 'change'
+              : 'input',
+            () =>
+              set(
+                input.dataset.vehicleField,
+                input.type === 'checkbox'
+                  ? input.checked
+                  : input.type === 'number'
+                    ? input.value === ''
+                      ? null
+                      : Number(input.value)
+                    : input.value,
+              ),
+          ),
+        );
+      root.querySelectorAll('[data-vehicle-list]').forEach((input) =>
+        input.addEventListener('change', () => {
+          const key = input.dataset.vehicleList;
+          draft.metadata[key] = input.checked
+            ? [...new Set([...draft.metadata[key], input.value])]
+            : draft.metadata[key].filter((item) => item !== input.value);
+          dirty = true;
+        }),
+      );
+      root.querySelectorAll('[data-step-vehicle]').forEach(
+        (button) =>
+          (button.onclick = () => {
+            step = Number(button.dataset.stepVehicle);
+            render();
+          }),
+      );
+      root.querySelector('[data-prev-vehicle]').onclick = () => {
+        step--;
+        render();
+      };
+      root.querySelector('[data-next-vehicle]').onclick = () =>
+        step === 11 ? operation(submit) : (step++, render());
+      root.querySelector('[data-draft-vehicle]').onclick = () =>
+        operation(async () => {
+          await save(true);
+          message = 'Brouillon enregistré.';
+        });
+      root.querySelector('[data-preview-vehicle]').onclick = () => {
+        step = 10;
+        render();
+      };
+      root
+        .querySelector('[data-submit-vehicle]')
+        ?.addEventListener('click', () => operation(submit));
+      root
+        .querySelector('[data-upload-vehicle]')
+        ?.addEventListener('change', (event) =>
+          operation(() => upload([...event.target.files])),
+        );
+      root
+        .querySelectorAll('[data-photo-replace]')
+        .forEach(
+          (input) =>
+            (input.onchange = () =>
+              operation(() =>
+                upload([...input.files], input.dataset.photoReplace),
+              )),
+        );
+      root.querySelectorAll('[data-photo-move]').forEach(
+        (button) =>
+          (button.onclick = () =>
+            operation(async () => {
+              const order = photos.map((photo) => photo.id);
+              const index = Number(button.dataset.photoMove),
+                other = index + Number(button.dataset.direction);
+              [order[index], order[other]] = [order[other], order[index]];
+              apply(
+                await api(
+                  `/dashboard/voitures/${encodeURIComponent(id)}/photos/order`,
+                  { method: 'PATCH', body: { photoIds: order } },
+                ),
+              );
+            })),
+      );
+      root.querySelectorAll('[data-photo-cover]').forEach(
+        (button) =>
+          (button.onclick = () =>
+            operation(async () => {
+              const index = Number(button.dataset.photoCover),
+                order = photos.map((photo) => photo.id);
+              order.unshift(...order.splice(index, 1));
+              apply(
+                await api(
+                  `/dashboard/voitures/${encodeURIComponent(id)}/photos/order`,
+                  { method: 'PATCH', body: { photoIds: order } },
+                ),
+              );
+            })),
+      );
+      root
+        .querySelectorAll('[data-photo-delete]')
+        .forEach(
+          (button) =>
+            (button.onclick = () =>
+              operation(async () =>
+                apply(
+                  await api(
+                    `/dashboard/voitures/${encodeURIComponent(id)}/photos/${encodeURIComponent(button.dataset.photoDelete)}`,
+                    { method: 'DELETE' },
+                  ),
+                ),
+              )),
+        );
+      root
+        .querySelectorAll('button,input,select,textarea')
+        .forEach((control) => {
+          if (busy) control.disabled = true;
+        });
+      root.setAttribute('aria-busy', String(busy));
+    }
+    function apply(listing) {
+      if (!listing?.id || !vehicleStatuses[listing.status])
+        throw new Error(
+          'La confirmation du serveur est invalide. Vos données restent dans le formulaire.',
+        );
+      if (
+        photos.some(
+          (photo) =>
+            !(listing.photos || []).some((next) => next.id === photo.id),
+        )
+      )
+        uploads.clear();
+      for (const [photoId, url] of blobs)
+        if (!(listing.photos || []).some((photo) => photo.id === photoId)) {
+          URL.revokeObjectURL(url);
+          blobs.delete(photoId);
+        }
+      id = listing.id;
+      draft = vehicleDraftFromListing(listing);
+      photos = listing.photos || [];
+      status = listing.status;
+      dirty = false;
+      const url = new URL(location.href);
+      url.searchParams.set('id', id);
+      history.replaceState(null, '', url);
+      sessionStorage.removeItem('pencmi_vehicle_creation');
+    }
+    async function previews() {
+      for (const photo of photos)
+        if (photo.managed && !blobs.has(photo.id)) {
+          const blob = await api(
+            `/files/${encodeURIComponent(photo.id)}/content`,
+            { binary: true },
+          );
+          blobs.set(photo.id, URL.createObjectURL(blob));
+        }
+    }
+    async function save(force = false) {
+      if (id && !dirty && !force) return;
+      if (!id) sessionStorage.setItem('pencmi_vehicle_creation', requestId);
+      const body = JSON.parse(JSON.stringify(draft));
+      if (!id) {
+        const created = await api('/dashboard/voitures', {
+          method: 'POST',
+          body: { ...body, requestId },
+        });
+        if (!created?.id)
+          throw new Error(
+            'La création du brouillon n’a pas été confirmée. Réessayez sans quitter cette page.',
+          );
+        id = created.id;
+        const url = new URL(location.href);
+        url.searchParams.set('id', id);
+        history.replaceState(null, '', url);
+      }
+      apply(
+        await api(`/dashboard/voitures/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          body,
+        }),
+      );
+    }
+    async function submit() {
+      await save();
+      apply(
+        await api(`/dashboard/voitures/${encodeURIComponent(id)}/submit`, {
+          method: 'POST',
+        }),
+      );
+      message = vehicleCopy.submitted;
+    }
+    async function upload(files, replacePhotoId) {
+      for (const file of files)
+        if (
+          !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) ||
+          file.size > 5 * 1024 * 1024
+        )
+          throw new Error(vehicleCopy.photoLimits);
+      if (photos.length + files.length - (replacePhotoId ? 1 : 0) > 30)
+        throw new Error(vehicleCopy.photoLimits);
+      await save();
+      for (const file of files) {
+        const form = new FormData(),
+          key = `${replacePhotoId || 'new'}:${file.name}:${file.size}:${file.lastModified}`;
+        if (!uploads.has(key)) uploads.set(key, uuid());
+        form.set('uploadId', uploads.get(key));
+        form.set('photo', file);
+        if (replacePhotoId) form.set('replacePhotoId', replacePhotoId);
+        apply(
+          await api(`/dashboard/voitures/${encodeURIComponent(id)}/photos`, {
+            method: 'POST',
+            body: form,
+          }),
+        );
+      }
+    }
+    async function operation(action) {
+      if (busy) return;
+      busy = true;
+      error = '';
+      message = '';
+      fields = [];
+      render();
+      try {
+        if (dirty && step === 5) await save();
+        await action();
+      } catch (failure) {
+        error = failure.message;
+        fields = failure.fields || [];
+        if (fields.length) step = vehicleFieldStep(fields[0].path);
+      } finally {
+        try {
+          await previews();
+        } catch (failure) {
+          error ||= failure.message;
+        }
+        busy = false;
+        render();
+      }
+    }
+    document.querySelector('#publish-header').innerHTML =
+      '<a class="brand" href="/" aria-label="Accueil Péncmi"><img src="/Logo%20pencmi.jpeg" width="64" height="64" style="object-fit:contain" alt="Péncmi"></a><div class="header-actions"><a class="btn btn-ghost" href="/voitures/">Voitures</a><a class="btn btn-light" href="/dashboard/voitures/">Mon espace</a></div>';
+    window.addEventListener('beforeunload', (event) => {
+      if (dirty) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
     });
-    document.querySelector("[data-preview-vehicle]")?.addEventListener("click", () => {
-      currentVehicleStep = 10;
-      PublishVehiclePage();
-    });
-    document.querySelector("[data-draft-vehicle]")?.addEventListener("click", () => {
-      vehicleStatusMessage = "Brouillon enregistré.";
-      PublishVehiclePage();
-    });
-  }
-
-  setTimeout(() => PublishVehiclePage(), 0);
+    window.addEventListener('pagehide', () =>
+      blobs.forEach((url) => URL.revokeObjectURL(url)),
+    );
+    render();
+    if (id)
+      await operation(async () =>
+        apply(await api(`/dashboard/voitures/${encodeURIComponent(id)}`)),
+      );
+  })().catch((error) => {
+    document.querySelector('#publish-page').textContent = error.message;
+  });
 }

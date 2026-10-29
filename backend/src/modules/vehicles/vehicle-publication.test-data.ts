@@ -1,0 +1,40 @@
+export const completeVehicle = {
+  vehicleMode: 'sale' as const,
+  title: 'Véhicule de recette',
+  description: 'Description complète du véhicule.',
+  metadata: {
+    identity: { brand: 'Toyota', model: 'Corolla', year: 2024 },
+    info: {
+      mileage: 100,
+      fuel: 'Essence',
+      gearbox: 'Automatique',
+      category: 'Berline',
+      seats: 5,
+      condition: 'Occasion',
+    },
+    location: {
+      city: 'Dakar',
+      region: 'Dakar',
+      district: 'Plateau',
+      addressHint: 'Indication privée',
+    },
+    pricing: {
+      price: 9000000,
+      pricePerDay: 25000,
+      pricePerWeek: 150000,
+      pricePerMonth: 500000,
+      deposit: 100000,
+      pricePerTrip: 20000,
+      chauffeurPriceUnit: 'service' as const,
+      coveredAreas: 'Dakar',
+      currency: 'FCFA' as const,
+    },
+    equipment: ['Climatisation'],
+    documents: ['Assurance' as const],
+    conditions: 'Conditions déclarées',
+    contactPreferences: {
+      contactFormEnabled: true,
+      notificationEmail: 'private@example.test',
+    },
+  },
+};

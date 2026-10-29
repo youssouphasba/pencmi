@@ -8,6 +8,8 @@ const vehicleDashboardRoutes = {
   emailSettings: "/dashboard/voitures/email-settings",
   publish: "/publier?category=voiture"
 };
+let vehicleDashboardPresentation;
+const vehicleDashboardEscape = value => vehicleDashboardPresentation.vehicleEscape(value);
 
 const vehicleDashboardData = {
   listings: [],
@@ -56,24 +58,17 @@ function vehicleListFromPayload(payload) {
 }
 
 async function vehicleApiRequest(path, options = {}) {
-  const baseUrl = vehicleApiBaseUrl();
-  const token = vehicleAccessToken();
-  if (!baseUrl || !token) {
-    throw new Error("Connexion annonceur requise.");
+  const { publicationRequest } = await import('../../publier/real-estate-api.mjs');
+  return publicationRequest(path, { ...options, body: typeof options.body === 'string' ? JSON.parse(options.body) : options.body });
+}
+
+async function vehicleApiList(path) {
+  const result = [];
+  for (let page = 1; ; page++) {
+    const payload = await vehicleApiRequest(`${path}?limit=100&page=${page}`, { includeMeta: true });
+    result.push(...vehicleListFromPayload(payload));
+    if (!payload.meta?.totalPages || page >= payload.meta.totalPages) return result;
   }
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers: {
-      ...(options.headers || {}),
-      Authorization: `Bearer ${token}`,
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-    },
-  });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || "Chargement impossible.");
-  }
-  return payload?.data ?? payload;
 }
 
 const vehicleRequestStatusLabels = {
@@ -85,6 +80,13 @@ const vehicleRequestStatusLabels = {
   completed: "Terminée",
   requires_more_info: "Infos demandées"
 };
+const vehicleRequestTransitions = {
+  new: ['accepted', 'requires_more_info', 'refused', 'cancelled'],
+  pending: ['accepted', 'requires_more_info', 'refused', 'cancelled'],
+  requires_more_info: ['accepted', 'pending', 'refused', 'cancelled'],
+  accepted: ['completed', 'cancelled'],
+};
+const vehicleRequestActionLabels = { accepted: 'Accepter', requires_more_info: 'Demander des infos', refused: 'Refuser', cancelled: 'Annuler', completed: 'Terminer', pending: 'Mettre en attente' };
 
 function formatVehicleRequestStatus(status) {
   return vehicleRequestStatusLabels[status] || "À traiter";
@@ -133,7 +135,7 @@ function VehiclesDashboardLayout(content, currentPage) {
 
 function VehiclesDashboardSidebar(currentPage) {
   const listingCount = String(vehicleDashboardData.listings.length || 0);
-  const contactCount = String(vehicleDashboardData.requests.length || 0);
+  const contactCount = String(vehicleDashboardData.requests.length + vehicleDashboardData.contacts.length || 0);
   const items = [
     ["Vue d’ensemble", vehicleDashboardRoutes.overview, "overview"],
     ["Annonces", vehicleDashboardRoutes.listings, "listings", listingCount],
@@ -156,7 +158,7 @@ function KpiCard(title, value) {
 }
 
 function EmptyState(title, text = "", action = "") {
-  return `<section class="vehicle-empty-dashboard"><div><h2>${title}</h2>${text ? `<p>${text}</p>` : ""}${action ? `<div class="vehicle-empty-actions">${action}</div>` : ""}</div></section>`;
+  return `<section class="vehicle-empty-dashboard"><div><h2>${vehicleDashboardEscape(title)}</h2>${text ? `<p>${vehicleDashboardEscape(text)}</p>` : ""}${action ? `<div class="vehicle-empty-actions">${action}</div>` : ""}</div></section>`;
 }
 
 function VehiclesDashboardPage() {
@@ -172,7 +174,6 @@ function VehiclesDashboardPage() {
     ["Annonces actives", activeListings],
     ["Annonces en attente", pendingListings],
     ["Demandes location/chauffeur", vehicleDashboardData.requests.length],
-    ["Messages reçus", vehicleDashboardData.messages.length],
     ["Contacts", vehicleDashboardData.contacts.length]
   ];
   return VehiclesDashboardLayout(`
@@ -184,7 +185,7 @@ function VehiclesDashboardPage() {
 
 function VehicleListingsDashboardPage() {
   return VehiclesDashboardLayout(`
-    ${DashboardHeader("Mes annonces voitures", "Gérez vos véhicules publiés et leurs performances.", `<a class="btn btn-primary" href="${vehicleDashboardRouteHref(vehicleDashboardRoutes.publish)}">Publier ma première voiture</a>`)}
+    ${DashboardHeader("Mes annonces voitures", "Gérez vos véhicules publiés et leurs performances.", `<a class="btn btn-primary" href="${vehicleDashboardRouteHref(vehicleDashboardRoutes.publish)}">Publier une voiture</a>`)}
     ${vehicleDashboardData.listings.length ? VehicleListingsTable() : EmptyState("Vous n’avez aucune annonce voiture pour le moment.", "", `<a class="btn btn-primary" href="${vehicleDashboardRouteHref(vehicleDashboardRoutes.publish)}">Publier ma première voiture</a>`)}
   `, "listings");
 }
@@ -192,7 +193,8 @@ function VehicleListingsDashboardPage() {
 function VehicleListingsTable() {
   return `<section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Voiture</th><th>Statut</th><th>Ville</th><th>Type</th><th>Prix</th><th>Demandes</th><th>Actions</th></tr></thead><tbody>${vehicleDashboardData.listings.map((listing) => {
     const requests = vehicleDashboardData.requests.filter((request) => request.listing?.id === listing.id).length;
-    return `<tr><td>${listing.title}</td><td>${listing.status}</td><td>${listing.city || ""}</td><td>${listing.vehicleMode || ""}</td><td>${listing.price || ""}</td><td>${requests}</td><td><a class="btn btn-ghost" href="${vehicleDashboardRouteHref(`/voitures/${listing.id}`)}">Voir</a></td></tr>`;
+    const esc = vehicleDashboardEscape, id = encodeURIComponent(listing.id);
+    return `<tr><td>${esc(listing.title || 'Brouillon sans titre')}</td><td>${esc(vehicleDashboardPresentation.vehicleStatuses[listing.status] || listing.status)}</td><td>${esc(listing.city)}</td><td>${esc(vehicleDashboardPresentation.vehicleModes[listing.vehicleMode])}</td><td>${esc(vehicleDashboardPresentation.vehiclePrice(listing))}</td><td>${requests}</td><td><div class="vehicle-row-actions"><a class="btn btn-light" href="/publier/?category=voiture&id=${id}">${listing.status === 'draft' ? 'Reprendre' : 'Modifier'}</a>${listing.status === 'active' ? `<a class="btn btn-ghost" href="${vehicleDashboardRouteHref(`/voitures/${id}`)}">Voir</a>` : ''}<button class="btn btn-ghost" data-delete-vehicle="${esc(listing.id)}" type="button">Supprimer</button></div></td></tr>`;
   }).join("")}</tbody></table></section>`;
 }
 
@@ -201,31 +203,28 @@ function VehicleMessagesPage() {
 }
 
 function VehicleContactsPage() {
-  const sources = ["WhatsApp", "Téléphone", "Email", "Message interne", "Formulaire"];
   return VehiclesDashboardLayout(`
     ${DashboardHeader("Contacts reçus", "Suivez les contacts générés par vos annonces voitures.")}
-    <section class="vehicle-dashboard-card"><h2>Sources prévues</h2><div class="vehicle-chip-row">${sources.map((source) => `<span class="vehicle-chip">${source}</span>`).join("")}</div></section>
-    ${vehicleDashboardData.requests.length ? `<section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Client</th><th>Annonce</th><th>Type</th><th>Début</th><th>Fin</th><th>Message</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead><tbody>${vehicleDashboardData.requests.map(VehicleRequestRow).join("")}</tbody></table></section>` : EmptyState("Aucun contact reçu pour le moment.")}
+    ${vehicleDashboardData.contacts.length ? `<section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Client</th><th>Annonce</th><th>Coordonnées</th><th>Message</th><th>Date</th></tr></thead><tbody>${vehicleDashboardData.contacts.map(contact => { const data = contact.metadata || {}; const esc = vehicleDashboardEscape; return `<tr><td>${esc(data.clientName)}</td><td>${esc(data.listingTitle)}</td><td>${esc([data.clientPhone, data.clientEmail].filter(Boolean).join(' · '))}</td><td>${esc(data.message)}</td><td>${formatVehicleDate(contact.createdAt)}</td></tr>`; }).join('')}</tbody></table></section>` : ''}
+    ${vehicleDashboardData.requests.length ? `<section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Client</th><th>Annonce</th><th>Type</th><th>Début</th><th>Fin</th><th>Message</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead><tbody>${vehicleDashboardData.requests.map(VehicleRequestRow).join("")}</tbody></table></section>` : vehicleDashboardData.contacts.length ? '' : EmptyState("Aucun contact reçu pour le moment.")}
   `, "contacts");
 }
 
 function VehicleRequestRow(request) {
+  const esc = vehicleDashboardEscape;
   return `
     <tr>
-      <td>${request.clientName || "Client"}</td>
-      <td>${request.listing?.title || "Annonce"}</td>
-      <td>${request.requestType || request.listing?.vehicleMode || ""}</td>
+      <td>${esc(request.clientName || "Client")}<br>${esc([request.clientPhone, request.clientEmail].filter(Boolean).join(' · '))}</td>
+      <td>${esc(request.listing?.title || "Annonce")}</td>
+      <td>${esc(request.requestType || request.listing?.vehicleMode || "")}</td>
       <td>${formatVehicleDate(request.startDate || request.serviceDate)}</td>
       <td>${formatVehicleDate(request.endDate)}</td>
-      <td>${request.message || ""}</td>
+      <td>${esc(request.message)}</td>
       <td>${formatVehicleRequestStatus(request.status)}</td>
       <td>${formatVehicleDate(request.createdAt)}</td>
       <td>
         <div class="vehicle-row-actions">
-          <button class="btn btn-primary" type="button" data-vehicle-request-status="accepted" data-vehicle-request-type="${request.requestType}" data-vehicle-request-id="${request.id}">Accepter</button>
-          <button class="btn btn-ghost" type="button" data-vehicle-request-status="requires_more_info" data-vehicle-request-type="${request.requestType}" data-vehicle-request-id="${request.id}">Demander des infos</button>
-          <button class="btn btn-ghost" type="button" data-vehicle-request-status="refused" data-vehicle-request-type="${request.requestType}" data-vehicle-request-id="${request.id}">Refuser</button>
-          <button class="btn btn-ghost" type="button" data-vehicle-request-status="completed" data-vehicle-request-type="${request.requestType}" data-vehicle-request-id="${request.id}">Terminer</button>
+          ${(vehicleRequestTransitions[request.status] || []).map(status => `<button class="btn ${status === 'accepted' ? 'btn-primary' : 'btn-ghost'}" type="button" data-vehicle-request-status="${status}" data-vehicle-request-type="${esc(request.requestType)}" data-vehicle-request-id="${esc(request.id)}">${vehicleRequestActionLabels[status]}</button>`).join('')}
         </div>
       </td>
     </tr>
@@ -253,35 +252,9 @@ function VehicleStatisticsPage() {
 }
 
 function VehicleContactSettingsPage() {
-  const notificationTriggers = ["Nouveau message", "Nouveau formulaire", "Nouveau contact"];
-  return VehiclesDashboardLayout(`
-    ${DashboardHeader("Moyens de contact", "Configurez les contacts et notifications email pour vos annonces voitures.", `<a class="btn btn-light" href="${vehicleDashboardRouteHref(vehicleDashboardRoutes.emailSettings)}">Emails automatiques</a>`)}
-    <section class="vehicle-dashboard-card">
-      <h2>Paramètres de contact voitures</h2>
-      <div class="vehicle-form-grid">
-        ${["WhatsApp", "Téléphone", "Email", "Messagerie interne", "Formulaire", "Notifications email", "Emails automatiques client"].map((item) => `<label class="choice-card"><input type="checkbox"><span>${item}</span></label>`).join("")}
-        <label class="vehicle-form-field"><span>Numéro WhatsApp</span><input type="tel"></label>
-        <label class="vehicle-form-field"><span>Numéro téléphone</span><input type="tel"></label>
-        <label class="vehicle-form-field"><span>Email de contact</span><input type="email"></label>
-        <label class="vehicle-form-field"><span>Email de notification</span><input type="email"></label>
-        <label class="vehicle-form-field"><span>Méthode préférée</span><select><option>WhatsApp</option><option>Téléphone</option><option>Email</option><option>Message interne</option><option>Formulaire</option></select></label>
-      </div>
-      <div class="vehicle-form-actions"><button class="btn btn-primary" type="button" data-save-contact-settings>Enregistrer</button></div>
-      <p id="vehicle-contact-settings-message" hidden>Vos moyens de contact ont été mis à jour.</p>
-    </section>
-    <section class="vehicle-dashboard-card">
-      <h2>Résumé et aperçu client</h2>
-      <p class="dashboard-muted">Les boutons visibles s’adaptent au type d’annonce : vente, location ou chauffeur.</p>
-      <div class="vehicle-chip-row">${["Contacter le vendeur", "Demander une location", "Demander un chauffeur", "Envoyer un message", "Appeler", "WhatsApp", "Email"].map((item) => `<span class="vehicle-chip">${item}</span>`).join("")}</div>
-    </section>
-    <section class="vehicle-dashboard-card">
-      <h2>Notifications email prévues</h2>
-      <p class="dashboard-muted">Objet futur : Nouveau contact sur votre annonce voiture Péncmi.</p>
-      <div class="vehicle-chip-row">${notificationTriggers.map((trigger) => `<span class="vehicle-chip">${trigger}</span>`).join("")}</div>
-      <p class="dashboard-muted">L’email contiendra le véhicule concerné, le type de contact, un extrait du message et un lien vers le dashboard.</p>
-    </section>
-  `, "contactSettings");
+  return VehiclesDashboardLayout(`${DashboardHeader('Moyens de contact', '')}<section class="vehicle-dashboard-card"><h2>Contacts par annonce</h2>${vehicleDashboardData.listings.length ? vehicleDashboardData.listings.map(listing => `<p><a class="btn btn-light" href="/publier/?category=voiture&id=${encodeURIComponent(listing.id)}&step=9">${vehicleDashboardEscape(listing.title || 'Brouillon sans titre')}</a></p>`).join('') : EmptyState('Aucune annonce à configurer.')}</section>`, 'contactSettings');
 }
+
 
 function renderDashboard() {
   const page = document.body.dataset.vehicleDashboardPage;
@@ -293,13 +266,18 @@ function renderDashboard() {
     statistics: VehicleStatisticsPage,
     contactSettings: VehicleContactSettingsPage
   };
-  document.querySelector("#vehicle-dashboard-root").innerHTML = pages[page]();
+  document.querySelector("#vehicle-dashboard-root").innerHTML = vehicleDashboardData.loading || vehicleDashboardData.error
+    ? VehiclesDashboardLayout(`${DashboardHeader('Mon espace voitures', '')}${EmptyState(vehicleDashboardData.error || 'Chargement en cours.')}`, page)
+    : (pages[page] || VehiclesDashboardPage)();
   document.querySelector("[data-open-sidebar]")?.addEventListener("click", () => document.querySelector("#vehicle-sidebar").classList.toggle("is-open"));
   document.querySelector("[data-dashboard-logout]")?.addEventListener("click", () => {
     void vehicleLogout();
   });
-  document.querySelector("[data-save-contact-settings]")?.addEventListener("click", () => {
-    document.querySelector("#vehicle-contact-settings-message").hidden = false;
+  document.querySelectorAll('[data-delete-vehicle]').forEach(button => button.onclick = async () => {
+    if (!window.confirm('Supprimer cette annonce ?')) return;
+    button.disabled = true;
+    try { await vehicleApiRequest(`/dashboard/voitures/${encodeURIComponent(button.dataset.deleteVehicle)}`, { method: 'DELETE' }); await loadVehicleDashboardData(); }
+    catch (error) { button.disabled = false; window.alert(error.message); }
   });
   document.querySelectorAll("[data-vehicle-request-status]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -317,14 +295,16 @@ async function loadVehicleDashboardData() {
   vehicleDashboardData.error = "";
   renderDashboard();
   try {
-    const [listingsPayload, rentalPayload, chauffeurPayload] = await Promise.all([
-      vehicleApiRequest("/dashboard/voitures"),
-      vehicleApiRequest("/dashboard/voitures/rental-requests"),
-      vehicleApiRequest("/dashboard/voitures/chauffeur-requests"),
+    const [listingsPayload, rentalPayload, chauffeurPayload, contacts] = await Promise.all([
+      vehicleApiList("/dashboard/voitures"),
+      vehicleApiList("/dashboard/voitures/rental-requests"),
+      vehicleApiList("/dashboard/voitures/chauffeur-requests"),
+      vehicleApiRequest('/dashboard/contacts?module=vehicles'),
     ]);
     const rentalRequests = vehicleListFromPayload(rentalPayload).map((request) => ({ ...request, requestType: "location" }));
     const chauffeurRequests = vehicleListFromPayload(chauffeurPayload).map((request) => ({ ...request, requestType: "chauffeur" }));
     vehicleDashboardData.listings = vehicleListFromPayload(listingsPayload);
+    vehicleDashboardData.contacts = vehicleListFromPayload(contacts).filter(contact => contact.source === 'form');
     vehicleDashboardData.requests = [...rentalRequests, ...chauffeurRequests].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   } catch (error) {
     vehicleDashboardData.error = error instanceof Error ? error.message : "Chargement impossible.";
@@ -334,4 +314,4 @@ async function loadVehicleDashboardData() {
   }
 }
 
-void loadVehicleDashboardData();
+void import('../../voitures/vehicle-content.mjs').then(module => { vehicleDashboardPresentation = module; return loadVehicleDashboardData(); });

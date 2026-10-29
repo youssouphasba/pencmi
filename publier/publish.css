@@ -351,4 +351,12 @@ body[data-hotel-publication] .step-pill { white-space: normal; text-align: left;
 .hotel-photo-grid figure { margin: 0; min-width: 0; }
 .hotel-photo-grid img { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #f1f5f9; }
 .hotel-photo-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+body[data-vehicle-publication] .publish-main { min-width: 0; }
+body[data-vehicle-publication] .stepper { flex-wrap: wrap; overflow: visible; }
+body[data-vehicle-publication] .step-pill { white-space: normal; text-align: left; max-width: 100%; cursor: pointer; }
+body[data-vehicle-publication] .publish-nav { position: static; }
+body[data-vehicle-publication] input, body[data-vehicle-publication] select, body[data-vehicle-publication] textarea { min-width: 0; max-width: 100%; }
+.vehicle-publication-photos { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 16px; }
+.vehicle-publication-photos figure { margin: 0; min-width: 0; }
+.vehicle-publication-photos img, .vehicle-publication-preview { width: 100%; aspect-ratio: 4 / 3; object-fit: contain; background: #f1f5f9; }
 body[data-hotel-publication] input, body[data-hotel-publication] select, body[data-hotel-publication] textarea { min-width: 0; max-width: 100%; }

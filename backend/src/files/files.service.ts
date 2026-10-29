@@ -105,9 +105,9 @@ export class FilesService {
     listingId: string,
     id: string,
     file: UploadedImage,
-    module: 'real_estate' | 'hotels' = 'real_estate',
+    module: 'real_estate' | 'hotels' | 'vehicles' = 'real_estate',
   ) {
-    const storageKey = `${module === 'real_estate' ? 'real-estate' : 'hotels'}/${ownerUserId}/${id}/${randomUUID()}.${file.mimetype.split('/')[1]}`;
+    const storageKey = `${module === 'real_estate' ? 'real-estate' : module}/${ownerUserId}/${id}/${randomUUID()}.${file.mimetype.split('/')[1]}`;
     try {
       await this.persistBinary(storageKey, file);
       return await tx.fileAsset.create({
@@ -145,7 +145,7 @@ export class FilesService {
   async purgeDeletedListingPhoto(
     id: string,
     ownerUserId: string,
-    module: 'real_estate' | 'hotels' = 'real_estate',
+    module: 'real_estate' | 'hotels' | 'vehicles' = 'real_estate',
   ) {
     const asset = await this.prisma.fileAsset.findFirst({
       where: {
@@ -238,15 +238,16 @@ export class FilesService {
 
     if (
       asset.module === PencmiModule.real_estate ||
-      asset.module === PencmiModule.hotels
+      asset.module === PencmiModule.hotels ||
+      asset.module === PencmiModule.vehicles
     ) {
       const usage = await this.prisma.fileUsage.findFirst({
         where: { fileId: id, targetType: TargetType.listing },
       });
       const listing =
         usage &&
-        (await (asset.module === PencmiModule.hotels
-          ? this.prisma.hotelProperty.findFirst({
+        (await (asset.module === PencmiModule.vehicles
+          ? this.prisma.vehicleListing.findFirst({
               where: {
                 id: usage.targetId,
                 status: ListingStatus.active,
@@ -254,14 +255,23 @@ export class FilesService {
               },
               select: { id: true },
             })
-          : this.prisma.realEstateListing.findFirst({
-              where: {
-                id: usage.targetId,
-                status: ListingStatus.active,
-                deletedAt: null,
-              },
-              select: { id: true },
-            })));
+          : asset.module === PencmiModule.hotels
+            ? this.prisma.hotelProperty.findFirst({
+                where: {
+                  id: usage.targetId,
+                  status: ListingStatus.active,
+                  deletedAt: null,
+                },
+                select: { id: true },
+              })
+            : this.prisma.realEstateListing.findFirst({
+                where: {
+                  id: usage.targetId,
+                  status: ListingStatus.active,
+                  deletedAt: null,
+                },
+                select: { id: true },
+              })));
       if (!listing) throw new NotFoundException('Fichier introuvable.');
     }
 
@@ -283,7 +293,8 @@ export class FilesService {
 
     if (
       asset.module === PencmiModule.real_estate ||
-      asset.module === PencmiModule.hotels
+      asset.module === PencmiModule.hotels ||
+      asset.module === PencmiModule.vehicles
     ) {
       throw new BadRequestException('Gérez cette photo depuis son annonce.');
     }
