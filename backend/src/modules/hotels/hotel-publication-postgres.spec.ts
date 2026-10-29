@@ -9,6 +9,7 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { FilesService } from '../../files/files.service';
 import { HotelPublicationService } from './hotel-publication.service';
 import { HotelsService } from './hotels.service';
+import { HotelReservationsService } from './hotel-reservations.service';
 
 const sharp: typeof SharpFactory = require('sharp');
 const url = process.env.TEST_DATABASE_URL;
@@ -38,7 +39,10 @@ const url = process.env.TEST_DATABASE_URL;
         prisma as PrismaService,
         files,
       );
-      const publicService = new HotelsService(prisma as PrismaService);
+      const publicService = new HotelsService(
+        prisma as PrismaService,
+        new HotelReservationsService(prisma as PrismaService),
+      );
       const users: string[] = [];
       const properties: string[] = [];
       try {

@@ -9,7 +9,7 @@ export function getPublicationApiBase(platform = window) {
   return '';
 }
 
-export async function publicationRequest(path, { method = 'GET', body, binary = false } = {}, retry = true) {
+export async function publicationRequest(path, { method = 'GET', body, binary = false, includeMeta = false } = {}, retry = true) {
   const base = getPublicationApiBase();
   const token = tokenSession.snapshot().accessToken;
   if (!token) throw Object.assign(new Error('Veuillez vous connecter à votre espace annonceur.'), { status: 401 });
@@ -29,14 +29,14 @@ export async function publicationRequest(path, { method = 'GET', body, binary = 
   }
   if (response.status === 401 && retry) {
     await tokenSession.refresh(base, token);
-    return publicationRequest(path, { method, body, binary }, false);
+    return publicationRequest(path, { method, body, binary, includeMeta }, false);
   }
   if (response.ok && binary) return response.blob();
   const payload = await response.json().catch(() => null);
   if (!response.ok) throw Object.assign(new Error(payload?.error?.message || payload?.message || 'Enregistrement impossible.'), {
     status: response.status, fields: payload?.error?.details?.fields || payload?.fields || [],
   });
-  return payload?.data ?? payload;
+  return includeMeta ? payload : payload?.data ?? payload;
 }
 
 export function publicationOperationId(cryptoProvider = crypto) {

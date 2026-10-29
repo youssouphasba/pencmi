@@ -8,6 +8,7 @@ const hotelDetailRoutes = {
 let hotelDetailState = {
   listing: null,
 };
+let hotelDetailReservation;
 const hotelDetailEscape = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const hotelCalendarDate = value => new Intl.DateTimeFormat('fr-FR', { timeZone: 'Africa/Dakar' }).format(new Date(value));
 
@@ -17,6 +18,10 @@ function hotelDetailRouteHref(path) {
 
 function hotelDetailMetadata() {
   return hotelDetailState.listing?.metadata || {};
+}
+
+function hotelCanRequestReservation() {
+  return hotelDetailState.listing?.rooms?.length > 0 && hotelDetailMetadata().contactPreferences?.reservationRequestEnabled !== false;
 }
 
 function hotelDetailAdvertiser() {
@@ -91,7 +96,7 @@ function hotelRooms() {
           <p>Disponibilité à confirmer</p>
           ${room.rates?.length ? `<details><summary>Tarifs datés</summary>${room.rates.map(rate => `<p>${hotelCalendarDate(rate.date)} : ${pencmiFormatPrice(rate.price, rate.currency)}</p>`).join('')}</details>` : ''}
           ${room.availability?.length ? `<details><summary>Calendrier renseigné</summary>${room.availability.map(day => `<p>${hotelCalendarDate(day.date)} : ${hotelDetailEscape(({ open: day.stopSell ? 'Ventes suspendues' : 'Sur demande', closed: 'Fermé', full: 'Complet', maintenance: 'Maintenance', unconfirmed: 'À confirmer' })[day.status] || 'À confirmer')}${day.available !== undefined ? ` · ${Number(day.available)} unité(s)` : ''}</p>`).join('')}</details>` : ''}
-          <button class="btn btn-primary" type="button" data-open-reservation data-room-name="${hotelDetailEscape(room.name)}">Demander une réservation</button>
+          <button class="btn btn-primary" type="button" data-open-reservation data-room-id="${hotelDetailEscape(room.id)}" ${hotelCanRequestReservation() ? '' : 'disabled'}>Demander une réservation</button>
         </article>
       `).join("")}</div>` : `<p>Aucune chambre ou logement renseigné pour le moment.</p>`}
     </section>
@@ -135,20 +140,23 @@ function hotelReservationModal() {
       <section class="hotel-modal-card" role="dialog" aria-modal="true" aria-labelledby="reservation-title">
         <h2 id="reservation-title">Demander une réservation</h2>
         <form class="hotel-form-grid" id="hotel-reservation-form">
-          <label class="hotel-form-field"><span>Nom</span><input type="text" name="clientName" required></label>
-          <label class="hotel-form-field"><span>Téléphone</span><input type="tel" name="clientPhone"></label>
-          <label class="hotel-form-field"><span>Email</span><input type="email" name="clientEmail"></label>
-          <label class="hotel-form-field"><span>Chambre ou logement</span><input type="text" name="roomName" id="hotel-room-name"></label>
-          <label class="hotel-form-field"><span>Date d’arrivée</span><input type="date" name="checkIn"></label>
-          <label class="hotel-form-field"><span>Date de départ</span><input type="date" name="checkOut"></label>
-          <label class="hotel-form-field"><span>Nombre de voyageurs</span><input type="number" name="guests" min="1" value="1"></label>
-          <label class="hotel-form-field"><span>Message</span><textarea name="message">Bonjour, je souhaite réserver cet hébergement.</textarea></label>
+          <label class="hotel-form-field"><span>Nom</span><input type="text" name="clientName" minlength="2" maxlength="120" autocomplete="name" required></label>
+          <label class="hotel-form-field"><span>Téléphone</span><input type="tel" name="clientPhone" maxlength="30" autocomplete="tel"></label>
+          <label class="hotel-form-field"><span>Email</span><input type="email" name="clientEmail" maxlength="254" autocomplete="email"></label>
+          <label class="hotel-form-field"><span>Catégorie de chambre</span><select name="roomId" id="hotel-room-id" required><option value="">Choisir une catégorie</option>${(listing?.rooms || []).map(room => `<option value="${hotelDetailEscape(room.id)}">${hotelDetailEscape(room.name)}</option>`).join('')}</select></label>
+          <label class="hotel-form-field"><span>Date d’arrivée</span><input type="date" name="checkIn" min="${hotelDetailReservation.reservationToday()}" required></label>
+          <label class="hotel-form-field"><span>Date de départ</span><input type="date" name="checkOut" min="${hotelDetailReservation.reservationToday()}" required></label>
+          <label class="hotel-form-field"><span>Nombre de voyageurs</span><input type="number" name="guests" min="1" max="100" value="1" required></label>
+          <label class="hotel-form-field"><span>Nombre d’unités</span><input type="number" name="units" min="1" max="10" value="1" required></label>
+          <label class="hotel-form-field"><span>Message</span><textarea name="message" maxlength="2000">Bonjour, je souhaite réserver cet hébergement.</textarea></label>
+          <div id="hotel-stay-quote" class="hotel-reservation-feedback" aria-live="polite">Choisissez une chambre et les dates pour vérifier le séjour.</div>
           <div class="hotel-form-actions" style="grid-column:1 / -1;">
             <button class="btn btn-ghost" type="button" data-close-modal>Annuler</button>
             <button class="btn btn-primary" type="submit">Envoyer la demande</button>
           </div>
         </form>
-        <p id="reservation-message" hidden>Votre demande a été envoyée. L’établissement vous confirmera la disponibilité.</p>
+        <p id="reservation-message" role="status" hidden></p>
+        <button class="btn btn-light" type="button" data-new-hotel-request hidden>Nouvelle demande</button>
         ${listing ? `<p style="margin-top:12px;color:var(--muted);">${hotelDetailEscape(listing.name)}</p>` : ""}
       </section>
     </div>
@@ -200,7 +208,7 @@ function hotelDetailPage() {
             <button class="btn btn-ghost" type="button" data-share>Partager</button>
             ${typeof ReportButton === "function" ? ReportButton("Signaler") : ""}
             <button class="btn btn-light" type="button" data-open-contact>Contacter</button>
-            <button class="btn btn-primary" type="button" data-open-reservation>Demander une réservation</button>
+            <button class="btn btn-primary" type="button" data-open-reservation ${hotelCanRequestReservation() ? '' : 'disabled'}>Demander une réservation</button>
           </div>
         </section>
         ${hotelRooms()}
@@ -231,20 +239,7 @@ function bindHotelDetailActions() {
     });
   });
 
-  document.querySelectorAll("[data-open-reservation]").forEach((button) => {
-    button.addEventListener("click", () => {
-      document.querySelector("#reservation-modal")?.classList.add("is-open");
-      const roomName = button.dataset.roomName || "";
-      const input = document.querySelector("#hotel-room-name");
-      if (input) {
-        input.value = roomName;
-      }
-    });
-  });
-
-  document.querySelector("[data-close-modal]")?.addEventListener("click", () => {
-    document.querySelector("#reservation-modal")?.classList.remove("is-open");
-  });
+  hotelDetailReservation.bindHotelReservation({ property: hotelDetailState.listing, api: pencmiApiRequest, formatPrice: pencmiFormatPrice, escape: hotelDetailEscape });
 
   document.querySelector("[data-open-contact]")?.addEventListener("click", () => {
     document.querySelector("#contact-modal")?.classList.add("is-open");
@@ -263,30 +258,6 @@ function bindHotelDetailActions() {
     await navigator.clipboard?.writeText(url).catch(() => undefined);
   });
 
-  document.querySelector("#hotel-reservation-form")?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const message = [formData.get("message"), formData.get("roomName") ? `Chambre souhaitée : ${formData.get("roomName")}` : ""].filter(Boolean).join("\n");
-
-    await pencmiApiRequest(`/hotels/${encodeURIComponent(hotelDetailState.listing.id)}/reservation-requests`, {
-      method: "POST",
-      body: JSON.stringify({
-        clientName: formData.get("clientName"),
-        clientPhone: formData.get("clientPhone"),
-        clientEmail: formData.get("clientEmail"),
-        checkIn: formData.get("checkIn") || undefined,
-        checkOut: formData.get("checkOut") || undefined,
-        guests: Number(formData.get("guests") || 1),
-        message,
-      }),
-    });
-
-    const confirmation = document.querySelector("#reservation-message");
-    if (confirmation) {
-      confirmation.hidden = false;
-    }
-    event.currentTarget.reset();
-  });
 }
 
 async function loadHotelDetail() {
@@ -300,6 +271,7 @@ async function loadHotelDetail() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  hotelDetailReservation = await import('../reservation.mjs');
   hotelDetailHeader();
   try {
     await loadHotelDetail();

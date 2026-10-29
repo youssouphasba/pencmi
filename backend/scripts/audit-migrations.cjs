@@ -25,6 +25,13 @@ const requiredArtifacts = {
     ['column', 'HotelRoomAvailability.status'],
     ['constraint', 'HotelRoomAvailability_nonnegative'],
   ],
+  '20261029010000_hotel_reservation_allocations': [
+    ...['roomId', 'units', 'idempotencyKey', 'requestFingerprint'].map(name => ['column', `HotelReservationRequest.${name}`]),
+    ['table', 'HotelStockAllocation'],
+    ['table', 'HotelReservationEvent'],
+    ...['HotelReservationRequest_roomId_fkey', 'HotelReservationRequest_stay_valid', 'HotelStockAllocation_requestId_fkey', 'HotelStockAllocation_roomId_fkey', 'HotelReservationEvent_requestId_fkey'].map(name => ['constraint', name]),
+    ...['HotelReservationRequest_idempotencyKey_key', 'HotelStockAllocation_requestId_date_key', 'HotelStockAllocation_roomId_date_releasedAt_idx', 'HotelReservationEvent_requestId_createdAt_idx'].map(name => ['index', name]),
+  ],
 };
 
 function checksumMatches(sql, checksum) {

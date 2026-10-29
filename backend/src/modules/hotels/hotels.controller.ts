@@ -30,6 +30,8 @@ import { HotelsService } from './hotels.service';
 import { HotelPublicationService } from './hotel-publication.service';
 import { UploadedImage } from '../../files/files.service';
 import { MAX_PHOTO_BYTES } from '../../files/listing-photo.constants';
+import { Throttle } from '@nestjs/throttler';
+import { HotelStayDto } from './hotels.dto';
 
 @ApiTags('hotels')
 @Controller()
@@ -53,11 +55,19 @@ export class HotelsController {
 
   @Public()
   @Post('hotels/:id/reservation-requests')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   createReservationRequest(
     @Param('id') id: string,
     @Body() dto: CreateHotelReservationRequestDto,
   ) {
     return this.service.createReservationRequest(id, dto);
+  }
+
+  @Public()
+  @Post('hotels/:id/stay-quote')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  quoteStay(@Param('id') id: string, @Body() dto: HotelStayDto) {
+    return this.service.quoteStay(id, dto);
   }
 
   @ApiBearerAuth()

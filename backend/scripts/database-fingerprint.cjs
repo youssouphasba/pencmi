@@ -7,6 +7,7 @@ const addedColumns = {
   RefreshToken: ['consumedAt', 'parentTokenId'],
   HotelRoom: ['metadata'],
   HotelRoomAvailability: ['status'],
+  HotelReservationRequest: ['roomId', 'units', 'idempotencyKey', 'requestFingerprint'],
 };
 
 async function fingerprint(url) {
@@ -23,7 +24,7 @@ async function fingerprint(url) {
         const groups = new Map();
         for (const { table_name, column_name } of columns) {
           if (
-            ['_prisma_migrations', 'AdvertiserReview'].includes(table_name) ||
+            ['_prisma_migrations', 'AdvertiserReview', 'HotelStockAllocation', 'HotelReservationEvent'].includes(table_name) ||
             addedColumns[table_name]?.includes(column_name)
           )
             continue;

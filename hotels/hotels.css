@@ -352,7 +352,11 @@
 .hotel-modal-card {
   width: min(760px, 100%);
   padding: 22px;
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
 }
+
+.hotel-reservation-feedback { grid-column: 1 / -1; min-width: 0; overflow-wrap: anywhere; }
 
 .hotel-dashboard-layout {
   min-height: 100vh;

@@ -17,6 +17,10 @@ import {
   validateHotelPublication,
   validateHotelSubmission,
 } from './hotel-publication.schema';
+import {
+  activeHotelAllocations,
+  assertHotelAllocatedInventory,
+} from './hotel-inventory';
 
 const digest = (value: string) =>
   createHash('sha256').update(value).digest('hex');
@@ -24,7 +28,8 @@ export const hotelRoomsInclude = {
   rates: { orderBy: { date: 'asc' as const } },
   availability: { orderBy: { date: 'asc' as const } },
   restrictions: true,
-};
+  stockAllocations: activeHotelAllocations,
+} satisfies Prisma.HotelRoomInclude;
 export function hotelSettings(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, any>)
@@ -246,6 +251,7 @@ export class HotelPublicationService {
       const existing = property.rooms.find((item) => item.id === roomId);
       if (input.id && !existing)
         throw new NotFoundException('Chambre introuvable.');
+      if (existing) await assertHotelAllocatedInventory(tx, existing, input);
       const mapping = await tx.hotelExternalMapping.findFirst({
         where: { internalId: roomId },
       });

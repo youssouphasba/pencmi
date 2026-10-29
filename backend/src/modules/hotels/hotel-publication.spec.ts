@@ -153,7 +153,7 @@ describe('Hotel publication validation and public boundaries', () => {
       '2026-11-02',
     ]));
   it('projects only public hotel fields and no unconfirmed inventory', () => {
-    const service = new HotelsService({} as any);
+    const service = new HotelsService({} as any, {} as any);
     const output = service.publicProperty({
       id: 'h',
       name: 'H',

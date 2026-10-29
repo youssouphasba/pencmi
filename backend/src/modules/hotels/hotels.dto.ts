@@ -1,7 +1,6 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
-  IsDateString,
   IsIn,
   IsInt,
   IsObject,
@@ -12,6 +11,10 @@ import {
   Min,
   ArrayMaxSize,
   ArrayUnique,
+  Matches,
+  IsEmail,
+  MinLength,
+  Max,
 } from 'class-validator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 
@@ -90,35 +93,52 @@ export class HotelPhotoOrderDto {
   photoIds: string[];
 }
 
-export class CreateHotelReservationRequestDto {
-  @IsOptional()
+export class HotelStayDto {
   @IsString()
-  clientName?: string;
+  @MinLength(1)
+  @MaxLength(100)
+  roomId: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  checkIn: string;
+
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  checkOut: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  guests: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  units: number;
+}
+
+export class CreateHotelReservationRequestDto extends HotelStayDto {
+  @IsUUID()
+  requestId: string;
+
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
+  clientName: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(30)
   clientPhone?: string;
 
   @IsOptional()
-  @IsString()
+  @IsEmail()
+  @MaxLength(254)
   clientEmail?: string;
 
   @IsOptional()
-  @IsDateString()
-  checkIn?: string;
-
-  @IsOptional()
-  @IsDateString()
-  checkOut?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  guests?: number;
-
-  @IsOptional()
   @IsString()
+  @MaxLength(2000)
   message?: string;
 }
 
@@ -128,9 +148,16 @@ const hotelReservationStatuses = [
   'refused',
   'cancelled',
   'requires_more_info',
+  'expired',
+  'completed',
 ] as const;
 
 export class UpdateHotelReservationStatusDto {
   @IsIn(hotelReservationStatuses)
   status: (typeof hotelReservationStatuses)[number];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
 }

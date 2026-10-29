@@ -1,11 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
 import {
-  ContactSource,
-  ListingStatus,
-  PencmiModule,
-  RequestStatus,
-  TargetType,
-} from '@prisma/client';
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ListingStatus } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import {
@@ -16,12 +14,18 @@ import {
   CreateHotelReservationRequestDto,
   HotelSearchDto,
   UpdateHotelReservationStatusDto,
+  HotelStayDto,
 } from './hotels.dto';
 import { hotelRoomsInclude, hotelSettings } from './hotel-publication.service';
+import { HotelReservationsService } from './hotel-reservations.service';
+import { hotelReservedOn, hotelDate } from './hotel-inventory';
 
 @Injectable()
 export class HotelsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reservations: HotelReservationsService,
+  ) {}
 
   async findPublic(query: HotelSearchDto) {
     const pagination = getPagination(query);
@@ -175,26 +179,29 @@ export class HotelsService {
             );
             const external =
               property.integration?.sourceOfTruth === 'external_system';
-            const reliable = external
-              ? property.integration.status === 'active' &&
-                day.reliableUntil &&
-                day.reliableUntil > new Date()
-              : !day.reliableUntil || day.reliableUntil > new Date();
+            const remaining =
+              day.available - hotelReservedOn(room, hotelDate(day.date));
+            const reliable =
+              !external &&
+              Number.isInteger(data.totalUnits) &&
+              day.available <= data.totalUnits &&
+              remaining >= 0 &&
+              (!day.reliableUntil || day.reliableUntil > new Date());
             return {
               date: day.date,
               available:
                 reliable && publication.management?.showRemainingRoomsToClients
-                  ? day.available
+                  ? remaining
                   : undefined,
               status: reliable
-                ? day.status === 'open' && day.available === 0
+                ? day.status === 'open' && remaining === 0
                   ? 'full'
                   : day.status
                 : 'unconfirmed',
               stopSell:
                 restriction?.stopSell ||
                 day.status !== 'open' ||
-                day.available === 0,
+                remaining === 0,
               minStay: restriction?.minStay,
               maxStay: restriction?.maxStay,
             };
@@ -250,35 +257,11 @@ export class HotelsService {
     propertyId: string,
     dto: CreateHotelReservationRequestDto,
   ) {
-    return this.prisma.$transaction(async (tx) => {
-      const property = await tx.hotelProperty.findFirst({
-        where: { id: propertyId, status: 'active', deletedAt: null },
-        select: { id: true },
-      });
-      if (!property) throw new NotFoundException('Hébergement introuvable.');
-      const request = await tx.hotelReservationRequest.create({
-        data: {
-          propertyId,
-          clientName: dto.clientName,
-          clientPhone: dto.clientPhone,
-          clientEmail: dto.clientEmail,
-          checkIn: dto.checkIn ? new Date(dto.checkIn) : undefined,
-          checkOut: dto.checkOut ? new Date(dto.checkOut) : undefined,
-          guests: dto.guests,
-          message: dto.message,
-        },
-      });
-      await tx.contactEvent.create({
-        data: {
-          module: PencmiModule.hotels,
-          source: ContactSource.reservation_request,
-          targetType: TargetType.listing,
-          targetId: propertyId,
-          metadata: { requestId: request.id },
-        },
-      });
-      return request;
-    });
+    return this.reservations.create(propertyId, dto);
+  }
+
+  quoteStay(propertyId: string, dto: HotelStayDto) {
+    return this.reservations.quote(propertyId, dto);
   }
 
   async findMine(ownerUserId: string, dto: PaginationDto) {
@@ -290,42 +273,37 @@ export class HotelsService {
         skip: pagination.skip,
         take: pagination.take,
         orderBy: { updatedAt: 'desc' },
-        include: { rooms: { include: hotelRoomsInclude } },
+        include: {
+          rooms: { include: hotelRoomsInclude },
+          integration: { select: { sourceOfTruth: true } },
+        },
       }),
       this.prisma.hotelProperty.count({ where }),
     ]);
-    return { data, meta: pagination.meta(total) };
+    return {
+      data: data.map((property) => ({
+        ...property,
+        rooms: property.rooms.map((room) => ({
+          ...room,
+          availability: room.availability.map((day) => ({
+            ...day,
+            allocatedUnits: hotelReservedOn(room, hotelDate(day.date)),
+            remainingUnits:
+              property.integration?.sourceOfTruth === 'external_system'
+                ? null
+                : Math.max(
+                    0,
+                    day.available - hotelReservedOn(room, hotelDate(day.date)),
+                  ),
+          })),
+        })),
+      })),
+      meta: pagination.meta(total),
+    };
   }
 
   async findMyReservationRequests(ownerUserId: string, dto: PaginationDto) {
-    const pagination = getPagination(dto);
-    const where = {
-      property: {
-        ownerUserId,
-        deletedAt: null,
-      },
-    };
-    const [data, total] = await Promise.all([
-      this.prisma.hotelReservationRequest.findMany({
-        where,
-        skip: pagination.skip,
-        take: pagination.take,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          property: {
-            select: {
-              id: true,
-              name: true,
-              city: true,
-              propertyType: true,
-              status: true,
-            },
-          },
-        },
-      }),
-      this.prisma.hotelReservationRequest.count({ where }),
-    ]);
-    return { data, meta: pagination.meta(total) };
+    return this.reservations.findMine(ownerUserId, dto);
   }
 
   async updateReservationStatus(
@@ -333,46 +311,32 @@ export class HotelsService {
     id: string,
     dto: UpdateHotelReservationStatusDto,
   ) {
-    const request = await this.prisma.hotelReservationRequest.findFirstOrThrow({
-      where: {
-        id,
-        property: {
-          ownerUserId,
-          deletedAt: null,
-        },
-      },
-      include: {
-        property: {
-          select: {
-            id: true,
-            name: true,
-            city: true,
-          },
-        },
-      },
-    });
-
-    return this.prisma.hotelReservationRequest.update({
-      where: { id: request.id },
-      data: { status: dto.status as RequestStatus },
-      include: {
-        property: {
-          select: {
-            id: true,
-            name: true,
-            city: true,
-            propertyType: true,
-            status: true,
-          },
-        },
-      },
-    });
+    return this.reservations.update(ownerUserId, id, dto);
   }
 
   softDelete(ownerUserId: string, id: string) {
-    return this.prisma.hotelProperty.updateMany({
-      where: { id, ownerUserId },
-      data: { deletedAt: new Date() },
-    });
+    return this.prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT "id" FROM "HotelProperty" WHERE "id" = ${id} AND "ownerUserId" = ${ownerUserId} FOR UPDATE`;
+        const property = await tx.hotelProperty.findFirst({
+          where: { id, ownerUserId, deletedAt: null },
+          select: { id: true },
+        });
+        if (!property) throw new NotFoundException('Hébergement introuvable.');
+        if (
+          await tx.hotelReservationRequest.count({
+            where: { propertyId: id, status: 'accepted' },
+          })
+        )
+          throw new ConflictException(
+            'Traitez les séjours acceptés avant de retirer cet hébergement.',
+          );
+        return tx.hotelProperty.updateMany({
+          where: { id, ownerUserId, deletedAt: null },
+          data: { deletedAt: new Date() },
+        });
+      },
+      { timeout: 15000 },
+    );
   }
 }

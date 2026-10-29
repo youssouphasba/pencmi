@@ -17,6 +17,8 @@ const hotelDashboardData = {
   availability: [],
   messages: [],
   reservations: [],
+  reservationsPage: 1,
+  reservationsMeta: null,
   contacts: [],
   stats: null,
   loading: true,
@@ -70,19 +72,10 @@ async function hotelApiRequest(path, options = {}) {
   return publicationRequest(path, { ...options, body: typeof options.body === 'string' ? JSON.parse(options.body) : options.body });
 }
 
-const hotelReservationStatusLabels = {
-  new: "Nouvelle",
-  pending: "En attente",
-  accepted: "Acceptée",
-  refused: "Refusée",
-  cancelled: "Annulée",
-  expired: "Expirée",
-  completed: "Terminée",
-  requires_more_info: "Infos demandées"
-};
+let hotelReservationCatalog;
 
 function formatHotelReservationStatus(status) {
-  return hotelReservationStatusLabels[status] || "À traiter";
+  return hotelReservationCatalog?.hotelRequestLabels[status] || "À traiter";
 }
 
 function formatHotelDate(value) {
@@ -131,7 +124,7 @@ function HotelsDashboardLayout(content, currentPage) {
 
 function HotelsDashboardSidebar(currentPage) {
   const listingCount = String(hotelDashboardData.hotels.length || 0);
-  const reservationCount = String(hotelDashboardData.reservations.length || 0);
+  const reservationCount = String(hotelDashboardData.reservationsMeta?.total ?? hotelDashboardData.reservations.length);
   const items = [
     ["Vue d’ensemble", hotelDashboardRoutes.overview, "overview"],
     ["Hébergements", hotelDashboardRoutes.listings, "listings", listingCount],
@@ -234,7 +227,7 @@ function HotelListingsTable() {
 }
 
 function HotelAvailabilityCalendar() {
-  return hotelDashboardData.hotels.map(hotel => `<section class="hotel-dashboard-card"><h2>${hotelDashboardEscape(hotel.name || 'Hébergement sans nom')}</h2><a class="btn btn-primary" href="${hotelEditHref(hotel.id, 8)}">Modifier les disponibilités</a><a class="btn btn-light" href="${hotelEditHref(hotel.id, 4)}">Modifier les tarifs</a>${(hotel.rooms || []).map(room => `<h3>${hotelDashboardEscape(room.name)}</h3>${room.availability?.length ? `<div class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Date</th><th>État</th><th>Quantité</th><th>Ventes</th></tr></thead><tbody>${room.availability.map(day => `<tr><td>${formatHotelDate(day.date)}</td><td>${hotelDashboardEscape(({ open: 'Ouvert', closed: 'Fermé', full: 'Complet', maintenance: 'Maintenance' })[day.status] || 'À confirmer')}</td><td>${Number(day.available)}</td><td>${room.restrictions?.some(item => item.date === day.date && item.stopSell) ? 'Suspendues' : 'Sur demande'}</td></tr>`).join('')}</tbody></table></div>` : '<p>Disponibilité à confirmer.</p>'}`).join('')}</section>`).join('') || EmptyState('Aucun hébergement enregistré.');
+  return hotelDashboardData.hotels.map(hotel => `<section class="hotel-dashboard-card"><h2>${hotelDashboardEscape(hotel.name || 'Hébergement sans nom')}</h2><a class="btn btn-primary" href="${hotelEditHref(hotel.id, 8)}">Modifier les disponibilités</a><a class="btn btn-light" href="${hotelEditHref(hotel.id, 4)}">Modifier les tarifs</a>${(hotel.rooms || []).map(room => `<h3>${hotelDashboardEscape(room.name)}</h3>${room.availability?.length ? `<div class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Date</th><th>État</th><th>Stock initial</th><th>Unités allouées</th><th>Stock restant</th><th>Ventes</th></tr></thead><tbody>${room.availability.map(day => `<tr><td>${formatHotelDate(day.date)}</td><td>${hotelDashboardEscape(({ open: 'Ouvert', closed: 'Fermé', full: 'Complet', maintenance: 'Maintenance' })[day.status] || 'À confirmer')}</td><td>${Number(day.available)}</td><td>${Number(day.allocatedUnits) || 0}</td><td>${day.remainingUnits === null || day.remainingUnits === undefined ? 'À confirmer' : Number(day.remainingUnits)}</td><td>${room.restrictions?.some(item => item.date === day.date && item.stopSell) ? 'Suspendues' : 'Sur demande'}</td></tr>`).join('')}</tbody></table></div>` : '<p>Disponibilité à confirmer.</p>'}`).join('')}</section>`).join('') || EmptyState('Aucun hébergement enregistré.');
 }
 
 function HotelAvailabilityPage() {
@@ -249,41 +242,46 @@ function HotelMessagesPage() {
 }
 
 function HotelReservationsPage() {
+  const meta = hotelDashboardData.reservationsMeta;
   return HotelsDashboardLayout(`
     ${DashboardHeader("Demandes de réservation", "Gérez les demandes de réservation reçues sur vos hébergements.")}
-    ${hotelDashboardData.reservations.length ? `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Client</th><th>Hébergement</th><th>Arrivée</th><th>Départ</th><th>Personnes</th><th>Message</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead><tbody>${hotelDashboardData.reservations.map(HotelReservationRow).join("")}</tbody></table></section>` : EmptyState("Aucune demande de réservation pour le moment.")}
+    ${hotelDashboardData.reservations.length ? `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Client</th><th>Hébergement / chambre</th><th>Arrivée</th><th>Départ</th><th>Voyageurs / unités</th><th>Message</th><th>Statut et stock</th><th>Date</th><th>Actions</th></tr></thead><tbody>${hotelDashboardData.reservations.map(HotelReservationRow).join("")}</tbody></table></section>` : EmptyState("Aucune demande de réservation pour le moment.")}
+    ${meta?.totalPages > 1 ? `<nav class="hotel-row-actions" aria-label="Pages des demandes"><button class="btn btn-light" type="button" data-reservations-page="${hotelDashboardData.reservationsPage - 1}" ${hotelDashboardData.loading || hotelDashboardData.reservationsPage <= 1 ? 'disabled' : ''}>Précédent</button><span>Page ${hotelDashboardData.reservationsPage} sur ${Number(meta.totalPages)}</span><button class="btn btn-light" type="button" data-reservations-page="${hotelDashboardData.reservationsPage + 1}" ${hotelDashboardData.loading || hotelDashboardData.reservationsPage >= meta.totalPages ? 'disabled' : ''}>Suivant</button></nav>` : ''}
   `, "reservations");
 }
 
 function HotelReservationRow(request) {
+  const escape = hotelDashboardEscape;
+  const actions = hotelReservationCatalog?.hotelRequestActions || {};
+  const confirmation = request.confirmation || {};
+  const warning = confirmation.confirmed ? 'Stock alloué pour ce séjour.' : confirmation.message || 'Disponibilité à confirmer.';
   return `
     <tr>
-      <td>${request.clientName || "Client"}</td>
-      <td>${request.property?.name || "Hébergement"}</td>
+      <td>${escape(request.clientName || "Client")}<br>${escape(request.clientPhone || request.clientEmail || '')}</td>
+      <td>${escape(request.property?.name || "Hébergement")}<br>${escape(request.room?.name || 'Catégorie non renseignée')}</td>
       <td>${formatHotelDate(request.checkIn)}</td>
       <td>${formatHotelDate(request.checkOut)}</td>
-      <td>${request.guests || ""}</td>
-      <td>${request.message || ""}</td>
-      <td>${formatHotelReservationStatus(request.status)}</td>
+      <td>${Number(request.guests) || '—'} / ${Number(request.units) || '—'}</td>
+      <td>${escape(request.message || "")}</td>
+      <td>${escape(formatHotelReservationStatus(request.status))}<p>${escape(warning)}</p>${confirmation.remainingUnits !== null && confirmation.remainingUnits !== undefined ? `<p>Stock restant : ${Number(confirmation.remainingUnits)}</p>` : ''}${request.events?.length ? `<details><summary>Historique</summary>${request.events.map(event => `<p>${escape(formatHotelReservationStatus(event.toStatus))} · ${formatHotelDate(event.createdAt)}${event.note ? `<br>${escape(event.note)}` : ''}</p>`).join('')}</details>` : ''}</td>
       <td>${formatHotelDate(request.createdAt)}</td>
       <td>
         <div class="hotel-row-actions">
-          <button class="btn btn-primary" type="button" data-reservation-status="accepted" data-reservation-id="${request.id}">Accepter</button>
-          <button class="btn btn-ghost" type="button" data-reservation-status="requires_more_info" data-reservation-id="${request.id}">Demander des infos</button>
-          <button class="btn btn-ghost" type="button" data-reservation-status="refused" data-reservation-id="${request.id}">Refuser</button>
+          ${(request.allowedActions || []).filter(status => actions[status]).map(status => `<button class="btn ${status === 'accepted' ? 'btn-primary' : 'btn-ghost'}" type="button" data-reservation-status="${status}" data-reservation-id="${escape(request.id)}">${actions[status]}</button>`).join('')}
         </div>
+        ${request.allowedActions?.length ? '<label>Note de suivi<textarea data-reservation-note maxlength="1000" rows="2"></textarea></label>' : ''}
+        <p data-reservation-feedback role="status"></p>
       </td>
     </tr>
   `;
 }
 
-async function updateHotelReservationStatus(id, status) {
-  const updated = await hotelApiRequest(`/dashboard/hotels/reservations/${encodeURIComponent(id)}/status`, {
+async function updateHotelReservationStatus(id, status, note) {
+  await hotelApiRequest(`/dashboard/hotels/reservations/${encodeURIComponent(id)}/status`, {
     method: "PATCH",
-    body: JSON.stringify({ status })
+    body: JSON.stringify({ status, note: note || undefined })
   });
-  hotelDashboardData.reservations = hotelDashboardData.reservations.map((request) => request.id === id ? updated : request);
-  renderDashboard();
+  await loadHotelDashboardData();
 }
 
 function HotelContactsPage() {
@@ -291,7 +289,7 @@ function HotelContactsPage() {
   return HotelsDashboardLayout(`
     ${DashboardHeader("Contacts reçus", "Suivez les contacts générés par vos hébergements.")}
     <section class="hotel-dashboard-card"><h2>Sources prévues</h2><div class="hotel-chip-row">${sources.map((source) => `<span class="hotel-chip">${source}</span>`).join("")}</div></section>
-    ${hotelDashboardData.reservations.length ? `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Client</th><th>Hébergement</th><th>Téléphone</th><th>Email</th><th>Message</th><th>Source</th><th>Date</th></tr></thead><tbody>${hotelDashboardData.reservations.map((request) => `<tr><td>${request.clientName || "Client"}</td><td>${request.property?.name || "Hébergement"}</td><td>${request.clientPhone || ""}</td><td>${request.clientEmail || ""}</td><td>${request.message || ""}</td><td>Demande de réservation</td><td>${formatHotelDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucun contact reçu pour le moment.")}
+    ${hotelDashboardData.reservations.length ? `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Client</th><th>Hébergement</th><th>Téléphone</th><th>Email</th><th>Message</th><th>Source</th><th>Date</th></tr></thead><tbody>${hotelDashboardData.reservations.map((request) => `<tr><td>${hotelDashboardEscape(request.clientName || "Client")}</td><td>${hotelDashboardEscape(request.property?.name || "Hébergement")}</td><td>${hotelDashboardEscape(request.clientPhone || "")}</td><td>${hotelDashboardEscape(request.clientEmail || "")}</td><td>${hotelDashboardEscape(request.message || "")}</td><td>Demande de réservation</td><td>${formatHotelDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucun contact reçu pour le moment.")}
   `, "contacts");
 }
 
@@ -331,13 +329,23 @@ function renderDashboard() {
   });
   document.querySelectorAll("[data-reservation-status]").forEach((button) => {
     button.addEventListener("click", () => {
-      button.disabled = true;
-      void updateHotelReservationStatus(button.dataset.reservationId, button.dataset.reservationStatus).catch(() => {
-        button.disabled = false;
-        window.alert("La mise à jour de la demande a échoué. Vérifiez la connexion puis réessayez.");
+      const row = button.closest('tr');
+      const buttons = [...row.querySelectorAll('[data-reservation-status]')];
+      buttons.forEach(item => { item.disabled = true; });
+      row.querySelector('[data-reservation-feedback]').textContent = 'Mise à jour…';
+      void updateHotelReservationStatus(button.dataset.reservationId, button.dataset.reservationStatus, row.querySelector('[data-reservation-note]')?.value.trim()).catch(error => {
+        buttons.forEach(item => { item.disabled = false; });
+        const feedback = row.querySelector('[data-reservation-feedback]');
+        feedback.setAttribute('role', 'alert');
+        feedback.textContent = error.message || "La mise à jour de la demande a échoué. Réessayez.";
       });
     });
   });
+  document.querySelectorAll('[data-reservations-page]').forEach(button => button.addEventListener('click', () => {
+    if (hotelDashboardData.loading) return;
+    hotelDashboardData.reservationsPage = Number(button.dataset.reservationsPage);
+    void loadHotelDashboardData();
+  }));
 }
 
 async function loadHotelDashboardData() {
@@ -345,12 +353,14 @@ async function loadHotelDashboardData() {
   hotelDashboardData.error = "";
   renderDashboard();
   try {
+    hotelReservationCatalog ||= await import('/hotels/reservation.mjs');
     const [hotelsPayload, reservationsPayload] = await Promise.all([
       hotelApiRequest("/dashboard/hotels"),
-      hotelApiRequest("/dashboard/hotels/reservations"),
+      hotelApiRequest(`/dashboard/hotels/reservations?page=${hotelDashboardData.reservationsPage}&limit=20`, { includeMeta: true }),
     ]);
     hotelDashboardData.hotels = listFromPayload(hotelsPayload);
     hotelDashboardData.reservations = listFromPayload(reservationsPayload);
+    hotelDashboardData.reservationsMeta = reservationsPayload?.meta || null;
   } catch (error) {
     hotelDashboardData.error = error instanceof Error ? error.message : "Chargement impossible.";
   } finally {

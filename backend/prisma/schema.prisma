@@ -360,6 +360,8 @@ model HotelRoom {
   rates      HotelRoomRate[]
   availability HotelRoomAvailability[]
   restrictions HotelRestriction[]
+  reservationRequests HotelReservationRequest[]
+  stockAllocations HotelStockAllocation[]
 
   @@index([propertyId, status])
 }
@@ -410,6 +412,11 @@ model HotelReservationRequest {
   id          String        @id @default(cuid())
   propertyId  String
   property    HotelProperty @relation(fields: [propertyId], references: [id])
+  roomId      String?
+  room        HotelRoom? @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  units       Int?
+  idempotencyKey String? @unique
+  requestFingerprint String?
   clientUserId String?
   clientName  String?
   clientPhone String?
@@ -421,8 +428,40 @@ model HotelReservationRequest {
   status      RequestStatus @default(new)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+  allocations HotelStockAllocation[]
+  events      HotelReservationEvent[]
 
   @@index([propertyId, status, createdAt])
+  @@index([roomId, checkIn, checkOut])
+  @@index([propertyId, requestFingerprint, createdAt], map: "HotelReservationRequest_propertyId_fingerprint_createdAt_idx")
+}
+
+model HotelStockAllocation {
+  id String @id @default(cuid())
+  requestId String
+  request HotelReservationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  roomId String
+  room HotelRoom @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  date DateTime
+  units Int
+  createdAt DateTime @default(now())
+  releasedAt DateTime?
+
+  @@unique([requestId, date])
+  @@index([roomId, date, releasedAt])
+}
+
+model HotelReservationEvent {
+  id String @id @default(cuid())
+  requestId String
+  request HotelReservationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actorUserId String?
+  fromStatus RequestStatus?
+  toStatus RequestStatus
+  note String?
+  createdAt DateTime @default(now())
+
+  @@index([requestId, createdAt])
 }
 
 model HotelIntegration {

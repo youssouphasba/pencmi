@@ -49,7 +49,7 @@ Les modifications verrouillent l'établissement et son intégration. Si `sourceO
 ## Limites assumées
 
 - Pas de réservation instantanée, verrou temporaire de stock, encaissement ou remboursement.
-- Modes semi-automatique et automatique désactivés. Accepter une demande ne décrémente pas automatiquement le stock.
+- Modes semi-automatique et automatique désactivés. Depuis l'étape 8, l'acceptation manuelle réserve des allocations par nuit sans modifier le stock initial ; voir [Demandes et confirmations](hotel-reservations.md).
 - Le formulaire persiste les préférences de messagerie, formulaire et email ; il ne crée pas un moteur d'envoi d'emails ni une nouvelle messagerie.
 - Le catalogue historique des chambres peut nécessiter d'être complété avant une nouvelle soumission.
 - Les références anciennes sans binaire ne sont pas remplacées par des fichiers fictifs. L'audit a identifié cinq références à taille nulle, absentes de R2, du conteneur et des répertoires locaux d'uploads ; il ne permet pas d'affirmer qu'un binaire avait effectivement été enregistré auparavant.
