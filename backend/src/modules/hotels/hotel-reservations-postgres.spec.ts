@@ -266,6 +266,39 @@ const url = process.env.TEST_DATABASE_URL;
             where: { roomId: room.id, releasedAt: null },
           }),
         ).toBe(0);
+        const oldAccepted = await db.hotelReservationRequest.create({
+          data: {
+            propertyId: property.id,
+            status: 'accepted',
+            checkIn: new Date(checkIn),
+            checkOut: new Date(checkOut),
+          },
+        });
+        const blocked = await service.create(
+          property.id,
+          payload('unreconciled'),
+        );
+        expect(
+          (
+            await service.quote(property.id, {
+              roomId: room.id,
+              checkIn,
+              checkOut,
+              guests: 2,
+              units: 1,
+            })
+          ).canConfirm,
+        ).toBe(false);
+        await expect(
+          service.update(owner.id, blocked.id, { status: 'accepted' }),
+        ).rejects.toThrow();
+        const blockedView = (
+          await service.findMine(owner.id, new PaginationDto())
+        ).data.find((item) => item.id === blocked.id);
+        expect(blockedView.allowedActions).not.toContain('accepted');
+        await service.update(owner.id, oldAccepted.id, { status: 'refused' });
+        await service.update(owner.id, blocked.id, { status: 'accepted' });
+        await service.update(owner.id, blocked.id, { status: 'cancelled' });
         const unknown = await service.create(property.id, {
           ...payload('unknown'),
           checkIn: '2030-07-01',

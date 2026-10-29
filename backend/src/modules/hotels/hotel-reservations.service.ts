@@ -71,6 +71,56 @@ function completeAllocations(request: any): boolean {
   }
 }
 
+const reservationIntegritySelect = {
+  id: true,
+  propertyId: true,
+  roomId: true,
+  checkIn: true,
+  checkOut: true,
+  units: true,
+  status: true,
+  allocations: {
+    select: { roomId: true, date: true, units: true, releasedAt: true },
+  },
+} as const;
+
+export function hotelHasUnreconciledReservations(
+  records: any[],
+  stay: Pick<HotelStayDto, 'roomId' | 'checkIn' | 'checkOut'>,
+): boolean {
+  return records.some(
+    (record) =>
+      record.status === 'accepted' &&
+      (!record.roomId || record.roomId === stay.roomId) &&
+      (!record.checkIn ||
+        !record.checkOut ||
+        hotelDate(record.checkIn) >= hotelDate(record.checkOut) ||
+        (hotelDate(record.checkIn) < stay.checkOut &&
+          hotelDate(record.checkOut) > stay.checkIn)) &&
+      !completeAllocations(record),
+  );
+}
+
+function withLegacyStock(
+  quote: ReturnType<typeof hotelStayQuote>,
+  records: any[],
+  stay: Pick<HotelStayDto, 'roomId' | 'checkIn' | 'checkOut'>,
+) {
+  if (
+    quote.status === 'unavailable' ||
+    !hotelHasUnreconciledReservations(records, stay)
+  )
+    return quote;
+  return {
+    ...quote,
+    canConfirm: false,
+    status: 'unconfirmed',
+    remainingUnits: null,
+    reason: 'legacy_stock_unreconciled',
+    message: HOTEL_STOCK_MESSAGES.legacy_stock_unreconciled,
+  };
+}
+
 @Injectable()
 export class HotelReservationsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -105,7 +155,15 @@ export class HotelReservationsService {
         });
         if (!room)
           throw new NotFoundException('Catégorie de chambre introuvable.');
-        return hotelStayQuote(room, stay, property.integration);
+        const accepted = await tx.hotelReservationRequest.findMany({
+          where: { propertyId, status: 'accepted' },
+          select: reservationIntegritySelect,
+        });
+        return withLegacyStock(
+          hotelStayQuote(room, stay, property.integration),
+          accepted,
+          stay,
+        );
       },
       { isolationLevel: 'RepeatableRead', timeout: 15000 },
     );
@@ -225,7 +283,7 @@ export class HotelReservationsService {
     };
   }
 
-  private view(request: any) {
+  private view(request: any, accepted: any[] = []) {
     let confirmation: any = {
       canConfirm: false,
       status: 'unconfirmed',
@@ -241,16 +299,24 @@ export class HotelReservationsService {
       !request.guests;
     if (!legacy && request.room) {
       try {
-        confirmation = hotelStayQuote(
-          request.room,
+        confirmation = withLegacyStock(
+          hotelStayQuote(
+            request.room,
+            {
+              roomId: request.roomId,
+              checkIn: hotelDate(request.checkIn),
+              checkOut: hotelDate(request.checkOut),
+              units: request.units,
+              guests: request.guests,
+            },
+            request.property.integration,
+          ),
+          accepted,
           {
             roomId: request.roomId,
             checkIn: hotelDate(request.checkIn),
             checkOut: hotelDate(request.checkOut),
-            units: request.units,
-            guests: request.guests,
           },
-          request.property.integration,
         );
         if (
           request.property.status !== 'active' ||
@@ -343,8 +409,24 @@ export class HotelReservationsService {
           orderBy: { createdAt: 'desc' },
         });
         const total = await tx.hotelReservationRequest.count({ where });
+        const accepted = await tx.hotelReservationRequest.findMany({
+          where: {
+            status: 'accepted',
+            propertyId: {
+              in: [...new Set(data.map((request) => request.propertyId))],
+            },
+          },
+          select: reservationIntegritySelect,
+        });
         return {
-          data: data.map((request) => this.view(request)),
+          data: data.map((request) =>
+            this.view(
+              request,
+              accepted.filter(
+                (record) => record.propertyId === request.propertyId,
+              ),
+            ),
+          ),
           meta: pagination.meta(total),
         };
       },
@@ -430,6 +512,14 @@ export class HotelReservationsService {
           };
           const quote = hotelStayQuote(room, stay, property.integration);
           if (!quote.canConfirm) throw new ConflictException(quote.message);
+          const accepted = await tx.hotelReservationRequest.findMany({
+            where: { propertyId: request.propertyId, status: 'accepted' },
+            select: reservationIntegritySelect,
+          });
+          if (hotelHasUnreconciledReservations(accepted, stay))
+            throw new ConflictException(
+              HOTEL_STOCK_MESSAGES.legacy_stock_unreconciled,
+            );
           const nights = hotelStayNights(stay.checkIn, stay.checkOut);
           if (request.allocations.length)
             throw new ConflictException(

@@ -5,6 +5,7 @@ import {
   HOTEL_RESERVATION_TRANSITIONS,
   hotelToday,
 } from './hotel-inventory';
+import { hotelHasUnreconciledReservations } from './hotel-reservations.service';
 
 describe('Hotel stay and inventory rules', () => {
   const start = '2030-06-01';
@@ -117,6 +118,64 @@ describe('Hotel stay and inventory rules', () => {
       expect(
         hotelRequestSchema.safeParse({ ...input, ...change }).success,
       ).toBe(false);
+  });
+  it('blocks unreconciled accepted history only for potentially overlapping rooms and dates', () => {
+    const old = {
+      status: 'accepted',
+      roomId: null,
+      checkIn: new Date(start),
+      checkOut: new Date(end),
+      units: null,
+      allocations: [],
+    };
+    expect(hotelHasUnreconciledReservations([old], stay)).toBe(true);
+    expect(
+      hotelHasUnreconciledReservations(
+        [{ ...old, checkIn: null, checkOut: null }],
+        stay,
+      ),
+    ).toBe(true);
+    expect(
+      hotelHasUnreconciledReservations(
+        [{ ...old, checkOut: new Date('2030-05-31') }],
+        stay,
+      ),
+    ).toBe(true);
+    expect(
+      hotelHasUnreconciledReservations([{ ...old, roomId: 'other' }], stay),
+    ).toBe(false);
+    expect(
+      hotelHasUnreconciledReservations([{ ...old, status: 'refused' }], stay),
+    ).toBe(false);
+    expect(
+      hotelHasUnreconciledReservations(
+        [
+          {
+            ...old,
+            checkIn: new Date('2030-05-29'),
+            checkOut: new Date(start),
+          },
+        ],
+        stay,
+      ),
+    ).toBe(false);
+    const confirmed = {
+      ...old,
+      roomId: 'room',
+      units: 1,
+      allocations: [start, '2030-06-02'].map((date) => ({
+        date,
+        roomId: 'room',
+        units: 1,
+      })),
+    };
+    expect(hotelHasUnreconciledReservations([confirmed], stay)).toBe(false);
+    expect(
+      hotelHasUnreconciledReservations(
+        [{ ...confirmed, allocations: confirmed.allocations.slice(1) }],
+        stay,
+      ),
+    ).toBe(true);
   });
   it('has explicit terminal transitions and cancellation of confirmed stays', () => {
     for (const status of [

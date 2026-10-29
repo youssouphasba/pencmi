@@ -8,6 +8,8 @@ Une demande `new` ne bloque rien. L'acceptation manuelle crée une allocation pa
 
 Une nouvelle acceptation de la même demande déjà acceptée est sans effet uniquement si ses allocations sont complètes. Une annulation ou un refus après acceptation renseigne `releasedAt` une seule fois. Aucun incrément du stock initial n'est effectué. Les autres réservations ne sont jamais modifiées pour résoudre un conflit.
 
+Une ancienne demande acceptée sans allocations complètes bloque aussi une nouvelle confirmation lorsque ses dates et sa catégorie peuvent se chevaucher. Si ses dates ou sa catégorie manquent, le contrôle est conservateur. Le propriétaire doit d'abord rapprocher et traiter cet historique ; aucune chambre ni allocation n'est inventée pour le régulariser. Une ancienne demande refusée ou sans chevauchement n'immobilise pas arbitrairement le nouveau stock.
+
 La modification d'une catégorie vérifie ses allocations à venir avant toute écriture : désactivation, capacité insuffisante, suppression de dates, stock inférieur aux allocations, fermeture ou maintenance sont refusés. Pour arrêter de nouvelles demandes sans invalider les séjours confirmés, conserver le stock initial et utiliser `stopSell`. Les allocations et événements historiques restent conservés.
 
 ## API et validation
@@ -53,10 +55,12 @@ Les tests PostgreSQL exigent `TEST_DATABASE_URL` vers une base `_test` et `PRODU
 
 ## Vérifications du 29 octobre 2026
 
-- 284 tests backend, 17 suites, aucun test ignoré. Les contrôles PostgreSQL utilisent la copie restaurée de production sur un cluster distinct : concurrence des acceptations, idempotence, allocation par nuit, annulation et refus, protection du calendrier, isolation entre propriétaires, anciennes demandes, source externe, régressions JWT et immobilier. Le test R2 réel écrit et nettoie uniquement son propre objet associé à la recette.
+- 285 tests backend, 17 suites, aucun test ignoré. Les contrôles PostgreSQL utilisent la copie restaurée de production sur un cluster distinct : concurrence des acceptations, idempotence, allocation par nuit, annulation et refus, protection du calendrier, isolation entre propriétaires, anciennes demandes, blocage des anciens séjours acceptés sans allocations fiables, source externe, régressions JWT et immobilier. Le test R2 réel écrit et nettoie uniquement son propre objet associé à la recette.
 - 40 tests frontend réussis. Les parcours de demande, erreur réseau, réutilisation du UUID, fermeture, pagination, note de suivi, erreur de stock, acceptation et annulation du dashboard sont testés sous Edge aux quatre largeurs. Les valeurs HTML hostiles restent du texte ; aucun débordement horizontal global n'est observé.
 - 11 tests des outils d'audit et d'empreinte réussis. Prisma valide le schéma ; compilation TypeScript et build NestJS vérifiés.
 - Sauvegarde `pencmi-20261029-052455.dump.dpapi`, empreinte SHA-256 `61E7D5B2E4B581E4292B1C8033B1569F4798D617E8E5EDF4869ED482706595E1`, restaurée sur PostgreSQL 18.6 isolé. La migration additive y est réellement appliquée, les six checksums sont conformes, aucun artefact manquant, diff Prisma vide. L'empreinte des données préexistantes avant/après migration reste `ffe9fb9076fc43e14ca91e9ebb8daadf0d87f6a4d85479da34042146eee72752`.
 - L'audit npm de production signale encore sept alertes héritées : une critique, cinq élevées, une modérée. Aucune dépendance ni lockfile n'est modifié dans cette étape. Leur correction doit être traitée séparément, notamment `proxy-addr`, sans imposer une migration majeure Prisma non testée.
 
 La réussite de ces contrôles de recette ne vaut pas validation automatique du déploiement : l'historique, le diff, la santé et les lectures publiques doivent être revérifiés après la bascule Railway. Les comptes existants ne sont pas utilisés pour créer de fausses réservations en production.
+
+La première bascule du 29 octobre a appliqué `20261029010000_hotel_reservation_allocations` en pré-déploiement après arrêt de l'ancien backend. Les six migrations de production ont des checksums conformes, sans artefact manquant et sans diff Prisma. L'empreinte des données préexistantes est inchangée. Les lectures santé/hôtels/immobilier/voitures/voyages répondent 200, les ressources privées et partenaires sans authentification répondent 401, un formulaire de demande invalide répond 400. Le renforcement des anciennes acceptations ne nécessite aucune migration supplémentaire.

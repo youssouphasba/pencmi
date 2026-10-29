@@ -50,6 +50,8 @@ export const HOTEL_STOCK_MESSAGES = {
     'Le stock de cette catégorie doit être renseigné avant confirmation.',
   legacy_request:
     'Demande historique incomplète : aucune confirmation de stock ne peut être garantie.',
+  legacy_stock_unreconciled:
+    'Des séjours acceptés sans allocations fiables doivent être rapprochés avant toute nouvelle confirmation.',
 };
 
 const dateSchema = z
