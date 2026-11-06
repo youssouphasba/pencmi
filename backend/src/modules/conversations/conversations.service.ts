@@ -1,6 +1,12 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma/prisma.service';
-import { CreateMessageDto } from './conversations.dto';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+} from "@nestjs/common";
+import { createHash } from "crypto";
+import { PrismaService } from "../../database/prisma/prisma.service";
+import { Prisma } from "@prisma/client";
+import { CreateMessageDto } from "./conversations.dto";
 
 @Injectable()
 export class ConversationsService {
@@ -9,8 +15,11 @@ export class ConversationsService {
   findMine(userId: string) {
     return this.prisma.conversation.findMany({
       where: { participants: { some: { userId } } },
-      include: { participants: true, messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
-      orderBy: { updatedAt: 'desc' },
+      include: {
+        participants: true,
+        messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+      orderBy: { updatedAt: "desc" },
     });
   }
 
@@ -18,12 +27,48 @@ export class ConversationsService {
     await this.assertParticipant(id, userId);
     return this.prisma.conversation.findUniqueOrThrow({
       where: { id },
-      include: { participants: true, messages: { orderBy: { createdAt: 'asc' } } },
+      include: {
+        participants: true,
+        messages: { orderBy: { createdAt: "asc" } },
+      },
     });
   }
 
-  async createMessage(conversationId: string, senderUserId: string, dto: CreateMessageDto) {
+  async createMessage(
+    conversationId: string,
+    senderUserId: string,
+    dto: CreateMessageDto,
+  ) {
     await this.assertParticipant(conversationId, senderUserId);
+    if (dto.requestId) {
+      const id =
+        "msg_" +
+        createHash("sha256")
+          .update(`${conversationId}:${senderUserId}:${dto.requestId}`)
+          .digest("hex");
+      let row;
+      try {
+        row = await this.prisma.message.upsert({
+          where: { id },
+          update: {},
+          create: { id, conversationId, senderUserId, body: dto.body },
+        });
+      } catch (error) {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === "P2002" &&
+          Array.isArray(error.meta?.target) &&
+          error.meta.target.includes("id")
+        )
+          row = await this.prisma.message.findUniqueOrThrow({ where: { id } });
+        else throw error;
+      }
+      if (row.body !== dto.body)
+        throw new ConflictException(
+          "Ce message a déjà été envoyé avec un contenu différent.",
+        );
+      return row;
+    }
     return this.prisma.message.create({
       data: { conversationId, senderUserId, body: dto.body },
     });
@@ -40,6 +85,6 @@ export class ConversationsService {
     const participant = await this.prisma.conversationParticipant.findUnique({
       where: { conversationId_userId: { conversationId, userId } },
     });
-    if (!participant) throw new ForbiddenException('Accès non autorisé.');
+    if (!participant) throw new ForbiddenException("Accès non autorisé.");
   }
 }

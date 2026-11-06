@@ -57,7 +57,7 @@ describe("Trip publication validation and isolation", () => {
     { ownerUserId: "victim" },
     { slug: "forced" },
     { vehicle: { plate: "private" } },
-    { schedule: { regular: true } },
+    { schedule: { regular: "yes" } },
     { pricing: { pricePerSeat: 1.5 } },
     { pricing: { availableSeats: 0 } },
     { vehicle: { totalSeats: 2 }, pricing: { availableSeats: 3 } },
@@ -123,10 +123,13 @@ describe("Trip publication validation and isolation", () => {
   });
   it("uses a stable server id for concurrent retries without overwriting saved data", async () => {
     const db: any = {
+      $queryRaw: jest.fn(),
+      auditLog: { count: jest.fn(async () => 1) },
       tripListing: {
         upsert: jest.fn(async (args) => ({ ...args.create, status: "draft" })),
       },
     };
+    db.$transaction = (fn: any) => fn(db);
     const service = new TripPublicationService(db),
       dto = { requestId: randomUUID(), publication: {} };
     const [a, b] = await Promise.all([
@@ -161,12 +164,16 @@ describe("Trip publication validation and isolation", () => {
       tx: any = {
         $queryRaw: jest.fn(),
         tripListing: { findFirst: jest.fn().mockResolvedValue(null) },
-        tripSeatRequest: { create },
+        tripSeatRequest: { create, findUnique: jest.fn().mockResolvedValue(null) },
+        tripOccurrence: {
+          findFirst: jest.fn(async () => ({ id: "occ", remainingSeats: 2 })),
+        },
       };
     const service = new TripsService({
       $transaction: (fn: any) => fn(tx),
     } as any);
     const dto = {
+      occurrenceId: "occ",
       requestId: randomUUID(),
       clientName: "Client",
       clientPhone: "+221771234567",

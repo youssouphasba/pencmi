@@ -40,11 +40,9 @@ export const tripConditions = [
   "Paiement sur place",
 ];
 export const tripCopy = {
-  recurrenceUnavailable:
-    "Les trajets réguliers ne sont pas disponibles. Publiez un départ daté.",
   submitted: "Votre trajet est en attente de validation.",
   saved: "Brouillon enregistré.",
-  declaredSeats: "Places déclarées, à confirmer avec le transporteur.",
+  declaredSeats: "La demande doit être acceptée par le transporteur pour confirmer les places.",
   requestReceived:
     "Votre demande a été reçue. Elle ne constitue pas une réservation confirmée.",
 };

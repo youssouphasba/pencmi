@@ -16,6 +16,7 @@ import { PaginationDto } from "../../common/pagination/pagination.dto";
 import { AuthenticatedUser } from "../../auth/types/authenticated-user.type";
 import {
   CreateSeatRequestDto,
+  CancelTripOccurrenceDto,
   CreateTripDto,
   ModerateTripDto,
   TripSearchDto,
@@ -25,6 +26,7 @@ import {
 import { TripsService } from "./trips.service";
 import { TripPublicationService } from "./trip-publication.service";
 import { Throttle } from "@nestjs/throttler";
+import { TripOccurrencesService } from "./trip-occurrences.service";
 
 @ApiTags("trips")
 @Controller()
@@ -32,6 +34,7 @@ export class TripsController {
   constructor(
     private readonly service: TripsService,
     private readonly publication: TripPublicationService,
+    private readonly occurrences: TripOccurrencesService,
   ) {}
 
   @ApiBearerAuth()
@@ -60,8 +63,8 @@ export class TripsController {
 
   @Public()
   @Get("voyages/:id")
-  findPublicOne(@Param("id") id: string) {
-    return this.service.findPublicOne(id);
+  findPublicOne(@Param("id") id: string, @Query() query: TripSearchDto) {
+    return this.service.findPublicOne(id, query.occurrenceId);
   }
 
   @Public()
@@ -72,6 +75,18 @@ export class TripsController {
     @Body() dto: CreateSeatRequestDto,
   ) {
     return this.service.createSeatRequest(id, dto);
+  }
+
+  @ApiBearerAuth()
+  @RequirePermissions("manage_trips")
+  @Post("dashboard/voyages/:id/occurrences/:occurrenceId/cancel")
+  cancelOccurrence(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("id") id: string,
+    @Param("occurrenceId") occurrenceId: string,
+    @Body() dto: CancelTripOccurrenceDto,
+  ) {
+    return this.occurrences.cancel(user.id, id, occurrenceId, dto.reason);
   }
 
   @ApiBearerAuth()
@@ -92,6 +107,31 @@ export class TripsController {
     @Query() pagination: PaginationDto,
   ) {
     return this.service.findMySeatRequests(user.id, pagination);
+  }
+
+  @ApiBearerAuth()
+  @RequirePermissions("manage_trips")
+  @Get("dashboard/voyages/contacts")
+  contacts(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: PaginationDto,
+  ) {
+    return this.service.contacts(user.id, query);
+  }
+  @ApiBearerAuth()
+  @RequirePermissions("manage_trips")
+  @Get("dashboard/voyages/conversations")
+  conversations(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: PaginationDto,
+  ) {
+    return this.service.conversations(user.id, query);
+  }
+  @ApiBearerAuth()
+  @RequirePermissions("manage_trips")
+  @Get("dashboard/voyages/statistics")
+  statistics(@CurrentUser() user: AuthenticatedUser) {
+    return this.service.statistics(user.id);
   }
 
   @ApiBearerAuth()

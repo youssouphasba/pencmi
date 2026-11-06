@@ -1,5 +1,7 @@
 # Publication des voyages interurbains — étape 10
 
+Ce document conserve le bilan de la première livraison (`ba8099c`). Les paragraphes ci-dessous décrivent cet état antérieur, pas les limites actuelles. La finalisation des occurrences, de la capacité transactionnelle et des dashboards est décrite dans [trip-occurrences.md](trip-occurrences.md), qui fait référence pour le contrat actuel.
+
 ## Périmètre opérationnel
 
 Le formulaire existant conserve ses dix étapes. Il utilise `TripListing`, `TripSeatRequest`, le client de publication et la coordination JWT existants. Aucun moteur parallèle, paiement, billet ou allocation de sièges n'est créé.

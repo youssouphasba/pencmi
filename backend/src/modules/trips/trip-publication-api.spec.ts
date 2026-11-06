@@ -13,6 +13,7 @@ import { PermissionsGuard } from "../../auth/guards/permissions.guard";
 import { TripsController } from "./trips.controller";
 import { TripsService } from "./trips.service";
 import { TripPublicationService } from "./trip-publication.service";
+import { TripOccurrencesService } from "./trip-occurrences.service";
 
 describe("Trip publication HTTP contracts and permissions", () => {
   let app: INestApplication;
@@ -30,6 +31,10 @@ describe("Trip publication HTTP contracts and permissions", () => {
     createSeatRequest: jest.fn(),
     findMine: jest.fn(),
     findMySeatRequests: jest.fn(),
+    updateSeatRequestStatus: jest.fn(async () => ({ status: "accepted" })),
+    contacts: jest.fn(async () => ({ data: [] })),
+    conversations: jest.fn(async () => ({ data: [] })),
+    statistics: jest.fn(async () => ({ totalRequests: 0 })),
   };
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -37,6 +42,7 @@ describe("Trip publication HTTP contracts and permissions", () => {
       providers: [
         { provide: TripsService, useValue: service },
         { provide: TripPublicationService, useValue: publication },
+        { provide: TripOccurrencesService, useValue: { cancel: jest.fn() } },
         {
           provide: AuthService,
           useValue: {
@@ -72,11 +78,60 @@ describe("Trip publication HTTP contracts and permissions", () => {
   afterAll(() => app.close());
   beforeEach(() => jest.clearAllMocks());
   it("refuses anonymous access to owner routes", async () => {
-    for (const path of ["/dashboard/voyages", "/dashboard/voyages/id"])
+    for (const path of [
+      "/dashboard/voyages",
+      "/dashboard/voyages/id",
+      "/dashboard/voyages/contacts",
+      "/dashboard/voyages/conversations",
+      "/dashboard/voyages/statistics",
+    ])
       await request(app.getHttpServer()).get(path).expect(401);
     await request(app.getHttpServer())
       .post("/dashboard/voyages/id/submit")
       .expect(401);
+  });
+  it("protects contacts, conversations, statistics and occurrence cancellation with owner permissions", async () => {
+    for (const path of ["contacts", "conversations", "statistics"] as const) {
+      await request(app.getHttpServer())
+        .get(`/dashboard/voyages/${path}`)
+        .set("Authorization", "Bearer client")
+        .expect(403);
+      await request(app.getHttpServer())
+        .get(`/dashboard/voyages/${path}`)
+        .set("Authorization", "Bearer provider")
+        .expect(200);
+      expect(service[path]).toHaveBeenCalledWith(
+        "authenticated-owner",
+        ...(path === "statistics" ? [] : [expect.anything()]),
+      );
+    }
+    await request(app.getHttpServer())
+      .post("/dashboard/voyages/id/occurrences/occ/cancel")
+      .set("Authorization", "Bearer client")
+      .send({ reason: "Annulation" })
+      .expect(403);
+  });
+  it("requires an exact occurrence and refuses privileged request fields", async () => {
+    const dto = {
+      requestId: randomUUID(),
+      clientName: "Client",
+      clientEmail: "client@example.test",
+      requestedSeats: 1,
+    };
+    await request(app.getHttpServer())
+      .post("/voyages/id/seat-requests")
+      .send(dto)
+      .expect(400);
+    await request(app.getHttpServer())
+      .post("/voyages/id/seat-requests")
+      .send({
+        ...dto,
+        occurrenceId: "occ",
+        allocatedSeats: 1,
+        status: "accepted",
+      })
+      .expect(400);
+    expect(service.createSeatRequest).not.toHaveBeenCalled();
   });
   it.each(["client", "hotel"])(
     "refuses unrelated %s permissions",
@@ -145,12 +200,17 @@ describe("Trip publication HTTP contracts and permissions", () => {
       }),
     );
   });
-  it("does not permit allocation-free confirmations", async () => {
+  it("routes confirmations through the authenticated owner service", async () => {
     await request(app.getHttpServer())
       .patch("/dashboard/voyages/seat-requests/id/status")
       .set("Authorization", "Bearer provider")
       .send({ status: "accepted" })
-      .expect(400);
+      .expect(200);
+    expect(service.updateSeatRequestStatus).toHaveBeenCalledWith(
+      "authenticated-owner",
+      "id",
+      { status: "accepted" },
+    );
   });
   it.each(["provider", "individual", "client", "hotel"])(
     "refuses moderation to %s",

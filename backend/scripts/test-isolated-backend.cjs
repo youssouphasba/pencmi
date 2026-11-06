@@ -24,6 +24,7 @@ async function main() {
   }
   const env = { ...process.env, DATABASE_URL: url.toString() };
   for (const args of [
+    ['node_modules/eslint/bin/eslint.js', 'src/**/*.ts'],
     [
       '--max-old-space-size=640',
       '--max-semi-space-size=4',

@@ -55,7 +55,8 @@ export class ProfessionalProfilesService {
         take: 12,
       }),
       this.prisma.tripListing.findMany({
-        where: { ownerUserId: userId, ...tripPublicWhere({}) },
+        where: { ownerUserId: userId,status:'active',deletedAt:null,OR:[{occurrences:{some:{cancelledAt:null,departureAt:{gt:new Date()}}}},{...tripPublicWhere({}),occurrences:{none:{}}}] },
+        include:{occurrences:{where:{cancelledAt:null,departureAt:{gt:new Date()}},orderBy:{departureAt:'asc'},take:1}},
         orderBy: { updatedAt: 'desc' },
         take: 12,
       }),

@@ -31,6 +31,7 @@ type TripContactSource =
   | "email"
   | "internal_message"
   | "form"
+  | "seat_request"
   | "reservation_request";
 
 type TripReservationStatus =
@@ -39,7 +40,24 @@ type TripReservationStatus =
   | "accepted"
   | "refused"
   | "cancelled"
-  | "completed";
+  | "completed"
+  | "expired"
+  | "requires_more_info";
+
+type TripOccurrence = {
+  id: string;
+  tripId?: string;
+  serviceDate: string;
+  departureAt: string;
+  estimatedArrivalAt?: string | null;
+  totalCapacity?: number;
+  offeredSeats?: number;
+  confirmedSeats?: number;
+  remainingSeats: number;
+  pricePerSeat: number;
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
+};
 
 type TripContactPreferences = {
   whatsappEnabled: boolean;
@@ -58,6 +76,9 @@ type TripContactPreferences = {
 
 type TripListing = {
   id: string;
+  occurrenceId?: string | null;
+  occurrences?: TripOccurrence[];
+  moderationReason?: string | null;
   title: string;
   vehicleType: TripVehicleType;
   status: TripStatus;
@@ -71,7 +92,7 @@ type TripListing = {
   estimatedDuration?: string;
   pricePerSeat?: number;
   currency: "FCFA";
-  availableSeats?: number;
+  availableSeats?: number | null;
   totalSeats?: number;
   luggageAllowed?: boolean;
   largeLuggageAllowed?: boolean;
@@ -87,6 +108,10 @@ type TripListing = {
 type TripReservationRequest = {
   id: string;
   tripId: string;
+  occurrenceId?: string | null;
+  occurrence?: TripOccurrence | null;
+  allocatedSeats?: number | null;
+  quotedPricePerSeat?: number | null;
   clientName?: string;
   clientPhone?: string;
   clientEmail?: string;
@@ -112,17 +137,13 @@ type TripAlert = {
 };
 
 type TripStats = {
-  views: number;
-  detailClicks: number;
-  favorites: number;
-  contacts: number;
-  messages: number;
-  reservationRequests: number;
+  totalRequests: number;
   requestedSeats: number;
-  whatsappClicks: number;
-  phoneClicks: number;
-  emailClicks: number;
-  viewToRequestRate: number;
-  viewToContactRate: number;
-  averageResponseTimeMinutes?: number;
+  confirmedSeats: number;
+  directContacts: number;
+  inboundMessages: number;
+  requestsByStatus: Partial<Record<TripReservationStatus, number>>;
+  contactsBySource: Partial<Record<TripContactSource, number>>;
+  historicalUnallocatedRequests: number;
+  unavailableMetrics: string[];
 };

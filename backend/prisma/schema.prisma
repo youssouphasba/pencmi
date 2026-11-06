@@ -690,6 +690,7 @@ model TripListing {
   updatedAt    DateTime     @updatedAt
   deletedAt    DateTime?
   seatRequests TripSeatRequest[]
+  occurrences TripOccurrence[]
 
   @@index([ownerUserId, status])
   @@index([departureCity, arrivalCity, status])
@@ -704,6 +705,10 @@ model TripSeatRequest {
   clientPhone String?
   clientEmail String?
   requestedSeats Int
+  occurrenceId String?
+  occurrence TripOccurrence? @relation(fields: [occurrenceId], references: [id], onDelete: Restrict)
+  allocatedSeats Int?
+  quotedPricePerSeat Int?
   luggage   Boolean?
   message   String?
   status    RequestStatus @default(new)
@@ -711,6 +716,29 @@ model TripSeatRequest {
   updatedAt DateTime      @updatedAt
 
   @@index([tripId, status, createdAt])
+  @@index([occurrenceId, status])
+}
+
+model TripOccurrence {
+  id String @id
+  tripId String
+  trip TripListing @relation(fields: [tripId], references: [id])
+  serviceDate DateTime @db.Date
+  departureAt DateTime
+  estimatedArrivalAt DateTime?
+  totalCapacity Int
+  offeredSeats Int
+  confirmedSeats Int @default(0)
+  remainingSeats Int
+  pricePerSeat Int
+  cancelledAt DateTime?
+  cancellationReason String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  requests TripSeatRequest[]
+
+  @@unique([tripId, departureAt])
+  @@index([departureAt, cancelledAt])
 }
 
 model Conversation {

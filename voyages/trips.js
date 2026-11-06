@@ -137,6 +137,7 @@ function tripFiltersMarkup() {
 
 function tripCard(listing) {
   listing = tripDisplay(listing);
+  const detailHref = `/voyages/detail/?id=${encodeURIComponent(listing.id)}${listing.occurrenceId ? `&occurrenceId=${encodeURIComponent(listing.occurrenceId)}` : ''}`;
   const metadata = tripMetadata(listing);
   const advertiser = tripAdvertiser(listing);
   return `
@@ -152,9 +153,9 @@ function tripCard(listing) {
         ${listing.pricePerSeat ? `<span class="trip-chip">${pencmiFormatPrice(listing.pricePerSeat, listing.currency || "FCFA")}</span>` : ""}
         ${advertiser.verified ? `<span class="trip-chip">Vérifié</span>` : ""}
       </div>
-      <p>Places déclarées, à confirmer avec le transporteur.</p><div class="trip-card-actions">
-        <a class="btn btn-light" href="${tripRouteHref(`/voyages/${listing.id}`)}">Voir détails</a>
-        ${metadata.contactPreferences?.reservationRequestEnabled !== false ? `<a class="btn btn-primary" href="${tripRouteHref(`/voyages/${listing.id}`)}#reservation">Demander une place</a>` : ''}
+      <p>${listing.departureDate ? new Date(listing.departureDate).toLocaleDateString('fr-FR',{timeZone:'Africa/Dakar'}) : ''} · ${listing.availableSeats ?? 'Disponibilité à confirmer'}${listing.availableSeats != null ? ' places restantes' : ''}</p><div class="trip-card-actions">
+        <a class="btn btn-light" href="${detailHref}">Voir détails</a>
+        ${listing.occurrenceId && listing.availableSeats > 0 && metadata.contactPreferences?.reservationRequestEnabled !== false ? `<a class="btn btn-primary" href="${detailHref}#reservation">Demander une place</a>` : ''}
       </div>
     </article>
   `;

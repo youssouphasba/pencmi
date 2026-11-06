@@ -16,6 +16,7 @@ const tripDashboardData = {
   reservations: [],
   contacts: [],
   stats: null,
+  conversation: null,
   loading: true,
   error: ""
 };
@@ -72,6 +73,7 @@ const tripReservationStatusLabels = {
   refused: "Refusée",
   cancelled: "Annulée",
   completed: "Terminée",
+  expired: "Expirée",
   requires_more_info: "Infos demandées"
 };
 
@@ -122,7 +124,7 @@ function TripsDashboardSidebar(currentPage) {
     ["Trajets", tripDashboardRoutes.listings, "listings", listingCount],
     ["Messages", tripDashboardRoutes.messages, "messages"],
     ["Demandes de place", tripDashboardRoutes.reservations, "reservations", reservationCount],
-    ["Contacts", tripDashboardRoutes.contacts, "contacts", reservationCount],
+    ["Contacts", tripDashboardRoutes.contacts, "contacts", String(tripDashboardData.contacts.length)],
     ["Statistiques", tripDashboardRoutes.statistics, "statistics"],
     ["Moyens de contact", tripDashboardRoutes.contactSettings, "contactSettings"],
     ["Emails automatiques", tripDashboardRoutes.emailSettings, "emailSettings"]
@@ -158,12 +160,12 @@ function TripsDashboardPage() {
     ["Trajets en attente", pendingTrips],
     ["Demandes de place", tripDashboardData.reservations.length],
     ["Places demandées", requestedSeats],
-    ["Messages reçus", tripDashboardData.messages.length],
-    ["Contacts", tripDashboardData.contacts.length]
+    ["Messages reçus", tripDashboardData.stats?.inboundMessages ?? null],
+    ["Contacts directs", tripDashboardData.stats?.directContacts ?? null]
   ];
   return TripsDashboardLayout(`
     ${DashboardHeader("Dashboard voyages", "Suivez vos trajets, demandes, contacts, messages et performances.", `<a class="btn btn-primary" href="${tripDashboardRouteHref(tripDashboardRoutes.publish)}">Publier un trajet</a>`)}
-    <section class="trip-kpi-grid">${kpis.map(([title, value]) => KpiCard(title, String(value))).join("")}</section>
+    <section class="trip-kpi-grid">${kpis.map(([title, value]) => KpiCard(title, value == null ? "" : String(value))).join("")}</section>
     ${tripDashboardData.trips.length || tripDashboardData.reservations.length ? "" : EmptyState("Aucune donnée disponible pour le moment.")}
   `, "overview");
 }
@@ -181,12 +183,17 @@ function TripListingsTable() {
     const requests = tripDashboardData.reservations.filter((request) => request.trip?.id === trip.id).length;
     trip = tripDashboardDisplay(trip);
     const editable = ['draft', 'refused', 'active', 'pending_review'].includes(trip.status);
-    return `<tr><td>${trip.title || 'Sans titre'}</td><td>${tripDashboardContent?.tripStatuses[trip.status] || trip.status}</td><td>${trip.departureCity || ""}</td><td>${trip.arrivalCity || ""}</td><td>${formatTripDate(trip.departureDate)}</td><td>${trip.departureTime || ""}</td><td>${trip.availableSeats ?? ""}</td><td>${trip.pricePerSeat != null ? `${trip.pricePerSeat} FCFA` : 'Non renseigné'}</td><td>${requests}</td><td>${trip.status === 'active' ? `<a class="btn btn-ghost" href="${tripDashboardRouteHref(`/voyages/${trip.id}`)}">Voir</a>` : ''}${editable ? `<a class="btn btn-light" href="/publier/?category=voyage&id=${encodeURIComponent(trip.id)}">${trip.status === 'draft' ? 'Reprendre' : 'Modifier'}</a>${['draft', 'refused'].includes(trip.status) ? `<button class="btn btn-primary" data-trip-action="submit" data-id="${trip.id}">Soumettre</button>` : ''}<button class="btn btn-ghost" data-trip-action="delete" data-id="${trip.id}">Supprimer</button>` : ''}</td></tr>`;
+    return `<tr><td>${trip.title || 'Sans titre'}${trip.moderationReason ? `<p>${trip.moderationReason}</p>` : ''}${TripOccurrenceRows(trip)}</td><td>${tripDashboardContent?.tripStatuses[trip.status] || trip.status}</td><td>${trip.departureCity || ""}</td><td>${trip.arrivalCity || ""}</td><td>${formatTripDate(trip.departureDate)}</td><td>${trip.departureTime || ""}</td><td>${trip.availableSeats ?? ""}</td><td>${trip.pricePerSeat != null ? `${trip.pricePerSeat} FCFA` : 'Non renseigné'}</td><td>${requests}</td><td>${trip.status === 'active' ? `<a class="btn btn-ghost" href="${tripDashboardRouteHref(`/voyages/${trip.id}`)}">Voir</a>` : ''}${editable ? `<a class="btn btn-light" href="/publier/?category=voyage&id=${encodeURIComponent(trip.id)}">${trip.status === 'draft' ? 'Reprendre' : 'Modifier'}</a>${['draft', 'refused'].includes(trip.status) ? `<button class="btn btn-primary" data-trip-action="submit" data-id="${trip.id}">Soumettre</button>` : ''}<button class="btn btn-ghost" data-trip-action="delete" data-id="${trip.id}">Supprimer</button>` : ''}</td></tr>`;
   }).join("")}</tbody></table></section><div class="trip-row-actions">${tripTablePage > 1 ? '<button class="btn btn-light" data-trip-page="-1">Précédent</button>' : ''}<span>Page ${tripTablePage} sur ${count}</span>${tripTablePage < count ? '<button class="btn btn-light" data-trip-page="1">Suivant</button>' : ''}</div>`;
 }
 
+function TripOccurrenceRows(trip) {
+  return `<details><summary>Départs et places</summary>${(trip.occurrences||[]).map(row=>`<p>${formatTripDate(row.serviceDate)} ${new Date(row.departureAt).toLocaleTimeString('fr-FR',{timeZone:'Africa/Dakar',hour:'2-digit',minute:'2-digit'})} · ${row.remainingSeats} restantes / ${row.offeredSeats} proposées · ${row.confirmedSeats} allouées${row.cancelledAt?' · annulé':new Date(row.departureAt)<=new Date()?' · départ passé':` <button class="btn btn-ghost" data-cancel-trip-occurrence="${row.id}" data-trip-id="${trip.id}">Annuler ce départ</button>`}</p>`).join('')||'<p>Aucun départ matérialisé.</p>'}</details>`;
+}
+
 function TripMessagesPage() {
-  return TripsDashboardLayout(`${DashboardHeader("Messages voyages", "Suivez les conversations clients, les trajets concernés et vos réponses.")}${EmptyState("Aucun message reçu pour le moment.", "Les messages clients liés à vos trajets apparaîtront ici.")}`, "messages");
+  const messages = tripDashboardData.messages;
+  return TripsDashboardLayout(`${DashboardHeader('Messages voyages','Vos conversations liées aux trajets.')}${messages.length ? `<section class="trip-dashboard-card">${messages.map(conversation=>`<button class="btn btn-light" data-open-trip-conversation="${tripDashboardEscape(conversation.id)}">${tripDashboardEscape(tripDashboardData.trips.find(trip=>trip.id===conversation.targetId)?.title || 'Conversation')} · ${tripDashboardEscape(conversation.messages?.[0]?.body || '')}</button>`).join('')}</section>` : EmptyState('Aucun message reçu pour le moment.')}${tripDashboardData.conversation ? `<section class="trip-dashboard-card"><h2>Conversation</h2>${tripDashboardData.conversation.messages.map(message=>`<p>${tripDashboardEscape(message.body)} <small>${formatTripDate(message.createdAt)}</small></p>`).join('')}<form data-trip-reply><label class="trip-form-field"><span>Votre réponse</span><textarea name="body" required maxlength="6000"></textarea></label><button class="btn btn-primary" type="submit">Envoyer</button><p role="alert" data-reply-error></p></form></section>` : ''}`, 'messages');
 }
 
 function TripReservationsPage() {
@@ -199,16 +206,18 @@ function TripReservationsPage() {
 function TripReservationRow(request) {
   request = tripDashboardDisplay(request);
   return `
-    <tr>
+    <tr data-trip-request-row="${request.id}">
       <td>${request.clientName || "Client"}</td>
-      <td>${request.trip?.title || "Trajet"}</td>
-      <td>${request.requestedSeats || ""}</td>
+      <td>${request.trip?.title || "Trajet"}${request.occurrence ? `<br>${formatTripDate(request.occurrence.serviceDate)} ${new Date(request.occurrence.departureAt).toLocaleTimeString('fr-FR',{timeZone:'Africa/Dakar',hour:'2-digit',minute:'2-digit'})}` : '<br>Demande historique sans occurrence'}</td>
+      <td>${request.requestedSeats || ""}${request.quotedPricePerSeat != null ? `<br>${request.quotedPricePerSeat} FCFA / personne` : ''}${request.allocatedSeats === null ? '<br>Allocation historique non connue' : ''}${request.quotedPricePerSeat != null && request.occurrence && request.quotedPricePerSeat !== request.occurrence.pricePerSeat ? '<br>Tarif modifié : nouvelle demande nécessaire' : ''}</td>
       <td>${request.luggage ? "Oui" : "Non"}</td>
       <td>${request.message || ""}</td>
       <td>${formatTripReservationStatus(request.status)}</td>
       <td>${formatTripDate(request.createdAt)}</td>
       <td>
         <div class="trip-row-actions">
+          ${['new','pending','requires_more_info'].includes(request.status) && request.allocatedSeats !== null && request.occurrence && request.quotedPricePerSeat === request.occurrence.pricePerSeat && !request.occurrence.cancelledAt && new Date(request.occurrence.departureAt)>new Date() && request.trip?.status==='active' ? `<button class="btn btn-primary" data-trip-request-status="accepted" data-trip-request-id="${request.id}">Confirmer les places</button>` : ''}
+          ${request.status==='accepted' && request.occurrence && new Date(request.occurrence.departureAt)<=new Date()?`<button class="btn btn-light" data-trip-request-status="completed" data-trip-request-id="${request.id}">Terminer</button>`:''}
           ${['new', 'pending', 'requires_more_info'].includes(request.status) ? `
           <button class="btn btn-ghost" type="button" data-trip-request-status="requires_more_info" data-trip-request-id="${request.id}">Demander des infos</button>
           <button class="btn btn-ghost" type="button" data-trip-request-status="refused" data-trip-request-id="${request.id}">Refuser</button>
@@ -225,27 +234,18 @@ async function updateTripReservationStatus(id, status) {
     method: "PATCH",
     body: JSON.stringify({ status })
   });
-  tripDashboardData.reservations = tripDashboardData.reservations.map((request) => request.id === id ? updated : request);
-  renderDashboard();
+  await loadTripDashboardData();
 }
 
 function TripContactsPage() {
-  const sources = ["WhatsApp", "Téléphone", "Email", "Message interne", "Formulaire", "Demande de place"];
-  return TripsDashboardLayout(`
-    ${DashboardHeader("Contacts reçus", "Suivez les contacts générés par vos trajets.")}
-    <section class="trip-dashboard-card"><h2>Sources prévues</h2><div class="trip-chip-row">${sources.map((source) => `<span class="trip-chip">${source}</span>`).join("")}</div></section>
-    ${tripDashboardData.reservations.length ? `<section class="trip-table-wrap"><table class="trip-table"><thead><tr><th>Client</th><th>Trajet</th><th>Téléphone</th><th>Email</th><th>Places</th><th>Message</th><th>Source</th><th>Date</th></tr></thead><tbody>${tripDashboardData.reservations.map(tripDashboardDisplay).map((request) => `<tr><td>${request.clientName || "Client"}</td><td>${request.trip?.title || "Trajet"}</td><td>${request.clientPhone || ""}</td><td>${request.clientEmail || ""}</td><td>${request.requestedSeats || ""}</td><td>${request.message || ""}</td><td>Demande de place</td><td>${formatTripDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucun contact reçu pour le moment.")}
-  `, "contacts");
+  return TripsDashboardLayout(`${DashboardHeader('Contacts reçus','Les événements de contact de vos trajets.')}${tripDashboardData.contacts.length ? `<section class="trip-table-wrap"><table class="trip-table"><thead><tr><th>Trajet</th><th>Source</th><th>Date</th><th>Détails</th></tr></thead><tbody>${tripDashboardData.contacts.map(event=>`<tr><td>${tripDashboardEscape(tripDashboardData.trips.find(trip=>trip.id===event.targetId)?.title || event.targetId)}</td><td>${tripDashboardEscape(event.source)}</td><td>${formatTripDate(event.createdAt)}</td><td>${tripDashboardEscape(event.metadata?.message || '')}</td></tr>`).join('')}</tbody></table></section>` : EmptyState('Aucun contact reçu pour le moment.')}`, 'contacts');
 }
 
 function TripStatisticsPage() {
-  const kpis = ["Vues", "Clics détails", "Favoris", "Contacts", "Messages", "Demandes de place", "Places demandées", "Clics WhatsApp", "Clics téléphone", "Clics email", "Taux vue → demande", "Taux vue → contact", "Délai moyen de réponse"];
-  return TripsDashboardLayout(`
-    ${DashboardHeader("Statistiques voyages", "Analysez les performances détaillées de vos trajets.")}
-    <section class="trip-kpi-grid">${kpis.map((title) => KpiCard(title)).join("")}</section>
-    ${EmptyState("Aucune statistique disponible pour le moment.")}
-    <div class="dashboard-grid"><section class="trip-dashboard-card"><h2>Trajets les plus consultés</h2><div class="trip-chart-placeholder">Bloc graphique prévu</div></section><section class="trip-dashboard-card"><h2>Trajets sans contact</h2><div class="trip-chart-placeholder">Bloc prévu</div></section><section class="trip-dashboard-card"><h2>Trajets à améliorer</h2><div class="trip-chart-placeholder">Bloc prévu</div></section></div>
-  `, "statistics");
+  const stats = tripDashboardData.stats;
+  if (!stats || Array.isArray(stats)) return TripsDashboardLayout(DashboardHeader('Statistiques voyages','Vos données enregistrées.')+EmptyState('Statistiques indisponibles.'),'statistics');
+  const kpis=[['Demandes reçues',stats.totalRequests],['Places demandées',stats.requestedSeats],['Places allouées',stats.confirmedSeats],['Contacts directs',stats.directContacts],['Messages reçus',stats.inboundMessages]];
+  return TripsDashboardLayout(`${DashboardHeader('Statistiques voyages','Données calculées depuis vos demandes, allocations et contacts.') }<section class="trip-kpi-grid">${kpis.map(([label,value])=>KpiCard(label,String(value))).join('')}</section><section class="trip-dashboard-card"><h2>Demandes par statut</h2>${Object.entries(stats.requestsByStatus).map(([status,count])=>`<p>${tripDashboardEscape(formatTripReservationStatus(status))} : ${count}</p>`).join('')}<h2>Contacts directs par source</h2>${Object.entries(stats.contactsBySource).map(([source,count])=>`<p>${tripDashboardEscape(source)} : ${count}</p>`).join('')}${stats.historicalUnallocatedRequests ? `<p>${stats.historicalUnallocatedRequests} demandes historiques sans allocation de stock connue.</p>` : ''}<p>Vues, taux de conversion et délai de réponse : données indisponibles.</p></section>`,'statistics');
 }
 
 function TripContactSettingsPage() {
@@ -268,6 +268,9 @@ function renderDashboard() {
   };
   document.querySelector("#trip-dashboard-root").innerHTML = tripDashboardData.loading ? TripsDashboardLayout(EmptyState('Chargement en cours.'), page) : tripDashboardData.error ? TripsDashboardLayout(EmptyState(tripDashboardEscape(tripDashboardData.error), '', '<button class="btn btn-light" data-retry-trip>Réessayer</button>'), page) : pages[page]();
   document.querySelector('[data-retry-trip]')?.addEventListener('click', () => void loadTripDashboardData());
+  document.querySelectorAll('[data-cancel-trip-occurrence]').forEach(button=>button.onclick=async()=>{const reason=window.prompt('Motif de l’annulation du départ et de ses demandes');if(!reason?.trim())return;button.disabled=true;try{await tripApiRequest(`/dashboard/voyages/${encodeURIComponent(button.dataset.tripId)}/occurrences/${encodeURIComponent(button.dataset.cancelTripOccurrence)}/cancel`,{method:'POST',body:{reason}});await loadTripDashboardData();}catch(error){window.alert(error.message);button.disabled=false;}});
+  document.querySelectorAll('[data-open-trip-conversation]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{tripDashboardData.conversation=await tripApiRequest(`/messages/conversations/${encodeURIComponent(button.dataset.openTripConversation)}`);renderDashboard();}catch(error){window.alert(error.message);button.disabled=false;}});
+  document.querySelector('[data-trip-reply]')?.addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('[type="submit"]');if(button.disabled)return;button.disabled=true;try{const {publicationOperationId}=await import('../../publier/real-estate-api.mjs');form.dataset.requestId ||= publicationOperationId();await tripApiRequest(`/messages/conversations/${encodeURIComponent(tripDashboardData.conversation.id)}/messages`,{method:'POST',body:{body:form.elements.body.value,requestId:form.dataset.requestId}});tripDashboardData.conversation=await tripApiRequest(`/messages/conversations/${encodeURIComponent(tripDashboardData.conversation.id)}`);await loadTripDashboardData();}catch(error){form.querySelector('[data-reply-error]').textContent=error.message;button.disabled=false;}});
   document.querySelectorAll('[data-trip-page]').forEach(button => button.onclick = () => { tripTablePage += Number(button.dataset.tripPage); renderDashboard(); });
   document.querySelectorAll('[data-trip-action]').forEach(button => button.onclick = async () => {
     if (button.dataset.tripAction === 'delete' && !window.confirm('Supprimer ce trajet ?')) return;
@@ -299,7 +302,8 @@ async function loadTripDashboardData() {
   try {
     tripDashboardContent ||= await import('../../voyages/trip-content.mjs');
     const all = async path => { const rows = []; for (let page = 1; ; page++) { const result = await tripApiRequest(`${path}?page=${page}&limit=100`, { includeMeta: true }); rows.push(...tripListFromPayload(result?.data ?? result)); if (page >= (result.meta?.totalPages || 1)) return rows; } };
-    const [tripsPayload, reservationsPayload] = await Promise.all([all('/dashboard/voyages'), all('/dashboard/voyages/seat-requests')]);
+    const [tripsPayload, reservationsPayload, contacts, messages, stats] = await Promise.all([all('/dashboard/voyages'), all('/dashboard/voyages/seat-requests'),all('/dashboard/voyages/contacts'),all('/dashboard/voyages/conversations'),tripApiRequest('/dashboard/voyages/statistics')]);
+    tripDashboardData.contacts=contacts;tripDashboardData.messages=messages;tripDashboardData.stats=stats;
     tripDashboardData.trips = tripListFromPayload(tripsPayload);
     tripDashboardData.reservations = tripListFromPayload(reservationsPayload);
   } catch (error) {

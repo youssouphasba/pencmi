@@ -3,6 +3,7 @@ const { createHash } = require('node:crypto');
 
 const quote = (value) => '"' + value.replace(/"/g, '""') + '"';
 const addedColumns = {
+  TripSeatRequest: ['occurrenceId', 'allocatedSeats', 'quotedPricePerSeat'],
   HotelApiKey: ['active'],
   RefreshToken: ['consumedAt', 'parentTokenId'],
   HotelRoom: ['metadata'],
@@ -24,7 +25,7 @@ async function fingerprint(url) {
         const groups = new Map();
         for (const { table_name, column_name } of columns) {
           if (
-            ['_prisma_migrations', 'AdvertiserReview', 'HotelStockAllocation', 'HotelReservationEvent'].includes(table_name) ||
+            ['_prisma_migrations', 'AdvertiserReview', 'HotelStockAllocation', 'HotelReservationEvent', 'TripOccurrence'].includes(table_name) ||
             addedColumns[table_name]?.includes(column_name)
           )
             continue;

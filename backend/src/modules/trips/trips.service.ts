@@ -1,17 +1,10 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { createHash } from "crypto";
-import {
-  ContactSource,
-  ListingStatus,
-  PencmiModule,
-  RequestStatus,
-  TargetType,
-} from "@prisma/client";
+import { TripOccurrencesService } from "./trip-occurrences.service";
+import { ListingStatus } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 import {
   getPagination,
@@ -117,6 +110,7 @@ export function tripPublicWhere(
   return { status: ListingStatus.active, deletedAt: null, AND: and };
 }
 export function publicTrip(row: any) {
+  const occurrence = row.selectedOccurrence || row.occurrences?.[0];
   const m = tripObject(row.metadata),
     p = tripObject(m.publication),
     c = tripObject(p.contactPreferences);
@@ -133,6 +127,15 @@ export function publicTrip(row: any) {
   };
   return {
     id: row.id,
+    occurrenceId: occurrence?.id || null,
+    occurrences: row.occurrences?.map((item: any) => ({
+      id: item.id,
+      serviceDate: item.serviceDate,
+      departureAt: item.departureAt,
+      estimatedArrivalAt: item.estimatedArrivalAt,
+      remainingSeats: item.remainingSeats,
+      pricePerSeat: item.pricePerSeat,
+    })),
     slug: row.slug,
     title: row.title,
     vehicleType: canonicalTripType(row.vehicleType),
@@ -140,22 +143,45 @@ export function publicTrip(row: any) {
     arrivalCity: row.arrivalCity,
     departurePoint: row.departurePoint,
     arrivalPoint: row.arrivalPoint,
-    departureDate: row.departureDate,
-    departureTime: row.departureTime,
-    availableSeats: row.availableSeats,
-    pricePerSeat: row.pricePerSeat,
+    departureDate: occurrence?.serviceDate || row.departureDate,
+    departureTime:
+      occurrence?.departureAt?.toISOString().slice(11, 16) || row.departureTime,
+    availableSeats: occurrence ? occurrence.remainingSeats : null,
+    pricePerSeat: occurrence ? occurrence.pricePerSeat : row.pricePerSeat,
+    offeredSeats: occurrence?.offeredSeats,
+    confirmedSeats: occurrence?.confirmedSeats,
+    estimatedArrivalAt: occurrence?.estimatedArrivalAt || null,
     currency: row.currency,
     metadata: {
       description: p.content?.description ?? m.description,
       instructions: p.content?.instructions,
       conditions: p.conditions ?? m.conditions,
       meetingPoints: p.route?.meetingPoints,
+      stops: p.route?.stops,
+      rendezvous: p.route?.rendezvous,
+      durationMinutes: occurrence?.estimatedArrivalAt
+        ? (occurrence.estimatedArrivalAt.getTime() -
+            occurrence.departureAt.getTime()) /
+          60000
+        : p.schedule?.durationMinutes,
       vehicleLabel:
         [p.vehicle?.brand, p.vehicle?.model].filter(Boolean).join(" ") ||
         m.vehicleLabel,
       passengerInfo: p.vehicle?.passengerInfo,
       totalSeats: p.vehicle?.totalSeats,
-      estimatedArrivalTime: p.schedule?.arrivalTime ?? m.estimatedArrivalTime,
+      estimatedArrivalTime:
+        occurrence?.estimatedArrivalAt?.toISOString().slice(11, 16) ||
+        p.schedule?.arrivalTime ||
+        m.estimatedArrivalTime,
+      arrivalDayOffset: occurrence?.estimatedArrivalAt
+        ? Math.floor(
+            (Date.parse(
+              occurrence.estimatedArrivalAt.toISOString().slice(0, 10),
+            ) -
+              Date.parse(occurrence.serviceDate.toISOString().slice(0, 10))) /
+              86400000,
+          )
+        : undefined,
       arrivalNextDay:
         p.schedule?.arrivalNextDay ||
         (!!p.schedule?.arrivalTime &&
@@ -184,57 +210,133 @@ export function publicTrip(row: any) {
 
 @Injectable()
 export class TripsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly occurrences: TripOccurrencesService = new TripOccurrencesService(
+      prisma,
+    ),
+  ) {}
 
   async findPublic(query: TripSearchDto) {
     const pagination = getPagination(query);
-    const where = tripPublicWhere(query);
-    const [data, total] = await Promise.all([
-      this.prisma.tripListing.findMany({
+    const and: Prisma.TripListingWhereInput[] = [];
+    for (const key of ["departureCity", "arrivalCity"] as const)
+      if (query[key])
+        and.push({ [key]: { contains: query[key], mode: "insensitive" } });
+    if (query.query)
+      and.push({
+        OR: [
+          "title",
+          "departureCity",
+          "arrivalCity",
+          "departurePoint",
+          "arrivalPoint",
+        ].map((key) => ({
+          [key]: { contains: query.query, mode: "insensitive" },
+        })),
+      });
+    if (query.vehicleType)
+      and.push({
+        vehicleType: {
+          in: [
+            query.vehicleType,
+            ...Object.keys(TRIP_TYPE_ALIASES).filter(
+              (key) => TRIP_TYPE_ALIASES[key] === query.vehicleType,
+            ),
+          ],
+        },
+      });
+    const where: Prisma.TripOccurrenceWhereInput = {
+      trip: { status: "active", deletedAt: null, AND: and },
+      cancelledAt: null,
+      departureAt: { gt: new Date() },
+      remainingSeats: { gte: query.passengers || 1 },
+    };
+    if (query.date) {
+      const date = new Date(query.date + "T00:00:00Z");
+      if (
+        !Number.isFinite(date.getTime()) ||
+        date.toISOString().slice(0, 10) !== query.date
+      )
+        throw new BadRequestException("Date invalide.");
+      where.serviceDate = date;
+    }
+    if (
+      query.minPrice !== undefined &&
+      query.maxPrice !== undefined &&
+      query.minPrice > query.maxPrice
+    )
+      throw new BadRequestException("Fourchette de prix invalide.");
+    if (query.minPrice !== undefined || query.maxPrice !== undefined)
+      where.pricePerSeat = { gte: query.minPrice, lte: query.maxPrice };
+    const ranges: Record<string, [string, string]> = {
+      morning: ["06:00", "12:00"],
+      afternoon: ["12:00", "17:00"],
+      evening: ["17:00", "21:00"],
+    };
+    if (query.timeOfDay === "night")
+      and.push({
+        OR: [
+          { departureTime: { lt: "06:00" } },
+          { departureTime: { gte: "21:00" } },
+        ],
+      });
+    else if (query.timeOfDay && ranges[query.timeOfDay])
+      and.push({
+        departureTime: {
+          gte: ranges[query.timeOfDay][0],
+          lt: ranges[query.timeOfDay][1],
+        },
+      });
+    const [occurrences, total] = await Promise.all([
+      this.prisma.tripOccurrence.findMany({
         where,
         skip: pagination.skip,
         take: pagination.take,
-        orderBy: [
-          { departureDate: "asc" },
-          { departureTime: "asc" },
-          { id: "asc" },
-        ],
+        orderBy: [{ departureAt: "asc" }, { id: "asc" }],
         include: {
-          owner: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              city: true,
-              role: true,
-              professionalProfile: {
+          trip: {
+            include: {
+              owner: {
                 select: {
-                  businessName: true,
-                  professionalType: true,
+                  id: true,
+                  firstName: true,
+                  lastName: true,
                   city: true,
-                  logoUrl: true,
-                  whatsappNumber: true,
-                  professionalPhone: true,
-                  professionalEmail: true,
-                  openingHours: true,
-                  verified: true,
-                  website: true,
-                  description: true,
+                  role: true,
+                  professionalProfile: {
+                    select: {
+                      businessName: true,
+                      logoUrl: true,
+                      verified: true,
+                    },
+                  },
                 },
               },
             },
           },
         },
       }),
-      this.prisma.tripListing.count({ where }),
+      this.prisma.tripOccurrence.count({ where }),
     ]);
-    return { data: data.map(publicTrip), meta: pagination.meta(total) };
+    return {
+      data: occurrences.map((occurrence) =>
+        publicTrip({ ...occurrence.trip, selectedOccurrence: occurrence }),
+      ),
+      meta: pagination.meta(total),
+    };
   }
 
-  async findPublicOne(id: string) {
+  async findPublicOne(id: string, occurrenceId?: string) {
     const row = await this.prisma.tripListing.findFirst({
-      where: { ...tripPublicWhere({}), id },
+      where: { id, status: "active", deletedAt: null },
       include: {
+        _count: { select: { occurrences: true } },
+        occurrences: {
+          where: { cancelledAt: null, departureAt: { gt: new Date() } },
+          orderBy: [{ departureAt: "asc" }, { id: "asc" }],
+          take: 90,
+        },
         owner: {
           select: {
             id: true,
@@ -243,95 +345,33 @@ export class TripsService {
             city: true,
             role: true,
             professionalProfile: {
-              select: {
-                businessName: true,
-                professionalType: true,
-                city: true,
-                logoUrl: true,
-                whatsappNumber: true,
-                professionalPhone: true,
-                professionalEmail: true,
-                openingHours: true,
-                verified: true,
-                website: true,
-                description: true,
-              },
+              select: { businessName: true, logoUrl: true, verified: true },
             },
           },
         },
       },
     });
     if (!row) throw new NotFoundException("Trajet introuvable.");
-    return publicTrip(row);
+    const selected = occurrenceId
+      ? row.occurrences.find((occurrence) => occurrence.id === occurrenceId)
+      : row.occurrences[0];
+    if (occurrenceId && !selected)
+      throw new NotFoundException("Départ introuvable.");
+    if (!selected && row._count.occurrences > 0)
+      throw new NotFoundException("Aucun départ disponible.");
+    if (
+      !selected &&
+      (!row.departureDate ||
+        !row.departureTime ||
+        tripDeparture(row.departureDate.toISOString(), row.departureTime) <=
+          new Date())
+    )
+      throw new NotFoundException("Trajet introuvable.");
+    return publicTrip({ ...row, selectedOccurrence: selected });
   }
 
-  async createSeatRequest(tripId: string, dto: CreateSeatRequestDto) {
-    if (!dto.clientPhone && !dto.clientEmail)
-      throw new BadRequestException("Un téléphone ou un email est nécessaire.");
-    const id =
-      "seat_" +
-      createHash("sha256").update(`${tripId}:${dto.requestId}`).digest("hex");
-    return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT "id" FROM "TripListing" WHERE "id" = ${tripId} FOR UPDATE`;
-      const trip = await tx.tripListing.findFirst({
-        where: { id: tripId, ...tripPublicWhere({}) },
-      });
-      if (
-        !trip ||
-        !trip.departureDate ||
-        !trip.departureTime ||
-        tripDeparture(trip.departureDate.toISOString(), trip.departureTime) <=
-          new Date()
-      )
-        throw new NotFoundException("Trajet indisponible.");
-      const preferences = tripObject(
-        tripObject(trip.metadata).publication,
-      ).contactPreferences;
-      if (preferences && !preferences.reservationRequestEnabled)
-        throw new ConflictException("Les demandes de place sont désactivées.");
-      if (!trip.availableSeats || dto.requestedSeats > trip.availableSeats)
-        throw new BadRequestException(
-          "La demande dépasse les places déclarées.",
-        );
-      const previous = await tx.tripSeatRequest.findUnique({ where: { id } });
-      if (previous) {
-        if (
-          previous.clientPhone !== (dto.clientPhone || null) ||
-          previous.clientEmail !== (dto.clientEmail || null) ||
-          previous.requestedSeats !== dto.requestedSeats ||
-          previous.clientName !== dto.clientName ||
-          previous.message !== (dto.message || null) ||
-          previous.luggage !== (dto.luggage ?? null)
-        )
-          throw new ConflictException(
-            "Cette demande a déjà été traitée avec des informations différentes.",
-          );
-        return { id: previous.id, status: previous.status };
-      }
-      const request = await tx.tripSeatRequest.create({
-        data: {
-          id,
-          tripId,
-          clientName: dto.clientName,
-          clientPhone: dto.clientPhone,
-          clientEmail: dto.clientEmail,
-          requestedSeats: dto.requestedSeats,
-          luggage: dto.luggage,
-          message: dto.message,
-        },
-      });
-      await tx.contactEvent.create({
-        data: {
-          ownerUserId: trip.ownerUserId,
-          module: PencmiModule.trips,
-          source: ContactSource.seat_request,
-          targetType: TargetType.listing,
-          targetId: tripId,
-          metadata: { requestId: request.id },
-        },
-      });
-      return { id: request.id, status: request.status };
-    });
+  createSeatRequest(tripId: string, dto: CreateSeatRequestDto) {
+    return this.occurrences.createRequest(tripId, dto);
   }
 
   async findMine(ownerUserId: string, dto: PaginationDto) {
@@ -340,13 +380,32 @@ export class TripsService {
     const [data, total] = await Promise.all([
       this.prisma.tripListing.findMany({
         where,
+        include: { occurrences: { orderBy: { departureAt: "asc" } } },
         skip: pagination.skip,
         take: pagination.take,
-        orderBy: { updatedAt: "desc" },
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
       }),
       this.prisma.tripListing.count({ where }),
     ]);
-    return { data, meta: pagination.meta(total) };
+    const decisions = await this.prisma.auditLog.findMany({
+      where: {
+        module: "trips",
+        targetId: { in: data.map((row) => row.id) },
+        action: { in: ["trip.refused", "trip.suspended"] },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { targetId: true, metadata: true },
+    });
+    return {
+      data: data.map((row) => ({
+        ...row,
+        moderationReason:
+          tripObject(
+            decisions.find((item) => item.targetId === row.id)?.metadata,
+          ).reason || null,
+      })),
+      meta: pagination.meta(total),
+    };
   }
 
   async findMySeatRequests(ownerUserId: string, dto: PaginationDto) {
@@ -354,7 +413,6 @@ export class TripsService {
     const where = {
       trip: {
         ownerUserId,
-        deletedAt: null,
       },
     };
     const [data, total] = await Promise.all([
@@ -362,8 +420,9 @@ export class TripsService {
         where,
         skip: pagination.skip,
         take: pagination.take,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         include: {
+          occurrence: true,
           trip: {
             select: {
               id: true,
@@ -382,62 +441,130 @@ export class TripsService {
     return { data, meta: pagination.meta(total) };
   }
 
-  async updateSeatRequestStatus(
+  updateSeatRequestStatus(
     ownerUserId: string,
     id: string,
     dto: UpdateSeatRequestStatusDto,
   ) {
-    const request = await this.prisma.tripSeatRequest.findFirst({
-      where: {
-        id,
-        trip: {
-          ownerUserId,
-          deletedAt: null,
-        },
-      },
-      select: { id: true, status: true },
-    });
-    if (!request) throw new NotFoundException("Demande introuvable.");
+    return this.occurrences.updateRequest(ownerUserId, id, dto);
+  }
 
-    const transitions: Record<string, string[]> = {
-      new: ["pending", "requires_more_info", "refused", "cancelled"],
-      pending: ["requires_more_info", "refused", "cancelled"],
-      requires_more_info: ["pending", "refused", "cancelled"],
-      accepted: ["cancelled"],
+  private async targetIds(ownerUserId: string) {
+    return (
+      await this.prisma.tripListing.findMany({
+        where: { ownerUserId },
+        select: { id: true },
+      })
+    ).map((row) => row.id);
+  }
+  async contacts(ownerUserId: string, query: PaginationDto) {
+    const ids = await this.targetIds(ownerUserId),
+      p = getPagination(query);
+    const where: Prisma.ContactEventWhereInput = {
+      ownerUserId,
+      module: "trips",
+      targetType: "listing",
+      targetId: { in: ids },
     };
-    if (
-      request.status !== dto.status &&
-      !transitions[request.status]?.includes(dto.status)
-    )
-      throw new ConflictException("Transition non autorisée.");
-
-    try {
-      return await this.prisma.tripSeatRequest.update({
-        where: { id: request.id, status: request.status },
-        data: { status: dto.status as RequestStatus },
-        include: {
-          trip: {
-            select: {
-              id: true,
-              title: true,
-              departureCity: true,
-              arrivalCity: true,
-              departureDate: true,
-              departureTime: true,
-              status: true,
-            },
+    const [data, total] = await Promise.all([
+      this.prisma.contactEvent.findMany({
+        where,
+        skip: p.skip,
+        take: p.take,
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+      }),
+      this.prisma.contactEvent.count({ where }),
+    ]);
+    return { data, meta: p.meta(total) };
+  }
+  async conversations(ownerUserId: string, query: PaginationDto) {
+    const ids = await this.targetIds(ownerUserId),
+      p = getPagination(query);
+    const where: Prisma.ConversationWhereInput = {
+      module: "trips",
+      targetType: "listing",
+      targetId: { in: ids },
+      participants: { some: { userId: ownerUserId } },
+    };
+    const [data, total] = await Promise.all([
+      this.prisma.conversation.findMany({
+        where,
+        skip: p.skip,
+        take: p.take,
+        orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+        include: { messages: { orderBy: { createdAt: "desc" }, take: 1 } },
+      }),
+      this.prisma.conversation.count({ where }),
+    ]);
+    return { data, meta: p.meta(total) };
+  }
+  async statistics(ownerUserId: string) {
+    const ids = await this.targetIds(ownerUserId);
+    const [
+      requests,
+      places,
+      contacts,
+      occurrences,
+      inboundMessages,
+      historical,
+    ] = await Promise.all([
+      this.prisma.tripSeatRequest.groupBy({
+        by: ["status"],
+        where: { tripId: { in: ids } },
+        _count: { _all: true },
+      }),
+      this.prisma.tripSeatRequest.aggregate({
+        where: { tripId: { in: ids } },
+        _sum: { requestedSeats: true },
+      }),
+      this.prisma.contactEvent.groupBy({
+        by: ["source"],
+        where: {
+          ownerUserId,
+          module: "trips",
+          targetType: "listing",
+          targetId: { in: ids },
+          source: { not: "seat_request" },
+        },
+        _count: { _all: true },
+      }),
+      this.prisma.tripOccurrence.aggregate({
+        where: { tripId: { in: ids } },
+        _sum: { confirmedSeats: true },
+      }),
+      this.prisma.message.count({
+        where: {
+          senderUserId: { not: ownerUserId },
+          conversation: {
+            module: "trips",
+            targetType: "listing",
+            targetId: { in: ids },
+            participants: { some: { userId: ownerUserId } },
           },
         },
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2025"
-      )
-        throw new ConflictException(
-          "Cette demande a été modifiée. Actualisez la page.",
-        );
-      throw error;
-    }
+      }),
+      this.prisma.tripSeatRequest.count({
+        where: {
+          tripId: { in: ids },
+          status: { in: ["accepted", "completed"] },
+          allocatedSeats: null,
+        },
+      }),
+    ]);
+    return {
+      requestsByStatus: Object.fromEntries(
+        requests.map((row) => [row.status, row._count._all]),
+      ),
+      totalRequests: requests.reduce((n, row) => n + row._count._all, 0),
+      requestedSeats: places._sum.requestedSeats || 0,
+      confirmedSeats: occurrences._sum.confirmedSeats || 0,
+      directContacts: contacts.reduce((n, row) => n + row._count._all, 0),
+      contactsBySource: Object.fromEntries(
+        contacts.map((row) => [row.source, row._count._all]),
+      ),
+      inboundMessages,
+      historicalUnallocatedRequests: historical,
+      unavailableMetrics: ["views", "conversionRate", "responseTime"],
+    };
   }
 }

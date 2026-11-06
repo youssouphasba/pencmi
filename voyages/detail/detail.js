@@ -56,8 +56,8 @@ function tripVehicleSection() {
   const metadata = tripDetailMetadata();
   const items = [
     ["Véhicule", metadata.vehicleLabel],
-    ["Heure d’arrivée estimée", metadata.estimatedArrivalTime ? metadata.estimatedArrivalTime + (metadata.arrivalNextDay ? ' (lendemain)' : '') : ''],
-    ["Durée estimée", metadata.estimatedDuration],
+    ["Heure d’arrivée estimée", metadata.estimatedArrivalTime ? metadata.estimatedArrivalTime + (metadata.arrivalDayOffset > 1 ? ` (J+${metadata.arrivalDayOffset})` : metadata.arrivalNextDay ? ' (lendemain)' : '') : ''],
+    ["Durée estimée", !metadata.durationMinutes ? metadata.estimatedDuration : ''],
     ["Bagages", metadata.luggageAllowed ? "Acceptés" : ""],
     ["Gros bagages", metadata.largeLuggageAllowed ? "Acceptés" : ""],
     ["Climatisation", metadata.airConditioning ? "Oui" : ""],
@@ -65,6 +65,8 @@ function tripVehicleSection() {
     ['Supplément bagage', metadata.luggageExtra != null ? `${metadata.luggageExtra} FCFA` : ''],
     ['Prix négociable', metadata.negotiable ? 'Oui' : ''],
     ['Informations passagers', metadata.passengerInfo],
+    ['Durée estimée', metadata.durationMinutes ? `${metadata.durationMinutes} minutes` : ''],
+    ['Arrivée estimée', tripDetailState.listing?.estimatedArrivalAt ? new Date(tripDetailState.listing.estimatedArrivalAt).toLocaleString('fr-FR',{timeZone:'Africa/Dakar'}) : ''],
     ["Trajet direct", metadata.directTrip ? "Oui" : ""],
   ].filter(([, value]) => value);
   return `<section class="trip-detail-card"><h2>Informations véhicule</h2>${items.length ? `<div class="trip-chip-row">${items.map(([label, value]) => `<span class="trip-chip">${label} : ${value}</span>`).join("")}</div>` : `<p>Aucune information véhicule disponible.</p>`}</section>`;
@@ -99,7 +101,7 @@ function tripReservationModal() {
           <label class="trip-form-field"><span>Nom</span><input type="text" name="clientName" required></label>
           <label class="trip-form-field"><span>Téléphone</span><input type="tel" name="clientPhone"></label>
           <label class="trip-form-field"><span>Email</span><input type="email" name="clientEmail"></label>
-          <label class="trip-form-field"><span>Nombre de places</span><input type="number" name="requestedSeats" min="1" value="1"></label>
+          <label class="trip-form-field"><span>Nombre de places</span><input type="number" name="requestedSeats" min="1" max="${Number(tripDetailState.listing?.availableSeats) || 1}" value="1" required></label>
           <label class="choice-card"><input type="checkbox" name="luggage" value="1"><span>Bagages</span></label>
           <label class="trip-form-field"><span>Message</span><textarea name="message">Bonjour, je suis intéressé par ce trajet. Y a-t-il encore des places disponibles ?</textarea></label>
           <div class="trip-form-actions" style="grid-column:1 / -1;">
@@ -160,12 +162,15 @@ function tripDetailPage() {
           ${metadata.description ? `<p>${metadata.description}</p>` : ""}
           ${metadata.instructions ? `<p>${metadata.instructions}</p>` : ''}
           ${metadata.meetingPoints ? `<p>Rendez-vous : ${metadata.meetingPoints}</p>` : ''}
-          <p>Places déclarées, à confirmer avec le transporteur.</p>
+          <p>${listing.occurrenceId ? `${listing.availableSeats} places restantes sur ${listing.offeredSeats} proposées. La demande doit être acceptée pour être confirmée.` : 'Départ historique : disponibilité à confirmer. Les nouvelles demandes sont indisponibles tant que ce départ n’a pas été revalidé.'}</p>
+          ${(listing.occurrences?.length||0)>1?`<label class="trip-form-field"><span>Choisir le départ</span><select data-select-occurrence>${listing.occurrences.map(item=>`<option value="${item.id}"${item.id===listing.occurrenceId?' selected':''}>${new Date(item.departureAt).toLocaleString('fr-FR',{timeZone:'Africa/Dakar'})} · ${item.remainingSeats} places</option>`).join('')}</select></label>`:''}
+          ${(metadata.stops||[]).length?`<h2>Arrêts intermédiaires</h2><ol>${metadata.stops.map(stop=>`<li>${stop.city} — ${stop.point||''}${stop.arrivalTime?` · ${stop.arrivalTime}${stop.nextDay?' (lendemain)':''}`:''}${stop.boarding?' · montée':''}${stop.alighting?' · descente':''}</li>`).join('')}</ol>`:''}
+          ${(metadata.rendezvous||[]).length?`<h2>Rendez-vous</h2><ul>${metadata.rendezvous.map(item=>`<li>${item.label} : ${item.point}</li>`).join('')}</ul>`:''}
           <div class="trip-detail-actions" id="reservation">
             <button class="btn btn-ghost" type="button" data-share>Partager</button>
             ${typeof ReportButton === "function" ? ReportButton("Signaler") : ""}
             <button class="btn btn-light" type="button" data-open-contact>Contacter le transporteur</button>
-            ${metadata.contactPreferences?.reservationRequestEnabled !== false ? '<button class="btn btn-primary" type="button" data-open-reservation>Demander une place</button>' : ''}
+            ${listing.occurrenceId && listing.availableSeats > 0 && metadata.contactPreferences?.reservationRequestEnabled !== false ? '<button class="btn btn-primary" type="button" data-open-reservation>Demander une place</button>' : ''}
           </div>
         </section>
         ${tripVehicleSection()}
@@ -186,6 +191,7 @@ function tripDetailPage() {
 }
 
 function bindTripDetailActions() {
+  document.querySelector('[data-select-occurrence]')?.addEventListener('change',event=>{const url=new URL(location.href);url.searchParams.set('occurrenceId',event.target.value);location.href=url;});
   document.querySelector("[data-open-reservation]")?.addEventListener("click", () => {
     document.querySelector("#trip-reservation-modal")?.classList.add("is-open");
     document.querySelector('#trip-reservation-modal')?.setAttribute('aria-hidden', 'false');
@@ -225,6 +231,7 @@ function bindTripDetailActions() {
       method: "POST",
       body: JSON.stringify({
         requestId: tripRequestId,
+        occurrenceId: tripDetailState.listing.occurrenceId,
         clientName: formData.get("clientName"),
         clientPhone: formData.get("clientPhone") || undefined,
         clientEmail: formData.get("clientEmail") || undefined,
@@ -252,7 +259,8 @@ async function loadTripDetail() {
     tripDetailState.listing = null;
     return;
   }
-  tripDetailState.listing = await pencmiApiRequest(`/voyages/${encodeURIComponent(id)}`);
+  const occurrenceId=pencmiQueryValue('occurrenceId');
+  tripDetailState.listing = await pencmiApiRequest(`/voyages/${encodeURIComponent(id)}${occurrenceId?`?occurrenceId=${encodeURIComponent(occurrenceId)}`:''}`);
 }
 
 document.addEventListener("DOMContentLoaded", async () => {

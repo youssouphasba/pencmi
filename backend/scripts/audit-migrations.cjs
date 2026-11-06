@@ -6,6 +6,12 @@ const { spawnSync } = require('node:child_process');
 const backendDirectory = path.resolve(__dirname, '..');
 const migrationsDirectory = path.join(backendDirectory, 'prisma', 'migrations');
 const requiredArtifacts = {
+  '20261106000000_trip_occurrences': [
+    ['table','TripOccurrence'],
+    ...['occurrenceId','allocatedSeats','quotedPricePerSeat'].map(name=>['column',`TripSeatRequest.${name}`]),
+    ...['TripOccurrence_capacity_check','TripOccurrence_price_check','TripOccurrence_arrival_check','TripSeatRequest_allocation_check','TripSeatRequest_quote_check','TripSeatRequest_occurrenceId_fkey','TripOccurrence_tripId_fkey'].map(name=>['constraint',name]),
+    ...['TripOccurrence_tripId_departureAt_key','TripOccurrence_departureAt_cancelledAt_idx','TripSeatRequest_occurrenceId_status_idx'].map(name=>['index',name]),
+  ],
   '20260626170000_advertiser_reviews': [
     ['table', 'AdvertiserReview'],
     ['enum', 'AdvertiserReviewStatus'],

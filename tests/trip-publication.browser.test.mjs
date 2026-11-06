@@ -18,10 +18,13 @@ test(
       failed = false,
       creates = 0,
       filters,
-      seatRequests = 0;
+      seatRequests = 0,
+      bulk = false,
+      replies = 0;
     const publicTrip = () => ({
       ...listing,
       id: "public-trip",
+      occurrenceId: "public-occurrence",
       title: "<img src=x onerror=alert(1)>Trajet",
       departureCity: "Dakar",
       arrivalCity: "Thiès",
@@ -29,6 +32,7 @@ test(
       departureTime: "23:00",
       vehicleType: "bus",
       availableSeats: 10,
+      offeredSeats: 10,
       pricePerSeat: 3000,
       metadata: {
         description: "<b>Texte brut</b>",
@@ -64,7 +68,76 @@ test(
             path = url.pathname.slice(7);
           let data = [],
             meta;
-          if (path === "/dashboard/voyages" && req.method === "POST") {
+          if (bulk && path === "/dashboard/voyages") {
+            const start = (Number(url.searchParams.get("page") || 1) - 1) * 100;
+            data = Array.from(
+              { length: Math.max(0, Math.min(100, 105 - start)) },
+              (_, i) => ({
+                id: `bulk-${start + i}`,
+                title: `Trajet ${start + i}`,
+                status: "draft",
+                departureCity: "Dakar",
+                arrivalCity: "Touba",
+              }),
+            );
+            meta = { total: 105, totalPages: 2 };
+          } else if (bulk && path === "/dashboard/voyages/seat-requests") {
+            const start = (Number(url.searchParams.get("page") || 1) - 1) * 100;
+            data = Array.from(
+              { length: Math.max(0, Math.min(100, 105 - start)) },
+              (_, i) => ({
+                id: `request-${start + i}`,
+                clientName: `Client ${start + i}`,
+                requestedSeats: 1,
+                status: "new",
+                trip: { title: `Trajet ${start + i}` },
+              }),
+            );
+            meta = { total: 105, totalPages: 2 };
+          } else if (bulk && path === "/dashboard/voyages/statistics") {
+            data = {
+              totalRequests: 105,
+              requestedSeats: 105,
+              confirmedSeats: 0,
+              directContacts: 1,
+              inboundMessages: 1,
+              requestsByStatus: { new: 105 },
+              contactsBySource: { phone: 1 },
+              historicalUnallocatedRequests: 0,
+            };
+          } else if (bulk && path === "/dashboard/voyages/contacts") {
+            data = [
+              {
+                id: "contact",
+                targetId: "bulk-104",
+                source: "phone",
+                createdAt: "2099-01-01",
+              },
+            ];
+          } else if (bulk && path === "/dashboard/voyages/conversations") {
+            data = [
+              {
+                id: "conversation",
+                targetId: "bulk-104",
+                messages: [{ body: "<b>Question</b>" }],
+              },
+            ];
+          } else if (bulk && path === "/messages/conversations/conversation") {
+            data = {
+              id: "conversation",
+              messages: [
+                { body: "<b>Question</b>" },
+                ...(replies ? [{ body: "Réponse envoyée" }] : []),
+              ],
+            };
+          } else if (
+            bulk &&
+            path === "/messages/conversations/conversation/messages"
+          ) {
+            assert.match(body.requestId, /^[\da-f-]{36}$/);
+            replies++;
+            data = { id: "reply", body: body.body };
+          } else if (path === "/dashboard/voyages" && req.method === "POST") {
             creates++;
             listing ||= {
               id: "saved-trip",
@@ -299,6 +372,48 @@ test(
         await page.close();
       }
       assert.equal(seatRequests, 4);
+      bulk = true;
+      for (const width of [390, 1280]) {
+        const page = await browser.newPage({
+          viewport: { width, height: 900 },
+        });
+        await page.addInitScript(() =>
+          localStorage.setItem("pencmi_access_token", "test-token"),
+        );
+        await page.goto(origin + "/dashboard/voyages/trajets/");
+        await page.getByText("Page 1 sur 6", { exact: true }).waitFor();
+        for (let i = 0; i < 5; i++)
+          await page.locator('[data-trip-page="1"]').click();
+        await page
+          .getByRole("cell", { name: "Trajet 104", exact: true })
+          .waitFor();
+        await page.goto(origin + "/dashboard/voyages/reservations/");
+        await page
+          .getByRole("cell", { name: "Client 104", exact: true })
+          .waitFor();
+        await page.goto(origin + "/dashboard/voyages/messages/");
+        await page.locator("[data-open-trip-conversation]").click();
+        assert.equal(await page.locator(".trip-dashboard-card b").count(), 0);
+        await page
+          .locator("[data-trip-reply] textarea")
+          .fill("Réponse envoyée");
+        await page.locator('[data-trip-reply] button[type="submit"]').click();
+        await page.getByText("Réponse envoyée", { exact: false }).waitFor();
+        await page.goto(origin + "/dashboard/voyages/statistiques/");
+        await page
+          .locator(".kpi-value")
+          .filter({ hasText: "105" })
+          .first()
+          .waitFor();
+        assert.equal(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+          true,
+        );
+        await page.close();
+      }
+      assert.equal(replies, 2);
     } finally {
       await browser?.close();
       await new Promise((done) => server.close(done));

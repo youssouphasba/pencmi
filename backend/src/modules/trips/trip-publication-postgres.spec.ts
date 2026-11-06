@@ -67,6 +67,9 @@ const url = process.env.TEST_DATABASE_URL;
         await prisma.tripSeatRequest.deleteMany({
           where: { tripId: { in: ids } },
         });
+        await prisma.tripOccurrence.deleteMany({
+          where: { tripId: { in: ids } },
+        });
         await prisma.tripListing.deleteMany({ where: { id: { in: ids } } });
         await prisma.user.deleteMany({ where: { id: { in: [owner, other] } } });
       }
@@ -145,10 +148,10 @@ const url = process.env.TEST_DATABASE_URL;
           vehicleType: "minibus",
           pricing: { pricePerSeat: 9000, availableSeats: 1 },
         });
-      await prisma.tripListing.updateMany({
-        where: { id: { in: [a.id, b.id] } },
-        data: { status: "active" },
-      });
+      for (const row of [a, b]) {
+        await publication.submit(owner, row.id);
+        await publication.moderate(owner, row.id, { status: "active" });
+      }
       const result = await service.findPublic({
         page: 1,
         limit: 1,
@@ -169,22 +172,34 @@ const url = process.env.TEST_DATABASE_URL;
         { deletedAt: new Date() },
       ]) {
         await prisma.tripListing.update({ where: { id: a.id }, data });
+        if ("departureDate" in data)
+          await prisma.tripOccurrence.updateMany({
+            where: { tripId: a.id },
+            data: {
+              departureAt: new Date("2000-01-01"),
+              estimatedArrivalAt: null,
+            },
+          });
         await expect(service.findPublicOne(a.id)).rejects.toThrow();
       }
     });
     it("creates idempotent requests without changing declared seats, rejects conflicts and ineligible trips", async () => {
       const row = await create(complete());
       const dto = {
+        occurrenceId: "pending-occurrence",
         requestId: randomUUID(),
         clientName: "Client test",
         clientEmail: "client@example.test",
         requestedSeats: 2,
       };
       await expect(service.createSeatRequest(row.id, dto)).rejects.toThrow();
-      await prisma.tripListing.update({
-        where: { id: row.id },
-        data: { status: "active" },
-      });
+      await publication.submit(owner, row.id);
+      await publication.moderate(owner, row.id, { status: "active" });
+      dto.occurrenceId = (
+        await prisma.tripOccurrence.findFirstOrThrow({
+          where: { tripId: row.id },
+        })
+      ).id;
       const requests = await Promise.all([
         service.createSeatRequest(row.id, dto),
         service.createSeatRequest(row.id, dto),

@@ -28,6 +28,7 @@ if (new URLSearchParams(location.search).get("category") === "voyage") {
       message = "",
       error = "",
       fields = [];
+    let moderationReason = "";
     const requestId = sessionStorage.getItem("pencmi_trip_creation") || uuid();
     const get = (path) => path.split(".").reduce((v, k) => v?.[k], draft);
     const set = (path, value) => {
@@ -58,6 +59,9 @@ if (new URLSearchParams(location.search).get("category") === "voyage") {
     }
     const check = (path, label) =>
       `<label class="choice-card"><input type="checkbox" data-trip-field="${path}"${get(path) ? " checked" : ""}><span>${esc(label)}</span></label>`;
+    function routeRows(key, labels) {
+      return `<section class="full"><h3>${esc(labels[0])}</h3>${(draft.route[key] || []).map((row, index) => `<div class="form-grid">${key === "stops" ? field(`route.${key}.${index}.city`, "Ville") + field(`route.${key}.${index}.point`, "Point de montée ou descente") + field(`route.${key}.${index}.arrivalTime`, "Heure estimée", "time") + check(`route.${key}.${index}.nextDay`, "Le lendemain") + check(`route.${key}.${index}.boarding`, "Montée autorisée") + check(`route.${key}.${index}.alighting`, "Descente autorisée") : field(`route.${key}.${index}.label`, "Nom du rendez-vous") + field(`route.${key}.${index}.point`, "Lieu")}<button type="button" class="btn btn-ghost" data-remove-route="${key}" data-index="${index}">Retirer</button></div>`).join("")}<button type="button" class="btn btn-light" data-add-route="${key}"${(draft.route[key]?.length || 0) >= 20 ? " disabled" : ""}>${esc(labels[1])}</button></section>`;
+    }
     function content() {
       switch (step) {
         case 0:
@@ -73,7 +77,15 @@ if (new URLSearchParams(location.search).get("category") === "voyage") {
               "Points de rendez-vous supplémentaires",
               "textarea",
             ) +
-            check("route.approximate", "Localisation approximative")
+            check("route.approximate", "Localisation approximative") +
+            routeRows("stops", [
+              "Arrêts intermédiaires ordonnés",
+              "Ajouter un arrêt",
+            ]) +
+            routeRows("rendezvous", [
+              "Points de rendez-vous",
+              "Ajouter un rendez-vous",
+            ])
           );
         case 2:
           return (
@@ -81,7 +93,25 @@ if (new URLSearchParams(location.search).get("category") === "voyage") {
             field("schedule.departureTime", "Heure de départ (Dakar)", "time") +
             field("schedule.arrivalTime", "Heure d’arrivée estimée", "time") +
             check("schedule.arrivalNextDay", "Arrivée le lendemain") +
-            `<p>${esc(tripCopy.recurrenceUnavailable)}</p>`
+            field(
+              "schedule.durationMinutes",
+              "Durée estimée (minutes)",
+              "number",
+            ) +
+            check("schedule.regular", "Voyage régulier") +
+            (draft.schedule.regular
+              ? field(
+                  "schedule.validUntil",
+                  "Fin de la période (90 jours maximum)",
+                  "date",
+                ) +
+                field(
+                  "schedule.intervalWeeks",
+                  "Fréquence en semaines (1 à 4)",
+                  "number",
+                ) +
+                `<fieldset class="full"><legend>Jours de circulation</legend><div class="checkbox-list">${["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"].map((label, day) => `<label class="choice-card"><input type="checkbox" data-trip-weekday="${day}"${draft.schedule.weekdays?.includes(day) ? " checked" : ""}><span>${label}</span></label>`).join("")}</div></fieldset><label class="form-field full"><span>Exceptions de service (dates séparées par des virgules)</span><textarea data-trip-exceptions>${esc((draft.schedule.excludedDates || []).join(", "))}</textarea></label>`
+              : "")
           );
         case 3:
           return (
@@ -145,7 +175,7 @@ if (new URLSearchParams(location.search).get("category") === "voyage") {
             )
           );
         case 8:
-          return `<div class="preview-box"><h2>${esc(draft.content.title)}</h2><p>${esc(draft.route.departureCity)} → ${esc(draft.route.arrivalCity)}</p><p>${esc(draft.schedule.date)} ${esc(draft.schedule.departureTime)} (Dakar)</p>${draft.schedule.arrivalTime ? `<p>Arrivée estimée : ${esc(draft.schedule.arrivalTime)}${draft.schedule.arrivalNextDay || draft.schedule.arrivalTime < draft.schedule.departureTime ? " le lendemain" : ""}</p>` : ""}<p>${esc(draft.vehicleType ? tripTypes[draft.vehicleType] : "")}</p><p>${esc(draft.pricing.availableSeats)} places · ${esc(draft.pricing.pricePerSeat)} FCFA par personne</p><p>${esc(draft.content.description)}</p><p>${esc(draft.content.instructions)}</p><p>${esc(tripCopy.declaredSeats)}</p></div>`;
+          return `<div class="preview-box"><h2>${esc(draft.content.title)}</h2><p>${esc(draft.route.departureCity)} → ${esc(draft.route.arrivalCity)}</p><p>${esc(draft.route.departurePoint)} → ${esc(draft.route.arrivalPoint)}</p><p>${esc(draft.schedule.date)} ${esc(draft.schedule.departureTime)} (Dakar)</p>${draft.schedule.regular ? `<p>Programme régulier jusqu’au ${esc(draft.schedule.validUntil)} · toutes les ${esc(draft.schedule.intervalWeeks || 1)} semaine(s)</p><p>${(draft.schedule.weekdays || []).map((day) => esc(new Intl.DateTimeFormat("fr-SN", { weekday: "long", timeZone: "Africa/Dakar" }).format(new Date(Date.UTC(2026, 10, 1 + day))))).join(", ")}</p>${draft.schedule.excludedDates?.length ? `<p>Exceptions : ${draft.schedule.excludedDates.map(esc).join(", ")}</p>` : ""}` : ""}${draft.schedule.arrivalTime ? `<p>Arrivée estimée : ${esc(draft.schedule.arrivalTime)}${draft.schedule.arrivalNextDay || draft.schedule.arrivalTime < draft.schedule.departureTime ? " le lendemain" : ""}</p>` : ""}${draft.schedule.durationMinutes ? `<p>Durée estimée : ${esc(draft.schedule.durationMinutes)} min</p>` : ""}${draft.route.stops?.length ? `<h3>Arrêts</h3><ol>${draft.route.stops.map((stop) => `<li>${esc(stop.city)} · ${esc(stop.point)}${stop.arrivalTime ? ` · ${esc(stop.arrivalTime)}${stop.nextDay ? " le lendemain" : ""}` : ""}${stop.boarding ? " · Montée" : ""}${stop.alighting ? " · Descente" : ""}</li>`).join("")}</ol>` : ""}${draft.route.rendezvous?.length ? `<h3>Points de rendez-vous</h3><ul>${draft.route.rendezvous.map((point) => `<li>${esc(point.label)} : ${esc(point.point)}</li>`).join("")}</ul>` : ""}<p>${esc(draft.vehicleType ? tripTypes[draft.vehicleType] : "")}</p><p>${esc(draft.pricing.availableSeats)} places · ${esc(draft.pricing.pricePerSeat)} FCFA par personne</p><p>${esc(draft.content.description)}</p><p>${esc(draft.content.instructions)}</p><p>${esc(tripCopy.declaredSeats)}</p></div>`;
         default:
           return '<p>Votre trajet sera soumis à validation avant sa mise en ligne.</p><button class="btn btn-primary" type="button" data-submit-trip>Soumettre le trajet</button>';
       }
@@ -170,6 +200,53 @@ if (new URLSearchParams(location.search).get("category") === "voyage") {
             ),
           ),
         );
+      root
+        .querySelector('[data-trip-field="schedule.regular"]')
+        ?.addEventListener("change", () => render());
+      root.querySelectorAll("[data-trip-weekday]").forEach(
+        (input) =>
+          (input.onchange = () => {
+            draft.schedule.weekdays = [
+              ...root.querySelectorAll("[data-trip-weekday]:checked"),
+            ].map((item) => Number(item.dataset.tripWeekday));
+          }),
+      );
+      root
+        .querySelector("[data-trip-exceptions]")
+        ?.addEventListener("input", (event) => {
+          draft.schedule.excludedDates = event.target.value
+            .split(/[\s,;]+/)
+            .filter(Boolean);
+        });
+      root.querySelectorAll("[data-add-route]").forEach(
+        (button) =>
+          (button.onclick = () => {
+            const key = button.dataset.addRoute;
+            (draft.route[key] ||= []).push(
+              key === "stops"
+                ? { city: "", point: "" }
+                : { label: "", point: "" },
+            );
+            render();
+          }),
+      );
+      root.querySelectorAll("[data-remove-route]").forEach(
+        (button) =>
+          (button.onclick = () => {
+            draft.route[button.dataset.removeRoute].splice(
+              Number(button.dataset.index),
+              1,
+            );
+            render();
+          }),
+      );
+      if (moderationReason) {
+        const notice = document.createElement("p");
+        notice.className = "form-error";
+        notice.textContent =
+          "Dernier motif de modération : " + moderationReason;
+        root.querySelector(".publish-top").append(notice);
+      }
       root.querySelectorAll("[data-trip-condition]").forEach((input) =>
         input.addEventListener("change", () => {
           draft.conditions = [
@@ -262,6 +339,7 @@ if (new URLSearchParams(location.search).get("category") === "voyage") {
         const row = await api(`/dashboard/voyages/${encodeURIComponent(id)}`);
         draft = tripDraftFromListing(row);
         status = row.status;
+        moderationReason = row.moderationReason || "";
       }
     } catch (e) {
       error = e.message;

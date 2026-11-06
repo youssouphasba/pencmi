@@ -18,6 +18,7 @@ import { TRIP_TYPES, TRIP_PHONE_PATTERN } from "./trip-publication.schema";
 import { PaginationDto } from "../../common/pagination/pagination.dto";
 
 export class TripSearchDto extends PaginationDto {
+  @IsOptional() @IsString() @MaxLength(100) occurrenceId?: string;
   @IsOptional()
   @IsString()
   @MaxLength(150)
@@ -63,6 +64,7 @@ export class UpdateTripDto {
 }
 
 export class CreateSeatRequestDto {
+  @IsString() @MaxLength(100) occurrenceId: string;
   @IsUUID() requestId: string;
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
@@ -96,6 +98,8 @@ export class CreateSeatRequestDto {
 }
 
 const seatRequestStatuses = [
+  "accepted",
+  "completed",
   "pending",
   "refused",
   "cancelled",
@@ -112,4 +116,11 @@ export class ModerateTripDto {
     | "refused"
     | "suspended";
   @IsOptional() @IsString() @MaxLength(2000) reason?: string;
+}
+export class CancelTripOccurrenceDto {
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @IsString()
+  @MinLength(3)
+  @MaxLength(1000)
+  reason: string;
 }

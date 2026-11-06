@@ -43,6 +43,32 @@ export const tripPublicationSchema = z
         departurePoint: text(300),
         arrivalPoint: text(300),
         meetingPoints: text(2000),
+        stops: z
+          .array(
+            z
+              .object({
+                city: text(150),
+                point: text(300),
+                arrivalTime: time,
+                nextDay: flag,
+                boarding: flag,
+                alighting: flag,
+              })
+              .strict(),
+          )
+          .max(20)
+          .optional(),
+        rendezvous: z
+          .array(
+            z
+              .object({
+                label: text(200),
+                point: text(300),
+              })
+              .strict(),
+          )
+          .max(20)
+          .optional(),
         approximate: flag,
       })
       .strict()
@@ -53,7 +79,26 @@ export const tripPublicationSchema = z
         departureTime: time,
         arrivalTime: time,
         arrivalNextDay: flag,
-        regular: z.literal(false).optional(),
+        regular: flag,
+        validUntil: date,
+        weekdays: z
+          .array(z.number().int().min(0).max(6))
+          .max(7)
+          .refine((v) => new Set(v).size === v.length)
+          .optional(),
+        intervalWeeks: z.number().int().min(1).max(4).optional(),
+        excludedDates: z
+          .array(z.iso.date())
+          .max(90)
+          .refine((v) => new Set(v).size === v.length)
+          .optional(),
+        durationMinutes: z
+          .number()
+          .int()
+          .min(1)
+          .max(2880)
+          .nullable()
+          .optional(),
       })
       .strict()
       .optional(),
@@ -146,6 +191,96 @@ export function validateTripPublication(value: unknown): TripPublication {
 export function tripDeparture(dateValue: string, timeValue: string) {
   return new Date(`${dateValue.slice(0, 10)}T${timeValue}:00Z`);
 }
+export const TRIP_DAY_MS = 86400000;
+export function tripServiceDates(data: TripPublication): string[] {
+  const s = data.schedule;
+  if (!s?.date) return [];
+  if (!s.regular) return [s.date];
+  const start = new Date(`${s.date}T00:00:00Z`),
+    end = new Date(`${s.validUntil}T00:00:00Z`);
+  if (
+    !s.validUntil ||
+    !s.weekdays?.length ||
+    !Number.isFinite(end.getTime()) ||
+    end < start ||
+    (end.getTime() - start.getTime()) / TRIP_DAY_MS >= 90
+  )
+    throw new BadRequestException({
+      message: "Vérifiez la période de circulation (90 jours maximum).",
+      fields: [
+        {
+          path: "schedule.validUntil",
+          message: "Renseignez les jours et une période de 90 jours maximum.",
+        },
+      ],
+    });
+  if (s.excludedDates?.some((day) => day < s.date! || day > s.validUntil!))
+    throw new BadRequestException({
+      message: "Une exception est hors période.",
+      fields: [
+        {
+          path: "schedule.excludedDates",
+          message: "Les exceptions doivent appartenir à la période.",
+        },
+      ],
+    });
+  const dates: string[] = [];
+  for (
+    let day = start.getTime(), index = 0;
+    day <= end.getTime();
+    day += TRIP_DAY_MS, index++
+  ) {
+    const current = new Date(day),
+      iso = current.toISOString().slice(0, 10);
+    if (
+      Math.floor(index / 7) % (s.intervalWeeks || 1) === 0 &&
+      s.weekdays.includes(current.getUTCDay()) &&
+      !s.excludedDates?.includes(iso)
+    )
+      dates.push(iso);
+  }
+  if (!dates.length)
+    throw new BadRequestException({
+      message: "Aucun départ dans cette période.",
+      fields: [
+        {
+          path: "schedule.weekdays",
+          message:
+            "Choisissez au moins un jour de circulation dans la période.",
+        },
+      ],
+    });
+  return dates;
+}
+export function tripArrivalAt(
+  data: TripPublication,
+  serviceDate: string,
+): Date | null {
+  const s = data.schedule!;
+  const departure = tripDeparture(serviceDate, s.departureTime!);
+  if (!s.arrivalTime)
+    return s.durationMinutes
+      ? new Date(departure.getTime() + s.durationMinutes * 60000)
+      : null;
+  const arrival = tripDeparture(serviceDate, s.arrivalTime);
+  if (s.arrivalNextDay || s.arrivalTime < s.departureTime!)
+    arrival.setUTCDate(arrival.getUTCDate() + 1);
+  if (
+    arrival <= departure ||
+    (s.durationMinutes &&
+      arrival.getTime() - departure.getTime() !== s.durationMinutes * 60000)
+  )
+    throw new BadRequestException({
+      message: "Arrivée et durée incohérentes.",
+      fields: [
+        {
+          path: "schedule.arrivalTime",
+          message: "Vérifiez l’arrivée, le lendemain et la durée.",
+        },
+      ],
+    });
+  return arrival;
+}
 export function validateTripSubmission(
   data: TripPublication,
   now = new Date(),
@@ -174,7 +309,11 @@ export function validateTripSubmission(
     });
   required("schedule.date", data.schedule?.date);
   required("schedule.departureTime", data.schedule?.departureTime);
-  if (data.schedule?.date && data.schedule.departureTime)
+  if (
+    data.schedule?.date &&
+    data.schedule.departureTime &&
+    !data.schedule.regular
+  )
     required(
       "schedule.date",
       tripDeparture(data.schedule.date, data.schedule.departureTime) > now,
@@ -189,6 +328,16 @@ export function validateTripSubmission(
   );
   required("content.title", data.content?.title);
   required("content.description", data.content?.description);
+  for (const [index, stop] of (data.route?.stops || []).entries())
+    required(
+      `route.stops.${index}.city`,
+      stop.city,
+      "Renseignez la ville de cet arrêt.",
+    );
+  for (const [index, point] of (data.route?.rendezvous || []).entries()) {
+    required(`route.rendezvous.${index}.label`, point.label);
+    required(`route.rendezvous.${index}.point`, point.point);
+  }
   const c = data.contactPreferences;
   if (c?.phoneEnabled)
     required(
@@ -222,4 +371,38 @@ export function validateTripSubmission(
       message: "Le trajet est incomplet.",
       fields,
     });
+  const dates = tripServiceDates(data);
+  if (
+    !dates.some(
+      (date) => tripDeparture(date, data.schedule!.departureTime!) > now,
+    )
+  )
+    throw new BadRequestException({
+      message: "Aucun départ futur.",
+      fields: [
+        {
+          path: "schedule.validUntil",
+          message: "La période doit contenir un départ futur.",
+        },
+      ],
+    });
+  const departure = tripDeparture(dates[0], data.schedule!.departureTime!);
+  const arrival = tripArrivalAt(data, dates[0]);
+  let previous = departure;
+  for (const [index, stop] of (data.route?.stops || []).entries()) {
+    if (!stop.arrivalTime) continue;
+    const at = tripDeparture(dates[0], stop.arrivalTime);
+    if (stop.nextDay) at.setUTCDate(at.getUTCDate() + 1);
+    if (at < previous || (arrival && at > arrival))
+      throw new BadRequestException({
+        message: "Horaires des arrêts incohérents.",
+        fields: [
+          {
+            path: `route.stops.${index}.arrivalTime`,
+            message: "Respectez l’ordre des arrêts et le jour d’arrivée.",
+          },
+        ],
+      });
+    previous = at;
+  }
 }
