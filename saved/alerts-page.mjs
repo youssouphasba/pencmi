@@ -132,6 +132,7 @@ export function mountAlerts(root, { module, title }) {
       } catch (error) {
         failure.textContent = error.message || 'Action impossible. Réessayez.';
         failure.hidden = false;
+      } finally {
         button.disabled = false;
       }
     };

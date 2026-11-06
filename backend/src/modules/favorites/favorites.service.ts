@@ -64,6 +64,6 @@ export class FavoritesService {
     if (module === 'real_estate') return !!(await this.prisma.realEstateListing.findFirst({ where, select: { id: true } }));
     if (module === 'hotels') return !!(await this.prisma.hotelProperty.findFirst({ where, select: { id: true } }));
     if (module === 'vehicles') return !!(await this.prisma.vehicleListing.findFirst({ where, select: { id: true } }));
-    return !!(await this.prisma.tripListing.findFirst({ where, select: { id: true } }));
+    return !!(await loadCards(this.prisma, module, [id])).get(id)?.available;
   }
 }

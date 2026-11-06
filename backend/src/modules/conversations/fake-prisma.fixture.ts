@@ -170,6 +170,7 @@ export function createFakePrisma() {
   for (const name of ["realEstateListing", "vehicleListing", "tripListing", "hotelProperty"])
     db[name] = new Table(db, {
       owner,
+      _count: (row) => ({ occurrences: db.tripOccurrence.rows.filter((item: any) => item.tripId === row.id).length }),
       rooms: (row) => db.hotelRoom.rows.filter((item: any) => item.propertyId === row.id).map(clone),
       occurrences: (row, spec) => clone(ordered(db.tripOccurrence.rows.filter((item: any) => item.tripId === row.id && matches(item, spec.where, db)), spec.orderBy).slice(0, spec.take)),
     });
@@ -177,6 +178,7 @@ export function createFakePrisma() {
     db[name] = new Table(db);
   const tables = () => Object.values(db).filter((value) => value instanceof Table) as Table[];
   let queue: Promise<unknown> = Promise.resolve();
+  db.$queryRaw = async () => [];
   db.$transaction = (work: (tx: any) => Promise<unknown>) => {
     const run = queue.then(async () => {
       const snapshot = tables().map((table) => clone(table.rows));

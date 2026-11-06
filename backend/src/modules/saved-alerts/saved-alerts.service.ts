@@ -5,7 +5,7 @@ import { getPagination, PaginationDto } from '../../common/pagination/pagination
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { isListingModule, ListingModule, LISTING_MODULES } from '../conversations/conversation-listings';
 import { loadCards } from '../favorites/listing-cards';
-import { canonical, CRITERIA_VERSION, Filters, matchWhere, searchUrl, validateFilters } from './alert-criteria';
+import { canonical, CRITERIA_VERSION, Filters, matchWhere, searchUrl, tripOccurrenceWhere, validateFilters } from './alert-criteria';
 import { CreateSavedAlertDto, SavedAlertListDto, UpdateSavedAlertDto } from './saved-alerts.dto';
 
 export const MAX_ALERTS_PER_ACCOUNT = 30;
@@ -47,47 +47,43 @@ export class SavedAlertsService {
 
   async create(userId: string, dto: CreateSavedAlertDto) {
     const filters = validateFilters(dto.module, dto.filters);
-    const mine = await this.prisma.savedAlert.findMany({ where: { userId }, select: { id: true, module: true, criteria: true, createdAt: true } });
-    if (mine.length >= MAX_ALERTS_PER_ACCOUNT) throw new ConflictException(`Vous avez atteint la limite de ${MAX_ALERTS_PER_ACCOUNT} alertes.`);
-    this.assertNotDuplicate(mine, dto.module, filters);
-    const criteria = { version: CRITERIA_VERSION, name: dto.name, filters, since: new Date().toISOString() };
-    const data = { userId, module: dto.module, criteria, active: dto.active ?? true };
-    // The id comes from the content: two simultaneous requests cannot both succeed.
-    const id = 'alr_' + createHash('sha256').update(`${userId}:${dto.module}:${canonical(filters)}`).digest('hex');
-    try {
-      return this.present(await this.prisma.savedAlert.create({ data: { ...data, id } }));
-    } catch (error) {
-      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) throw error;
-    }
-    const current = await this.prisma.savedAlert.findMany({ where: { userId }, select: { id: true, module: true, criteria: true, createdAt: true } });
-    this.assertNotDuplicate(current, dto.module, filters);
-    // That id belongs to an alert whose criteria have changed since: this one is still new.
-    return this.present(await this.prisma.savedAlert.create({ data: { ...data, id: 'alr_' + randomUUID() } }));
+    return this.withAccountLock(userId, async (tx) => {
+      const mine = await tx.savedAlert.findMany({ where: { userId }, select: { id: true, module: true, criteria: true, createdAt: true } });
+      if (mine.length >= MAX_ALERTS_PER_ACCOUNT) throw new ConflictException(`Vous avez atteint la limite de ${MAX_ALERTS_PER_ACCOUNT} alertes.`);
+      this.assertNotDuplicate(mine, dto.module, filters);
+      const criteria = { version: CRITERIA_VERSION, name: dto.name, filters, since: new Date().toISOString() };
+      const data = { userId, module: dto.module, criteria, active: dto.active ?? true };
+      const id = 'alr_' + createHash('sha256').update(`${userId}:${dto.module}:${canonical(filters)}`).digest('hex');
+      const occupied = await tx.savedAlert.findUnique({ where: { id } });
+      return this.present(await tx.savedAlert.create({ data: { ...data, id: occupied ? 'alr_' + randomUUID() : id } }));
+    });
   }
 
   async update(userId: string, id: string, dto: UpdateSavedAlertDto) {
-    const alert = await this.owned(userId, id);
-    const criteria = readCriteria(alert);
-    if (!criteria || !isListingModule(alert.module)) throw new ConflictException('Cette ancienne alerte ne peut pas être modifiée. Supprimez-la.');
-    const next = { ...criteria, name: dto.name ?? criteria.name };
-    let restart = false;
-    if (dto.filters) {
-      next.filters = validateFilters(alert.module, dto.filters);
-      if (canonical(next.filters) !== canonical(criteria.filters)) {
-        const mine = await this.prisma.savedAlert.findMany({ where: { userId, id: { not: id } }, select: { id: true, module: true, criteria: true, createdAt: true } });
-        this.assertNotDuplicate(mine, alert.module, next.filters);
-        restart = true;
+    return this.withAccountLock(userId, async (tx) => {
+      const alert = await this.owned(userId, id, tx);
+      const criteria = readCriteria(alert);
+      if (!criteria || !isListingModule(alert.module)) throw new ConflictException('Cette ancienne alerte ne peut pas être modifiée. Supprimez-la.');
+      const next = { ...criteria, name: dto.name ?? criteria.name };
+      let restart = false;
+      if (dto.filters) {
+        next.filters = validateFilters(alert.module, dto.filters);
+        if (canonical(next.filters) !== canonical(criteria.filters)) {
+          const mine = await tx.savedAlert.findMany({ where: { userId, id: { not: id } }, select: { id: true, module: true, criteria: true, createdAt: true } });
+          this.assertNotDuplicate(mine, alert.module, next.filters);
+          restart = true;
+        }
       }
-    }
-    if (dto.active === true && !alert.active) restart = true;
-    // Changing or resuming an alert never reports listings published in the meantime.
-    if (restart) next.since = new Date().toISOString();
-    const updated = await this.prisma.savedAlert.update({ where: { id }, data: { criteria: next, ...(dto.active !== undefined ? { active: dto.active } : {}) } });
-    return this.present(updated);
+      if (dto.active === true && !alert.active) restart = true;
+      // Changing or resuming an alert never reports listings published in the meantime.
+      if (restart) next.since = new Date().toISOString();
+      const updated = await tx.savedAlert.update({ where: { id }, data: { criteria: next, ...(dto.active !== undefined ? { active: dto.active } : {}) } });
+      return this.present(updated);
+    });
   }
 
   async remove(userId: string, id: string) {
-    await this.prisma.savedAlert.deleteMany({ where: { id, userId } });
+    await this.withAccountLock(userId, (tx) => tx.savedAlert.deleteMany({ where: { id, userId } }));
     return { id, deleted: true };
   }
 
@@ -97,13 +93,14 @@ export class SavedAlertsService {
     const pagination = getPagination(query);
     if (!criteria || !isListingModule(alert.module)) return { data: [], meta: pagination.meta(0) };
     const delegate = listingDelegate(this.prisma, alert.module);
-    const where = matchWhere(alert.module, criteria.filters);
+    const now = new Date();
+    const where = matchWhere(alert.module, criteria.filters, now);
     // Filtered and paged by PostgreSQL, so that a page is never short because of a later filter.
     const [rows, total] = await Promise.all([
       delegate.findMany({ where, skip: pagination.skip, take: pagination.take, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], select: { id: true } }),
       delegate.count({ where }),
     ]);
-    const cards = await loadCards(this.prisma, alert.module, rows.map((row: { id: string }) => row.id));
+    const cards = await loadCards(this.prisma, alert.module, rows.map((row: { id: string }) => row.id), now, alert.module === 'trips' ? tripOccurrenceWhere(criteria.filters, now) : undefined);
     return { data: rows.map((row: { id: string }) => cards.get(row.id)), meta: pagination.meta(total) };
   }
 
@@ -114,10 +111,18 @@ export class SavedAlertsService {
   }
 
   /** Someone else's alert does not exist, as far as this account can tell. */
-  private async owned(userId: string, id: string) {
-    const alert = await this.prisma.savedAlert.findFirst({ where: { id, userId } });
+  private async owned(userId: string, id: string, tx: Prisma.TransactionClient = this.prisma) {
+    const alert = await tx.savedAlert.findFirst({ where: { id, userId } });
     if (!alert) throw new NotFoundException('Alerte introuvable.');
     return alert;
+  }
+
+  private withAccountLock<T>(userId: string, work: (tx: Prisma.TransactionClient) => Promise<T>) {
+    return this.prisma.$transaction(async (tx) => {
+      // Serialize quota and duplicate checks across every API instance for this account.
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+      return work(tx);
+    });
   }
 
   private present(alert: SavedAlert) {

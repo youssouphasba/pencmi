@@ -60,6 +60,16 @@ const HOURS: Record<string, { gte: string; lt: string }> = {
   morning: { gte: '06:00', lt: '12:00' }, afternoon: { gte: '12:00', lt: '17:00' }, evening: { gte: '17:00', lt: '21:00' },
 };
 
+export function tripOccurrenceWhere(filters: Filters, now = new Date()): Prisma.TripOccurrenceWhereInput {
+  return {
+    cancelledAt: null,
+    departureAt: { gt: now },
+    remainingSeats: { gte: filters.passengers || 1 },
+    ...(filters.date ? { serviceDate: new Date(`${filters.date}T00:00:00Z`) } : {}),
+    ...(filters.minPrice !== undefined || filters.maxPrice !== undefined ? { pricePerSeat: { gte: filters.minPrice, lte: filters.maxPrice } } : {}),
+  };
+}
+
 /**
  * One definition of "matches", in PostgreSQL, for both the preview and the notifications.
  * Same meaning as the public searches; only public listings can ever satisfy it.
@@ -97,13 +107,7 @@ export function matchWhere(module: ListingModule, filters: Filters, now = new Da
     ...(filters.timeOfDay === 'night' ? [{ OR: [{ departureTime: { lt: '06:00' } }, { departureTime: { gte: '21:00' } }] }] : []),
     ...(filters.timeOfDay && HOURS[filters.timeOfDay] ? [{ departureTime: HOURS[filters.timeOfDay] }] : []),
     // A real future departure with enough seats, as in the public search.
-    { occurrences: { some: {
-      cancelledAt: null,
-      departureAt: { gt: now },
-      remainingSeats: { gte: (filters.passengers as number) || 1 },
-      ...(filters.date ? { serviceDate: new Date(`${filters.date}T00:00:00Z`) } : {}),
-      ...(filters.minPrice !== undefined || filters.maxPrice !== undefined ? { pricePerSeat: { gte: filters.minPrice as number | undefined, lte: filters.maxPrice as number | undefined } } : {}),
-    } } },
+    { occurrences: { some: tripOccurrenceWhere(filters, now) } },
   ] } satisfies Prisma.TripListingWhereInput;
 }
 
@@ -120,6 +124,7 @@ export function searchUrl(module: ListingModule, filters: Filters) {
     trips: ['/voyages', { departureCity: 'depart', arrivalCity: 'arrivee', date: 'date', passengers: 'passengers', vehicleType: 'vehicleType', minPrice: 'minPrice', maxPrice: 'maxPrice', timeOfDay: 'timeOfDay' }],
   };
   const [path, map] = names[module];
+  if (Object.keys(filters).some((key) => !map[key])) return null;
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) if (map[key]) query.set(map[key], String(value));
   return query.size ? `${path}?${query}` : path;

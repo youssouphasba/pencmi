@@ -72,6 +72,7 @@ describe('Favorites and saved alerts over HTTP', () => {
 
     it.each(universes)('%s: add twice, concurrently, read back and remove twice', async (module, table) => {
       await seedListing(table, 'l1', table === 'hotelProperty' ? { name: 'Hôtel', propertyType: 'hotel' } : {});
+      if (module === 'trips') await future('l1');
       const results = await Promise.all(Array.from({ length: 5 }, () => http().put(`/favorites/${module}/l1`).set(as('awa'))));
       expect(results.map((row) => row.status)).toEqual([200, 200, 200, 200, 200]);
       expect(await db.favorite.count()).toBe(1);
@@ -130,14 +131,16 @@ describe('Favorites and saved alerts over HTTP', () => {
       await seedListing('tripListing', 't1', { departureCity: 'Dakar', arrivalCity: 'Touba', pricePerSeat: 4000, currency: 'FCFA', vehicleType: 'bus' });
       await db.tripOccurrence.create({ data: { id: 'past', tripId: 't1', departureAt: new Date(Date.now() - DAY), cancelledAt: null, pricePerSeat: 1 } });
       await db.tripOccurrence.create({ data: { id: 'off', tripId: 't1', departureAt: new Date(Date.now() + DAY), cancelledAt: new Date(), pricePerSeat: 2 } });
+      await http().put('/favorites/trips/t1').set(as('awa')).expect(404);
+      await db.tripOccurrence.create({ data: { id: 'next', tripId: 't1', departureAt: new Date(Date.now() + 3 * DAY), cancelledAt: null, pricePerSeat: 5000 } });
       await http().put('/favorites/trips/t1').set(as('awa')).expect(200);
       let row = (await http().get('/favorites').set(as('awa'))).body.data[0];
-      expect(row).toMatchObject({ listingId: 't1', available: true, nextDeparture: null, price: 4000, url: '/voyages/detail/?id=t1' });
-      await db.tripOccurrence.create({ data: { id: 'next', tripId: 't1', departureAt: new Date(Date.now() + 3 * DAY), cancelledAt: null, pricePerSeat: 5000 } });
-      row = (await http().get('/favorites').set(as('awa'))).body.data[0];
       expect(row).toMatchObject({ price: 5000, url: '/voyages/detail/?id=t1&occurrenceId=next' });
       expect(row.nextDeparture).toBeTruthy();
       expect(row).not.toHaveProperty('remainingSeats');
+      await db.tripOccurrence.update({ where: { id: 'next' }, data: { cancelledAt: new Date() } });
+      row = (await http().get('/favorites').set(as('awa'))).body.data[0];
+      expect(row).toMatchObject({ available: false, title: null, price: null, url: null });
     });
 
     it('pages by the server', async () => {
@@ -151,6 +154,13 @@ describe('Favorites and saved alerts over HTTP', () => {
 
   describe('alerts', () => {
     const create = (token: string, module: string, filters: unknown, name = 'Ma recherche') => http().post('/saved-alerts').set(as(token)).send({ module, name, filters });
+
+    it('does not open a broader search when the public page lacks one of the saved filters', async () => {
+      for (const [module, filters] of [['vehicles', { minYear: 2020 }], ['real_estate', { minSurface: 80, city: 'Dakar' }]]) {
+        const response = await create('awa', module as string, filters).expect(201);
+        expect(response.body.data).toMatchObject({ searchUrl: null, filters });
+      }
+    });
 
     it('refuses anonymous access, a browser-supplied account and invalid input', async () => {
       await http().get('/saved-alerts').expect(401);
@@ -407,7 +417,7 @@ describe('Favorites and saved alerts over HTTP', () => {
         await seedListing('tripListing', 't1', { departureCity: 'Dakar', arrivalCity: 'Touba', updatedAt: new Date(Date.now() + 1000) });
         await future('t1'); await future('t1'); await future('t1');
         expect(await processor().runOnce(later())).toEqual({ created: 1 });
-        expect(notifications()[0].targetUrl).toBe('/voyages/detail/?id=t1');
+        expect(notifications()[0].targetUrl).toContain('/voyages/detail/?id=t1&occurrenceId=');
       });
 
       it('has no timer unless it is really enabled', () => {

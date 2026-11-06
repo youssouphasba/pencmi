@@ -182,6 +182,8 @@ test('favorites and alerts in the four universes, at the four widths', { skip: !
         assert.deepEqual([...state.alerts.values()][0].filters, { [universe.field[0]]: universe.field[1] });
         await card.getByRole('button', { name: 'Voir les résultats' }).click();
         await card.locator('a', { hasText: 'piège' }).waitFor();
+        await card.getByRole('button', { name: 'Voir les résultats' }).click();
+        await card.locator('a', { hasText: 'piège' }).waitFor();
         assert.equal(await card.locator('img, b').count(), 0);
         await card.getByRole('button', { name: 'Mettre en pause' }).click();
         await page.locator('.sv-card', { hasText: 'En pause' }).waitFor();

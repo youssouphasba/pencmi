@@ -2,8 +2,8 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { createHash } from 'crypto';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { LISTING_MODULES, ListingModule } from '../conversations/conversation-listings';
-import { listingUrl } from '../favorites/listing-cards';
-import { matchWhere } from './alert-criteria';
+import { listingUrl, loadCards } from '../favorites/listing-cards';
+import { matchWhere, tripOccurrenceWhere } from './alert-criteria';
 import { listingDelegate, processorEnabled, readCriteria } from './saved-alerts.service';
 
 const INTERVAL_MS = 60_000;
@@ -41,8 +41,8 @@ export class SavedAlertsProcessor implements OnModuleInit, OnModuleDestroy {
     this.running = true;
     try {
       await this.runOnce();
-    } catch (error) {
-      this.logger.error(`Traitement des alertes interrompu : ${(error as Error).message}`);
+    } catch {
+      this.logger.error('Traitement des alertes interrompu. Une nouvelle tentative aura lieu au prochain passage.');
     } finally {
       this.running = false;
     }
@@ -99,6 +99,10 @@ export class SavedAlertsProcessor implements OnModuleInit, OnModuleDestroy {
         if (!criteria || listing.updatedAt < new Date(criteria.since)) continue;
         const matching = await delegate.count({ where: { AND: [{ id: listing.id }, matchWhere(module, criteria.filters, now)] } });
         if (!matching) continue;
+        const targetUrl = module === 'trips'
+          ? (await loadCards(this.prisma, module, [listing.id], now, tripOccurrenceWhere(criteria.filters, now))).get(listing.id)?.url
+          : listingUrl(module, listing.id);
+        if (!targetUrl) continue;
         rows.push({
           id: 'ntf_' + createHash('sha256').update(`saved-alert:${alert.id}:${module}:${listing.id}`).digest('hex'),
           userId: alert.userId,
@@ -106,7 +110,7 @@ export class SavedAlertsProcessor implements OnModuleInit, OnModuleDestroy {
           type: 'saved_alert_match',
           title: `Nouvelle annonce pour « ${criteria.name} »`,
           message: title,
-          targetUrl: listingUrl(module, listing.id),
+          targetUrl,
           metadata: { alertId: alert.id, listingId: listing.id },
         });
       }

@@ -1,4 +1,5 @@
 import { PrismaService } from '../../database/prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 import { ListingModule } from '../conversations/conversation-listings';
 
 export type ListingCard = {
@@ -38,7 +39,7 @@ function hidden(id: string): ListingCard {
 const isPublic = (row: { status: string; deletedAt: Date | null }) => row.status === 'active' && !row.deletedAt;
 
 /** The public view of a page of listings, read in one query per universe. */
-export async function loadCards(prisma: PrismaService, module: ListingModule, ids: string[], now = new Date()): Promise<Map<string, ListingCard>> {
+export async function loadCards(prisma: PrismaService, module: ListingModule, ids: string[], now = new Date(), occurrenceWhere?: Prisma.TripOccurrenceWhereInput): Promise<Map<string, ListingCard>> {
   const cards = new Map<string, ListingCard>(ids.map((id) => [id, hidden(id)]));
   if (!ids.length) return cards;
   const where = { id: { in: ids } };
@@ -63,10 +64,16 @@ export async function loadCards(prisma: PrismaService, module: ListingModule, id
     // The favorite stays on the stable trip; the link goes to a departure that really exists.
     const rows = await prisma.tripListing.findMany({
       where,
-      include: { occurrences: { where: { cancelledAt: null, departureAt: { gt: now } }, orderBy: [{ departureAt: 'asc' }, { id: 'asc' }], take: 1 } },
+      include: { _count: { select: { occurrences: true } }, occurrences: { where: occurrenceWhere ?? { cancelledAt: null, departureAt: { gt: now } }, orderBy: [{ departureAt: 'asc' }, { id: 'asc' }], take: 1 } },
     });
     for (const row of rows.filter(isPublic)) {
       const next = row.occurrences[0];
+      if (!next) {
+        const legacyDeparture = row.departureDate && row.departureTime
+          ? new Date(`${row.departureDate.toISOString().slice(0, 10)}T${row.departureTime}:00Z`)
+          : null;
+        if (occurrenceWhere || row._count.occurrences || !legacyDeparture || !(legacyDeparture > now)) continue;
+      }
       cards.set(row.id, { listingId: row.id, available: true, title: row.title, city: `${row.departureCity} → ${row.arrivalCity}`, price: next?.pricePerSeat ?? row.pricePerSeat, currency: row.currency, category: row.vehicleType, url: listingUrl(module, row.id, next?.id), photo: null, nextDeparture: next ? next.departureAt.toISOString() : null });
     }
   }
