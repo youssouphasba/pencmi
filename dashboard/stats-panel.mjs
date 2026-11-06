@@ -71,6 +71,7 @@ function moduleKpis(module, data, words) {
     kpi('Contacts directs', number(data.contacts.direct), 'Hors demandes et messages'),
     kpi('Conversations ouvertes', number(data.messages.conversationsOpened)),
     kpi('Messages reçus', number(data.messages.inbound)),
+    kpi('Favoris reçus', number(data.favorites.inPeriod), `${number(data.favorites.allTime)} au total`),
   ];
   if (module === 'hotels') cards.push(
     kpi('Chambres actives', number(data.hotels.rooms.active), `${number(data.hotels.rooms.total)} au total`),

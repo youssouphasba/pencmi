@@ -456,14 +456,6 @@ function RealEstateFilters() {
   `;
 }
 
-function FavoriteButton() {
-  return `
-    <a class="favorite-button" href="${routeHref(routes.favorites)}" aria-label="Ajouter aux favoris">
-      <span aria-hidden="true">♡</span>
-    </a>
-  `;
-}
-
 function SavedSearchButton() {
   return `<a class="btn btn-light" href="${routeHref(routes.alerts)}">Créer une alerte</a>`;
 }
@@ -495,7 +487,7 @@ function RealEstateListingCard(listing) {
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;">
         <a class="btn btn-primary" href="${routeHref(`/immobilier/annonce/${listing.id}`)}">Voir détails</a>
-        ${FavoriteButton()}
+        <span data-favorite-module="real_estate" data-favorite-id="${escapeValue(listing.id)}"></span>
       </div>
     </article>
   `;
@@ -664,6 +656,7 @@ function ResultsLayout() {
       </div>
     </div>
 
+    <div data-save-search="real_estate"></div>
     <div class="results-layout">
       ${RealEstateFilters()}
       <div class="results-list">${content}</div>
@@ -717,3 +710,4 @@ function initializePage() {
 }
 
 document.addEventListener("DOMContentLoaded", initializePage);
+void import("../saved/enhance.mjs").catch(() => {});

@@ -218,7 +218,7 @@ function ListingMainInfo(listing) {
       <p>${escapeListingDetail([listing.district, listing.city].filter(Boolean).join(", "))}</p>
       <p>Mis à jour le ${formatDate(listing.updatedAt || listing.createdAt)}</p>
       <div class="action-row">
-        <a class="btn btn-ghost" href="${routes.favorites}">Ajouter aux favoris</a>
+        <span data-favorite-module="real_estate" data-favorite-id="${escapeListingDetail(listing.id)}"></span>
         <button class="btn btn-ghost" type="button" data-open-report>Signaler</button>
       </div>
     </section>
@@ -413,3 +413,4 @@ async function initializePage() {
 document.addEventListener("DOMContentLoaded", () => {
   void initializePage();
 });
+void import("../../saved/enhance.mjs").catch(() => {});

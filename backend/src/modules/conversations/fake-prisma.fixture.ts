@@ -13,21 +13,32 @@ function matches(row: any, where: any, db: any): boolean {
   return Object.entries(where).every(([key, condition]: [string, any]) => {
     if (key === "OR") return condition.some((item: any) => matches(row, item, db));
     if (key === "AND") return condition.every((item: any) => matches(row, item, db));
+    if (key === "occurrences")
+      return db.tripOccurrence.rows.some((item: any) => item.tripId === row.id && matches(item, condition.some, db));
+    if (key === "metadata" && condition?.path) {
+      const value = condition.path.reduce((node: any, part: string) => node?.[part], row.metadata);
+      if (value === undefined || value === null) return false;
+      if ("gte" in condition) return typeof value === "number" && value >= condition.gte;
+      return String(value).toLowerCase().includes(String(condition.string_contains).toLowerCase());
+    }
     if (key === "participants")
       return db.conversationParticipant.rows.some(
         (item: any) => item.conversationId === row.id && matches(item, condition.some, db),
       );
     const value = row[key];
     if (condition && typeof condition === "object" && !(condition instanceof Date)) {
+      if ("equals" in condition && String(value).toLowerCase() !== String(condition.equals).toLowerCase()) return false;
       if ("in" in condition && !condition.in.includes(value)) return false;
       if ("notIn" in condition && condition.notIn.includes(value)) return false;
       if ("not" in condition && (value ?? null) === condition.not) return false;
       if ("gt" in condition && !(value > condition.gt)) return false;
-      if ("gte" in condition && !(value >= condition.gte)) return false;
-      if ("lte" in condition && !(value <= condition.lte)) return false;
+      if (condition.gte !== undefined && !(value >= condition.gte)) return false;
+      if (condition.lte !== undefined && !(value <= condition.lte)) return false;
+      if ("lt" in condition && !(value < condition.lt)) return false;
       if ("contains" in condition && !String(value).toLowerCase().includes(condition.contains.toLowerCase())) return false;
       return true;
     }
+    if (condition instanceof Date) return value?.getTime?.() === condition.getTime();
     return (value ?? null) === condition;
   });
 }
@@ -98,8 +109,30 @@ class Table {
     Object.assign(row, args.data);
     return clone(row);
   }
+  async createMany(args: any) {
+    let count = 0;
+    for (const data of args.data) {
+      if (args.skipDuplicates && this.rows.some((row) => row.id === data.id)) continue;
+      await this.create({ data });
+      count++;
+    }
+    return { count };
+  }
+  async deleteMany(args: any) {
+    const before = this.rows.length;
+    this.rows = this.rows.filter((row) => !matches(row, args.where, this.db));
+    return { count: before - this.rows.length };
+  }
+  async upsert(args: any) {
+    const row = this.rows.find((item) => matches(item, args.where, this.db));
+    if (row) {
+      Object.assign(row, args.update);
+      return clone(row);
+    }
+    return this.create({ data: args.create });
+  }
   private flat(where: any) {
-    return where.conversationId_userId ?? where;
+    return where.conversationId_userId ?? where.userId_module_targetId ?? where;
   }
 }
 
@@ -135,8 +168,12 @@ export function createFakePrisma() {
     return { status: user?.status ?? "active", deletedAt: user?.deletedAt ?? null };
   };
   for (const name of ["realEstateListing", "vehicleListing", "tripListing", "hotelProperty"])
-    db[name] = new Table(db, { owner });
-  for (const name of ["realEstateVisitRequest", "hotelReservationRequest", "vehicleRentalRequest", "vehicleChauffeurRequest", "tripSeatRequest", "hotelRoom", "hotelStockAllocation", "trackingEvent", "notification"])
+    db[name] = new Table(db, {
+      owner,
+      rooms: (row) => db.hotelRoom.rows.filter((item: any) => item.propertyId === row.id).map(clone),
+      occurrences: (row, spec) => clone(ordered(db.tripOccurrence.rows.filter((item: any) => item.tripId === row.id && matches(item, spec.where, db)), spec.orderBy).slice(0, spec.take)),
+    });
+  for (const name of ["realEstateVisitRequest", "hotelReservationRequest", "vehicleRentalRequest", "vehicleChauffeurRequest", "tripSeatRequest", "hotelStockAllocation", "trackingEvent", "notification", "favorite", "savedAlert", "idempotencyKey", "tripOccurrence", "hotelRoom"])
     db[name] = new Table(db);
   const tables = () => Object.values(db).filter((value) => value instanceof Table) as Table[];
   let queue: Promise<unknown> = Promise.resolve();

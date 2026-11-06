@@ -103,6 +103,7 @@ test(
               acceptanceRate: { accepted: 0, received: 105, value: 0 },
               contacts: { direct: 1, bySource: { form: 1 } },
               messages: { conversationsOpened: 1, inbound: 1 },
+              favorites: { inPeriod: 0, allTime: 0, byListing: {} },
               series: [{ date: "2026-11-06", requests: 105, contacts: 1, inboundMessages: 1 }],
               topListings: { rankedBy: "requests", rows: [] },
               activeWithoutActivity: [],

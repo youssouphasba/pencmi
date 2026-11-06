@@ -45,6 +45,7 @@ const kpiDefinitions = [
   ["Demandes de visite", "visitRequests", "DV"],
   ["Contacts", "contacts", "CO"],
   ["Messages", "messages", "MS"],
+  ["Favoris reçus", "favorites", "FA"],
 ];
 
 function routeHref(path) {
@@ -200,6 +201,8 @@ function buildDashboardStats(report) {
     pendingVisits: report.requests.pending,
     contacts: report.contacts.direct,
     messages: report.messages.inbound,
+    favorites: report.favorites.inPeriod,
+    favoritesAllTime: report.favorites.allTime,
   };
 }
 
@@ -417,7 +420,7 @@ function DashboardFavoritesOverview() {
   return `
     <section class="dashboard-card">
       <h3>Favoris reçus</h3>
-      <p>Donnée indisponible : les favoris et les vues ne sont pas encore mesurés.</p>
+      <p>${formatMetric(dashboardStats?.favoritesAllTime || 0)} au total sur vos annonces. Les vues restent une donnée indisponible.</p>
     </section>
   `;
 }

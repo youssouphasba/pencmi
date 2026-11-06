@@ -238,6 +238,7 @@ function hotelCard(listing) {
         <div class="hotel-card-actions">
           <strong>${pencmiFormatPrice(hotelNightlyPrice(listing), listing.currency || "FCFA")}</strong>
           <a class="btn btn-light" href="${hotelRouteHref(`/hotels/${listing.id}`)}">Voir détails</a>
+          <span data-favorite-module="hotels" data-favorite-id="${hotelEscape(listing.id)}"></span>
           <a class="btn btn-primary" href="${hotelRouteHref(`/hotels/${listing.id}`)}#reservation">Demander une réservation</a>
         </div>
       </div>
@@ -266,6 +267,7 @@ function hotelResultsSummary() {
   return `
     <section class="hotel-detail-card" style="margin-bottom:16px;">
       <h2>Résultats</h2>
+      <div data-save-search="hotels"></div>
       <p>${hotelState.filtered.length} hébergement${hotelState.filtered.length > 1 ? "s" : ""} ${parts.length ? `pour ${parts.join(" · ")}` : "disponible(s)"}</p>
     </section>
   `;
@@ -397,3 +399,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   hotelsPage();
   hotelsFooter();
 });
+void import("../saved/enhance.mjs").catch(() => {});

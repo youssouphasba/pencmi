@@ -13,7 +13,7 @@ const UNIVERSES = [
   { module: 'vehicles', page: '/dashboard/voitures/statistiques/', extra: {}, types: { rental: 1, chauffeur: 1 } },
   { module: 'trips', page: '/dashboard/voyages/statistiques/', extra: { trips: { requestedSeats: 9, allocatedSeats: 4, historicalUnallocatedRequests: 2 } }, types: { seat: 1 } },
 ];
-const UNAVAILABLE = [{ key: 'views', label: 'Vues', reason: 'Aucune collecte.' }, { key: 'favorites', label: 'Favoris reçus', reason: 'Non enregistrés.' }];
+const UNAVAILABLE = [{ key: 'views', label: 'Vues', reason: 'Aucune collecte.' }];
 
 function report(universe, period, listingId) {
   const days = period === 'today' ? 1 : Number(period);
@@ -23,7 +23,7 @@ function report(universe, period, listingId) {
     options: [{ id: 'a', title: XSS, status: 'active', deleted: false }, { id: 'b', title: 'Autre', status: 'active', deleted: false }],
     requests: { total, accepted: 1, pending: 2, byStatus: { new: total - 1, accepted: 1 }, byType: universe.types },
     acceptanceRate: { accepted: 1, received: total, value: 1 / total }, contacts: { direct: 0, bySource: {} }, messages: { conversationsOpened: 0, inbound: 0 },
-    requestsByListing: { a: total }, series, topListings: { rankedBy: 'requests', rows: [{ id: 'a', title: XSS, status: 'active', deleted: false, requests: total, contacts: 0, inboundMessages: 0 }] },
+    requestsByListing: { a: total }, favorites: { inPeriod: 3, allTime: 5, byListing: { a: 3 } }, series, topListings: { rankedBy: 'requests', rows: [{ id: 'a', title: XSS, status: 'active', deleted: false, requests: total, contacts: 0, inboundMessages: 0 }] },
     activeWithoutActivity: listingId ? [] : [{ id: 'b', title: XSS }], unavailable: UNAVAILABLE, ...universe.extra };
 }
 
@@ -102,7 +102,8 @@ test('statistics of the four universes: filters, true chart, states and no injec
         assert.equal(await page.locator('.ps-chart rect').count(), 1, 'une barre par jour réel, pas de courbe inventée');
         assert.equal(await page.getByText('Bloc graphique prévu').count(), 0);
         assert.ok((await text()).includes('Vues : Donnée indisponible'));
-        assert.ok((await text()).includes('Favoris reçus : Donnée indisponible'));
+        assert.ok((await text()).includes('Favoris reçus'));
+        assert.ok((await text()).includes('5 au total'));
         // The filters change the request and the figures.
         await page.locator('select[name=period]').selectOption('7');
         await page.waitForFunction(() => document.querySelector('.ps-kpis')?.textContent.includes('14'));
@@ -159,14 +160,17 @@ test('statistics of the four universes: filters, true chart, states and no injec
     await page.locator('.kpi-card').first().waitFor();
     const overview = await page.locator('.dashboard-main').innerText();
     assert.ok(!overview.includes('999'), 'les compteurs de metadata ne sont plus affichés');
-    assert.ok(overview.includes('Donnée indisponible'));
+    assert.ok(overview.includes('donnée indisponible'));
+    assert.ok(overview.includes('5 au total'));
     assert.equal(await page.locator('.dashboard-main img[src="x"], .dashboard-main b').count(), 0);
     assert.equal(await page.evaluate(() => window.xss), undefined);
     await page.locator('[data-period-filter]').selectOption('7');
     await page.waitForFunction(() => document.querySelector('.kpi-grid')?.textContent.includes('14'));
     assert.equal(state.queries.at(-1).period, '7');
     await page.goto(`${origin}/dashboard/immobilier/favoris/`);
-    await page.getByRole('heading', { name: 'Donnée indisponible' }).waitFor();
+    await page.locator('.pm-table tbody tr').waitFor();
+    assert.equal(await page.locator('.pm-table img, .pm-table b').count(), 0);
+    assert.ok((await page.locator('#owner-favorites').innerText()).includes('5 au total'));
     assert.equal(await page.evaluate(() => window.xss), undefined);
     await context.close();
     // Without a session.

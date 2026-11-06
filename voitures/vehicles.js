@@ -154,6 +154,7 @@ function vehicleCard(listing) {
         </div>
         <div class="vehicle-card-actions">
           <a class="btn btn-light" href="${vehicleRouteHref(`/voitures/${listing.id}`)}">Voir détails</a>
+          <span data-favorite-module="vehicles" data-favorite-id="${vehicleText(listing.id)}"></span>
           <a class="btn btn-primary" href="${vehicleRouteHref(`/voitures/${listing.id}`)}#contact">Contacter</a>
         </div>
       </div>
@@ -182,7 +183,7 @@ function vehiclesPage() {
     <div class="vehicle-results-layout">
       ${vehicleFiltersMarkup()}
       <section class="vehicle-list">
-        <section class="vehicle-detail-card" style="margin-bottom:16px;"><h2>Résultats</h2><p>${vehicleState.meta?.total ?? vehicleState.filtered.length} véhicule(s)${filtersLabel ? ` pour ${vehicleText(filtersLabel)}` : ""}</p></section>
+        <section class="vehicle-detail-card" style="margin-bottom:16px;"><h2>Résultats</h2><div data-save-search="vehicles"></div><p>${vehicleState.meta?.total ?? vehicleState.filtered.length} véhicule(s)${filtersLabel ? ` pour ${vehicleText(filtersLabel)}` : ""}</p></section>
         ${vehicleState.filtered.length ? vehicleState.filtered.map(vehicleCard).join("") : vehicleEmptyState()}
         ${vehicleState.meta?.totalPages > 1 ? `<nav class="vehicle-card-actions" aria-label="Pagination">${vehicleState.meta.page > 1 ? `<button class="btn btn-ghost" data-vehicle-page="${vehicleState.meta.page - 1}">Précédent</button>` : ''}<span>Page ${vehicleState.meta.page} sur ${vehicleState.meta.totalPages}</span>${vehicleState.meta.page < vehicleState.meta.totalPages ? `<button class="btn btn-ghost" data-vehicle-page="${vehicleState.meta.page + 1}">Suivant</button>` : ''}</nav>` : ''}
       </section>
@@ -251,3 +252,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   vehiclesPage();
   vehiclesFooter();
 });
+void import("../saved/enhance.mjs").catch(() => {});

@@ -22,6 +22,7 @@ Le propriétaire vient toujours de la session. Un paramètre `ownerUserId` est r
 | Contacts directs | `ContactEvent` : `form`, `whatsapp`, `phone`, `email` | `createdAt` | Les événements sans `ownerUserId` sont rattachés par l'annonce |
 | Conversations ouvertes | `Conversation` | `createdAt` | Annonce possédée et participation |
 | Messages reçus | `Message` | `createdAt` | Hors messages de l'annonceur et messages masqués |
+| Favoris reçus | `Favorite` | `createdAt`, et total | Annonces du propriétaire. Totaux seulement, jamais le compte qui a enregistré |
 | Chambres | `HotelRoom` | État actuel | Total et actives |
 | Nuitées allouées | `HotelStockAllocation` | `date` | `units` non libérées. Jamais déduites des demandes |
 | Places demandées | `TripSeatRequest.requestedSeats` | `createdAt` | Déclarées par les clients |
@@ -38,7 +39,6 @@ Elles figurent dans `unavailable` et s'affichent « Donnée indisponible », jam
 | Mesure | Raison |
 | --- | --- |
 | Vues, clics détails, clics WhatsApp, téléphone et email | Aucune page n'envoie d'événement. `POST /tracking/events` est public et sans contrôle : ses données ne sont pas fiables |
-| Favoris reçus | Aucune route n'écrit dans `Favorite` |
 | Taux vue → contact | Les vues ne sont pas mesurées |
 | Délai moyen de réponse | Non calculé |
 | Taux d'occupation (hôtels) | Le stock déclaré ne fournit pas de total fiable de chambres-nuits |

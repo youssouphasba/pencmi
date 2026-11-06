@@ -5,8 +5,6 @@ const routes = {
   login: "/login?next=/favoris/immobilier"
 };
 
-const isAuthenticated = true;
-const favoriteListings = [];
 
 function routeHref(path) {
   if (window.location.protocol !== "file:") {
@@ -46,50 +44,9 @@ function ClientHeader() {
   });
 }
 
-function EmptyState() {
-  return `
-    <section class="client-empty-card">
-      <div>
-        <h2>Vous n’avez encore ajouté aucune annonce immobilière en favori.</h2>
-        <p>Ajoutez des annonces en favori pour les retrouver facilement plus tard.</p>
-        <a class="btn btn-primary" href="${routeHref(routes.realEstate)}">Voir les annonces immobilières</a>
-      </div>
-    </section>
-  `;
-}
-
-function FavoritesTable() {
-  return `
-    <section class="client-list-card">
-      <table>
-        <thead>
-          <tr><th>Annonce</th><th>Ville</th><th>Type</th><th>Transaction</th><th>Prix</th><th>Actions</th></tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-    </section>
-  `;
-}
-
 function ClientFavoritesPage() {
-  if (!isAuthenticated) {
-    window.location.href = routes.login;
-    return;
-  }
-
-  document.querySelector("#client-favorites-page").innerHTML = `
-    <section class="client-page-head">
-      <h1>Mes favoris immobiliers</h1>
-      <p>Retrouvez les biens que vous avez sauvegardés.</p>
-    </section>
-    <section class="client-filter-card" aria-label="Filtres favoris immobiliers">
-      <input type="search" placeholder="Ville">
-      <select><option>Type de bien</option></select>
-      <select><option>Transaction</option><option>Location</option><option>Vente</option><option>Achat</option></select>
-      <input type="search" placeholder="Prix">
-    </section>
-    ${favoriteListings.length ? FavoritesTable() : EmptyState()}
-  `;
+  const root = document.querySelector("#client-favorites-page");
+  void import("../../saved/favorites-page.mjs").then(({ mountFavorites }) => mountFavorites(root, { module: "real_estate", title: "Mes favoris immobiliers", browseHref: routeHref(routes.realEstate) }), () => { root.textContent = "Chargement impossible. Rechargez la page."; });
 }
 
 ClientHeader();

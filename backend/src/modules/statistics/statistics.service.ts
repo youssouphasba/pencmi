@@ -28,7 +28,6 @@ const UNAVAILABLE = [
   { key: 'views', label: 'Vues', reason: NO_COLLECTION },
   { key: 'detailClicks', label: 'Clics détails', reason: NO_COLLECTION },
   { key: 'channelClicks', label: 'Clics WhatsApp, téléphone et email', reason: NO_COLLECTION },
-  { key: 'favorites', label: 'Favoris reçus', reason: 'Les favoris ne sont pas encore enregistrés sur le serveur.' },
   { key: 'viewToContactRate', label: 'Taux vue → contact', reason: 'Les vues ne sont pas mesurées.' },
   { key: 'responseTime', label: 'Délai moyen de réponse', reason: 'Cette mesure n’est pas calculée pour le moment.' },
 ];
@@ -115,6 +114,11 @@ export class StatisticsService {
         select: { id: true, targetId: true, createdAt: true },
       }),
     ]);
+    // Counts only: who saved a listing is never part of the report.
+    const [favoritesInPeriod, favoritesAllTime] = await Promise.all([
+      this.prisma.favorite.findMany({ where: { module, targetId: { in: ids }, createdAt }, select: { targetId: true } }),
+      this.prisma.favorite.count({ where: { module, targetId: { in: ids } } }),
+    ]);
     const inbound = await this.prisma.message.findMany({
       where: { conversationId: { in: conversations.map((row) => row.id) }, senderUserId: { not: user.id }, hiddenAt: null, createdAt },
       select: { conversationId: true, createdAt: true },
@@ -154,6 +158,7 @@ export class StatisticsService {
         inbound: inbound.length,
       },
       requestsByListing: countBy(requests, (row) => row.listingId),
+      favorites: { inPeriod: favoritesInPeriod.length, allTime: favoritesAllTime, byListing: countBy(favoritesInPeriod, (row) => row.targetId) },
       series: this.series(window.days, requests, contacts, inbound),
       topListings: {
         rankedBy: 'requests',

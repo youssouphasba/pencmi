@@ -1,8 +1,6 @@
 const clientMessages = [];
 let clientUnreadLoaded = false;
-const clientFavorites = [];
-const clientAlerts = [];
-const clientNotifications = [];
+const clientCounts = {};
 const clientHotelReservations = [];
 const clientRealEstateVisits = [];
 const clientVehicleRentals = [];
@@ -193,14 +191,14 @@ function ClientSidebar(currentPage = "overview") {
 function ClientOverviewPage() {
   const summaries = [
     ["Messages non lus", clientUnreadLoaded ? clientMessages.reduce((total, item) => total + item.unreadCount, 0) : "—"],
-    ["Favoris", clientFavorites.length],
-    ["Alertes actives", clientAlerts.filter((item) => item.enabled).length],
+    ["Favoris", clientCounts.favorites ?? "—"],
+    ["Alertes actives", clientCounts.activeAlerts ?? "—"],
     ["Réservations hôtels en attente", clientHotelReservations.length],
     ["Visites immobilières", clientRealEstateVisits.length],
     ["Locations voitures", clientVehicleRentals.length],
     ["Demandes chauffeur", clientChauffeurRequests.length],
     ["Trajets interurbains", clientTripRequests.length],
-    ["Notifications non lues", clientNotifications.length]
+    ["Notifications non lues", clientCounts.unreadNotifications ?? "—"]
   ];
   const shortcuts = [
     ["Voir mes favoris", clientRoutes.favorites],
@@ -231,30 +229,15 @@ function ClientMessagesPage() {
 }
 
 function ClientFavoritesPage() {
-  const actions = `<div class="client-actions"><a class="btn btn-light" href="${clientRouteHref(clientRoutes.realEstate)}">Voir les annonces immobilières</a><a class="btn btn-light" href="${clientRouteHref(clientRoutes.hotels)}">Voir les hébergements</a><a class="btn btn-light" href="${clientRouteHref(clientRoutes.vehicles)}">Voir les voitures</a><a class="btn btn-light" href="${clientRouteHref(clientRoutes.voyages)}">Voir les trajets</a></div>`;
-  return ClientAccountLayout(`
-    ${ClientTabs(["Tous", "Immobilier", "Hôtels", "Voitures", "Voyages"])}
-    <section class="client-card"><div class="client-actions"><a class="btn btn-ghost" href="${clientRouteHref(clientRoutes.realEstateFavorites)}">Immobilier</a><a class="btn btn-ghost" href="${clientRouteHref(clientRoutes.hotelFavorites)}">Hôtels</a><a class="btn btn-ghost" href="${clientRouteHref(clientRoutes.vehicleFavorites)}">Voitures</a><a class="btn btn-ghost" href="${clientRouteHref(clientRoutes.tripFavorites)}">Voyages</a></div></section>
-    ${clientFavorites.length ? ClientGenericTable(["Type", "Titre", "Localisation", "Prix", "Date d’ajout", "Actions"], clientFavorites) : ClientEmptyState("Vous n’avez encore ajouté aucun favori.", "", actions)}
-  `, "favorites", "Mes favoris", "Retrouvez vos biens, hébergements, voitures et trajets sauvegardés.");
+  return ClientAccountLayout(`<div id="pencmi-favorites"></div>`, "favorites", "Mes favoris", "Retrouvez vos biens, hébergements, voitures et trajets sauvegardés.");
 }
 
 function ClientAlertsPage() {
-  const actions = `<div class="client-actions"><a class="btn btn-light" href="${clientRouteHref(clientRoutes.realEstateAlerts)}">Créer une alerte immobilier</a><a class="btn btn-light" href="${clientRouteHref(clientRoutes.hotelAlerts)}">Créer une alerte hôtel</a><a class="btn btn-light" href="${clientRouteHref(clientRoutes.vehicleAlerts)}">Créer une alerte voiture</a><a class="btn btn-light" href="${clientRouteHref(clientRoutes.tripAlerts)}">Créer une alerte trajet</a></div>`;
-  return ClientAccountLayout(`
-    ${ClientTabs(["Toutes", "Immobilier", "Hôtels", "Voitures", "Voyages"])}
-    ${clientAlerts.length ? ClientGenericTable(["Nom", "Module", "Critères", "Fréquence", "Statut", "Date", "Actions"], clientAlerts) : ClientEmptyState("Vous n’avez aucune alerte pour le moment.", "", actions)}
-  `, "alerts", "Mes alertes", "Gérez vos recherches sauvegardées et alertes sur tous les modules Péncmi.");
+  return ClientAccountLayout(`<div id="pencmi-alerts"></div>`, "alerts", "Mes alertes", "Gérez vos recherches sauvegardées sur tous les univers Péncmi.");
 }
 
 function ClientNotificationsPage() {
-  return ClientAccountLayout(`
-    <section class="client-card">
-      <div class="client-filter-row">${["Toutes", "Non lues", "Immobilier", "Hôtels", "Voitures", "Voyages", "Système"].map((label, index) => `<button type="button" aria-pressed="${index === 0}">${label}</button>`).join("")}</div>
-      <div class="client-actions"><button class="btn btn-light" type="button">Tout marquer comme lu</button></div>
-    </section>
-    ${clientNotifications.length ? ClientGenericTable(["Module", "Priorité", "Statut", "Date", "Action"], clientNotifications) : ClientEmptyState("Aucune notification pour le moment.")}
-  `, "notifications", "Notifications", "Consultez vos notifications internes, leur priorité et les actions associées.");
+  return ClientAccountLayout(`<div id="pencmi-notifications"></div>`, "notifications", "Notifications", "Consultez vos notifications internes et les actions associées.");
 }
 
 function ClientHotelReservationsPage() {
@@ -396,6 +379,12 @@ function renderClientSpace() {
   bindClientSpace();
   const inbox = document.querySelector("#pencmi-inbox");
   if (inbox) void import("../messaging/inbox.mjs").then(({ mountInbox }) => mountInbox(inbox, { scope: "participant", emptyTitle: "Vous n’avez aucun message pour le moment.", emptyText: "Écrivez à un annonceur depuis une annonce où la messagerie est activée." }));
+  const favorites = document.querySelector("#pencmi-favorites");
+  if (favorites) void import("../saved/favorites-page.mjs").then(({ mountFavorites }) => mountFavorites(favorites, { title: "Tous mes favoris" }));
+  const alerts = document.querySelector("#pencmi-alerts");
+  if (alerts) void import("../saved/alerts-page.mjs").then(({ mountAlerts }) => mountAlerts(alerts, { title: "Toutes mes alertes" }));
+  const notifications = document.querySelector("#pencmi-notifications");
+  if (notifications) void import("../saved/notifications-page.mjs").then(({ mountNotifications }) => mountNotifications(notifications));
 }
 
 /** Unread counts of the most recent conversations, shown only once the API has answered. */
@@ -405,7 +394,15 @@ async function loadClientUnread() {
     if (!hasSession()) return;
     clientMessages.splice(0, clientMessages.length, ...await apiRequest("/messages/conversations?limit=100"));
     clientUnreadLoaded = true;
-    if (document.body.dataset.clientPage !== "messages") renderClientSpace();
+    const [favorites, alerts, notifications] = await Promise.all([
+      apiRequest("/favorites?limit=1", { includeMeta: true }),
+      apiRequest("/saved-alerts?limit=100"),
+      apiRequest("/notifications"),
+    ]);
+    clientCounts.favorites = favorites.meta?.total ?? null;
+    clientCounts.activeAlerts = alerts.filter((item) => item.active).length;
+    clientCounts.unreadNotifications = notifications.filter((item) => item.status === "unread").length;
+    if (document.body.dataset.clientPage === "overview") renderClientSpace();
   } catch {
     clientUnreadLoaded = false;
   }

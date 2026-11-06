@@ -171,6 +171,7 @@ function tripDetailPage() {
             ${typeof ReportButton === "function" ? ReportButton("Signaler") : ""}
             <button class="btn btn-light" type="button" data-open-contact>Contacter le transporteur</button>
             <span data-listing-messaging></span>
+            <span data-favorite-module="trips" data-favorite-id="${String(listing.id).replace(/[^A-Za-z0-9_-]/g, '')}"></span>
             ${listing.occurrenceId && listing.availableSeats > 0 && metadata.contactPreferences?.reservationRequestEnabled !== false ? '<button class="btn btn-primary" type="button" data-open-reservation>Demander une place</button>' : ''}
           </div>
         </section>
@@ -278,3 +279,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   tripDetailPage();
 });
+void import("../../saved/enhance.mjs").catch(() => {});

@@ -4,8 +4,6 @@ const routes = {
   login: "/login?next=/favoris/hotels"
 };
 
-const isAuthenticated = true;
-const favoriteHotels = [];
 
 function routeHref(path) {
   if (window.location.protocol !== "file:") {
@@ -23,16 +21,9 @@ function Header() {
   `;
 }
 
-function EmptyState() {
-  return `<section class="hotel-empty"><div><h1>Vous n’avez encore ajouté aucun hébergement en favori.</h1><p>Ajoutez des hébergements en favori pour les retrouver plus tard.</p><div class="hotel-empty-actions"><a class="btn btn-primary" href="${routeHref(routes.hotels)}">Voir les hébergements</a></div></div></section>`;
-}
-
 function ClientHotelFavoritesPage() {
-  if (!isAuthenticated) {
-    window.location.href = routes.login;
-    return;
-  }
-  document.querySelector("#hotel-favorites-page").innerHTML = favoriteHotels.length ? `<section class="hotel-list"></section>` : EmptyState();
+  const root = document.querySelector("#hotel-favorites-page");
+  void import("../../saved/favorites-page.mjs").then(({ mountFavorites }) => mountFavorites(root, { module: "hotels", title: "Mes hébergements favoris", browseHref: routeHref(routes.hotels) }), () => { root.textContent = "Chargement impossible. Rechargez la page."; });
 }
 
 Header();

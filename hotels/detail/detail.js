@@ -209,6 +209,7 @@ function hotelDetailPage() {
             ${typeof ReportButton === "function" ? ReportButton("Signaler") : ""}
             <button class="btn btn-light" type="button" data-open-contact>Contacter</button>
             <span data-listing-messaging></span>
+            <span data-favorite-module="hotels" data-favorite-id="${hotelDetailEscape(listing.id)}"></span>
             <button class="btn btn-primary" type="button" data-open-reservation ${hotelCanRequestReservation() ? '' : 'disabled'}>Demander une réservation</button>
           </div>
         </section>
@@ -285,3 +286,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
   hotelDetailPage();
 });
+void import("../../saved/enhance.mjs").catch(() => {});

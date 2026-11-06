@@ -132,10 +132,23 @@ describe('Owner statistics over HTTP', () => {
     expect(data.requests.total).toBe(0);
     expect(data.contacts.direct).toBe(0);
     expect(data.acceptanceRate.value).toBeNull();
-    expect(data.unavailable.map((row: any) => row.key)).toEqual(expect.arrayContaining(['views', 'favorites', 'channelClicks', 'viewToContactRate', 'responseTime']));
+    expect(data.unavailable.map((row: any) => row.key)).toEqual(expect.arrayContaining(['views', 'channelClicks', 'viewToContactRate', 'responseTime']));
     expect(data).not.toHaveProperty('views');
-    expect(data).not.toHaveProperty('favorites');
+    expect(data.favorites).toEqual({ inPeriod: 0, allTime: 0, byListing: {} });
     expect(data.series.every((row: any) => row.requests === 0)).toBe(true);
+  });
+
+  it('counts the favorites of the owner listings only, without saying who saved them', async () => {
+    const favorite = (id: string, userId: string, targetId: string, createdAt = new Date()) => db.favorite.create({ data: { id, userId, module: 'real_estate', targetId, createdAt } });
+    await favorite('f1', 'client', 're_a');
+    await favorite('f2', 'rival', 're_a');
+    await favorite('f3', 'client', 're_b', daysAgo(60));
+    await favorite('f4', 'client', 're_rival');
+    const data = (await report('agency', 'module=real_estate&period=30').expect(200)).body.data;
+    expect(data.favorites).toEqual({ inPeriod: 2, allTime: 3, byListing: { re_a: 2 } });
+    expect(JSON.stringify(data.favorites)).not.toContain('client');
+    expect((await report('agency', 'module=real_estate&listingId=re_b&period=90').expect(200)).body.data.favorites).toEqual({ inPeriod: 1, allTime: 1, byListing: { re_b: 1 } });
+    expect((await report('rival', 'module=real_estate').expect(200)).body.data.favorites.allTime).toBe(1);
   });
 
   it('separates live, draft and deleted listings', async () => {

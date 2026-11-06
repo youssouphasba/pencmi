@@ -155,6 +155,7 @@ function tripCard(listing) {
       </div>
       <p>${listing.departureDate ? new Date(listing.departureDate).toLocaleDateString('fr-FR',{timeZone:'Africa/Dakar'}) : ''} · ${listing.availableSeats ?? 'Disponibilité à confirmer'}${listing.availableSeats != null ? ' places restantes' : ''}</p><div class="trip-card-actions">
         <a class="btn btn-light" href="${detailHref}">Voir détails</a>
+        <span data-favorite-module="trips" data-favorite-id="${tripEscape(listing.id)}"></span>
         ${listing.occurrenceId && listing.availableSeats > 0 && metadata.contactPreferences?.reservationRequestEnabled !== false ? `<a class="btn btn-primary" href="${detailHref}#reservation">Demander une place</a>` : ''}
       </div>
     </article>
@@ -169,6 +170,7 @@ function tripsPage() {
   const values = tripQueryValues();
   const label = tripEscape([values.depart, values.arrivee, values.vehicleType].filter(Boolean).join(" · "));
   document.querySelector("#trip-results").innerHTML = `
+    <div data-save-search="trips"></div>
     <div class="trip-results-layout">
       ${tripFiltersMarkup()}
       <section class="trip-list">
@@ -239,3 +241,4 @@ document.addEventListener("DOMContentLoaded", async () => {
   tripsPage();
   tripsFooter();
 });
+void import("../saved/enhance.mjs").catch(() => {});

@@ -44,11 +44,13 @@ function FavoriteStatsPage() {
       ${DashboardSidebar()}
       <main class="dashboard-main">
         <header class="dashboard-header"><div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>Favoris reçus</h1><p>Suivez les annonces sauvegardées par les clients.</p></div></header>
-        <section class="empty-card"><div><h2>Donnée indisponible</h2><p>Les favoris ne sont pas encore enregistrés sur le serveur : aucun chiffre ne peut être affiché pour le moment.</p></div></section>
+        <div id="owner-favorites"></div>
       </main>
     </div>
   `;
   document.querySelector("[data-open-sidebar]")?.addEventListener("click", () => document.querySelector("#dashboard-sidebar").classList.toggle("is-open"));
+  const area = document.querySelector("#owner-favorites");
+  void import("../../../saved/owner-favorites.mjs").then(({ mountOwnerFavorites }) => mountOwnerFavorites(area, { module: "real_estate" }), () => { area.textContent = "Chargement impossible. Rechargez la page."; });
 }
 
 FavoriteStatsPage();
