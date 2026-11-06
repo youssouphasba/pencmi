@@ -1,11 +1,6 @@
 const clientMessages = [];
 let clientUnreadLoaded = false;
 const clientCounts = {};
-const clientHotelReservations = [];
-const clientRealEstateVisits = [];
-const clientVehicleRentals = [];
-const clientChauffeurRequests = [];
-const clientTripRequests = [];
 
 const clientRoutes = {
   overview: "/compte",
@@ -155,7 +150,7 @@ function ClientAccountLayout(content, currentPage = "overview", title = "Mon com
             <h1>${title}</h1>
             <p>${subtitle}</p>
           </div>
-          <div class="client-header-actions"><a class="btn btn-light" href="${clientRouteHref(clientRoutes.notifications)}">Notifications <span class="notification-badge">0</span></a><button class="btn btn-ghost" type="button" data-client-logout>Se déconnecter</button></div>
+          <div class="client-header-actions"><a class="btn btn-light" href="${clientRouteHref(clientRoutes.notifications)}">Notifications</a><button class="btn btn-ghost" type="button" data-client-logout>Se déconnecter</button></div>
         </header>
         ${content}
       </main>
@@ -170,13 +165,13 @@ function ClientSidebar(currentPage = "overview") {
     ["Messages", clientRoutes.messages, "messages", clientUnreadLoaded ? clientMessages.reduce((total, item) => total + item.unreadCount, 0) : undefined],
     ["Favoris", clientRoutes.favorites, "favorites"],
     ["Alertes", clientRoutes.alerts, "alerts"],
-    ["Notifications", clientRoutes.notifications, "notifications", 0],
-    ["Signalements", clientRoutes.reports, "reports", 0],
-    ["Réservations hôtels", clientRoutes.reservations, "reservations", 0],
-    ["Visites immobilières", clientRoutes.visits, "visits", 0],
-    ["Locations voitures", clientRoutes.rentals, "rentals", 0],
-    ["Chauffeur", clientRoutes.chauffeur, "chauffeur", 0],
-    ["Trajets interurbains", clientRoutes.trips, "trips", 0],
+    ["Notifications", clientRoutes.notifications, "notifications"],
+    ["Signalements", clientRoutes.reports, "reports"],
+    ["Réservations hôtels", clientRoutes.reservations, "reservations"],
+    ["Visites immobilières", clientRoutes.visits, "visits"],
+    ["Locations voitures", clientRoutes.rentals, "rentals"],
+    ["Chauffeur", clientRoutes.chauffeur, "chauffeur"],
+    ["Trajets interurbains", clientRoutes.trips, "trips"],
     ["Paramètres", clientRoutes.settings, "settings"]
   ];
 
@@ -193,11 +188,11 @@ function ClientOverviewPage() {
     ["Messages non lus", clientUnreadLoaded ? clientMessages.reduce((total, item) => total + item.unreadCount, 0) : "—"],
     ["Favoris", clientCounts.favorites ?? "—"],
     ["Alertes actives", clientCounts.activeAlerts ?? "—"],
-    ["Réservations hôtels en attente", clientHotelReservations.length],
-    ["Visites immobilières", clientRealEstateVisits.length],
-    ["Locations voitures", clientVehicleRentals.length],
-    ["Demandes chauffeur", clientChauffeurRequests.length],
-    ["Trajets interurbains", clientTripRequests.length],
+    ["Demandes hôtels", '<span data-request-total="hotel">—</span>'],
+    ["Visites immobilières", '<span data-request-total="visit">—</span>'],
+    ["Locations voitures", '<span data-request-total="rental">—</span>'],
+    ["Demandes chauffeur", '<span data-request-total="chauffeur">—</span>'],
+    ["Trajets interurbains", '<span data-request-total="trip">—</span>'],
     ["Notifications non lues", clientCounts.unreadNotifications ?? "—"]
   ];
   const shortcuts = [
@@ -216,7 +211,8 @@ function ClientOverviewPage() {
       <h2>Accès rapides</h2>
       <div class="client-shortcuts">${shortcuts.map(([label, href]) => `<a class="btn btn-light" href="${clientRouteHref(href)}">${label}</a>`).join("")}</div>
     </section>
-    ${ClientEmptyState("Aucune activité pour le moment.", "Vos demandes, messages et favoris apparaîtront ici.")}
+    <div id="pencmi-request-summary-status" role="status"></div>
+    <section class="client-section"><h2>Mes demandes</h2><div class="client-shortcuts cr-shortcuts">${["reservations", "visits", "rentals", "chauffeur", "trips"].map((key, i) => `<a class="btn btn-light" href="${clientRouteHref(clientRoutes[key])}">${["Hôtels", "Visites", "Locations", "Chauffeur", "Voyages"][i]}</a>`).join("")}</div></section>
   `);
 }
 
@@ -241,28 +237,28 @@ function ClientNotificationsPage() {
 }
 
 function ClientHotelReservationsPage() {
-  return ClientRequestPage("reservations", "Réservations hôtels", "Vous n’avez aucune demande de réservation hôtel pour le moment.", "Rechercher un hébergement", clientRoutes.hotels, ["Établissement", "Chambre ou logement", "Dates", "Nuits", "Personnes", "Prix estimé", "Statut", "Date", "Actions"], clientHotelReservations);
+  return ClientRequestPage("reservations", "Réservations hôtels", "hotel");
 }
 
 function ClientRealEstateVisitsPage() {
-  return ClientRequestPage("visits", "Visites immobilières", "Vous n’avez aucune visite immobilière pour le moment.", "Voir les biens immobiliers", clientRoutes.realEstate, ["Bien immobilier", "Ville", "Quartier", "Annonceur", "Date demandée", "Date proposée", "Heure", "Statut", "Actions"], clientRealEstateVisits);
+  return ClientRequestPage("visits", "Visites immobilières", "visit");
 }
 
 function ClientVehicleRentalsPage() {
-  return ClientRequestPage("rentals", "Locations voitures", "Vous n’avez aucune demande de location voiture pour le moment.", "Voir les voitures à louer", clientRoutes.vehicles, ["Véhicule", "Loueur", "Ville", "Récupération", "Retour", "Durée", "Prix estimé", "Caution", "Statut", "Actions"], clientVehicleRentals);
+  return ClientRequestPage("rentals", "Locations voitures", "rental");
 }
 
 function ClientChauffeurRequestsPage() {
-  return ClientRequestPage("chauffeur", "Demandes chauffeur", "Vous n’avez aucune demande de chauffeur pour le moment.", "Trouver une voiture avec chauffeur", clientRoutes.vehicles, ["Véhicule ou chauffeur", "Lieu de départ", "Destination", "Date", "Heure", "Type de service", "Prix estimé", "Statut", "Actions"], clientChauffeurRequests);
+  return ClientRequestPage("chauffeur", "Demandes chauffeur", "chauffeur");
 }
 
 function ClientTripRequestsPage() {
-  return ClientRequestPage("trips", "Trajets interurbains", "Vous n’avez aucune demande de place pour le moment.", "Rechercher un trajet", clientRoutes.voyages, ["Départ", "Arrivée", "Date", "Heure", "Places demandées", "Bagages", "Transporteur", "Statut", "Actions"], clientTripRequests);
+  return ClientRequestPage("trips", "Trajets interurbains", "trip");
 }
 
-function ClientRequestPage(currentPage, title, emptyTitle, actionLabel, actionHref, columns, items) {
+function ClientRequestPage(currentPage, title, type) {
   return ClientAccountLayout(`
-    ${items.length ? ClientGenericTable(columns, items) : ClientEmptyState(emptyTitle, "", `<a class="btn btn-primary" href="${clientRouteHref(actionHref)}">${actionLabel}</a>`)}
+    <div id="pencmi-client-requests" data-request-type="${type}"></div>
   `, currentPage, title, "Suivez le statut, les messages et les actions disponibles pour vos demandes.");
 }
 
@@ -278,7 +274,7 @@ function ClientProfilePage() {
         <label class="client-field"><span>Ville</span><input type="text" autocomplete="address-level2"></label>
         <label class="client-field"><span>Langue préférée</span><select><option>Français</option><option>Wolof</option><option>Anglais</option></select></label>
       </div>
-      <div class="client-message" data-client-success>Votre profil a été mis à jour.</div>
+      <p role="status">La modification du profil n’est pas disponible pour le moment.</p>
       <div class="client-actions"><button class="btn btn-primary" type="submit">Enregistrer les modifications</button></div>
     </form>
   `, "profile", "Profil", "Gérez vos informations personnelles et votre langue préférée.");
@@ -292,7 +288,7 @@ function ClientSettingsPage() {
       <section class="client-settings-section"><h2>Emails</h2><p>Emails importants non désactivables : demande envoyée, demande acceptée, demande refusée, annulation, sécurité du compte.</p>${["Alertes de recherche", "Recommandations", "Rappels", "Baisse de prix", "Marketing futur"].map(ClientCheckbox).join("")}</section>
       <section class="client-settings-section"><h2>Confidentialité</h2>${["Afficher mon téléphone aux annonceurs", "Autoriser les annonceurs à me répondre par email", "Autoriser les annonceurs à me contacter par téléphone si je l’ai fourni"].map(ClientCheckbox).join("")}</section>
       <section class="client-settings-section"><h2>Suppression du compte</h2><button class="btn danger-button" type="button" data-open-client-modal>Supprimer mon compte</button></section>
-      <div class="client-message" data-client-success>Vos paramètres ont été mis à jour.</div>
+      <p role="status">La modification des paramètres n’est pas disponible pour le moment.</p>
       <div class="client-actions"><button class="btn btn-primary" type="submit">Enregistrer les modifications</button></div>
     </form>
     <div class="client-modal-backdrop" data-client-modal><div class="client-modal"><h2>Confirmer la suppression</h2><p>Aucun compte n’est supprimé maintenant. Cette action est prévue pour une future intégration sécurisée.</p><div class="client-actions"><button class="btn btn-ghost" type="button" data-close-client-modal>Annuler</button><button class="btn danger-button" type="button">Supprimer mon compte</button></div></div></div>
@@ -305,19 +301,6 @@ function ClientCheckbox(label) {
 
 function ClientTabs(labels) {
   return `<section class="client-card"><div class="client-tabs">${labels.map((label, index) => `<button type="button" aria-pressed="${index === 0}">${label}</button>`).join("")}</div></section>`;
-}
-
-function ClientGenericTable(columns, items) {
-  return `
-    <section class="client-table-shell client-section">
-      <div class="client-scroll">
-        <table class="client-table">
-          <thead><tr>${columns.map((column) => `<th>${column}</th>`).join("")}</tr></thead>
-          <tbody>${items.map(() => `<tr>${columns.map(() => "<td></td>").join("")}</tr>`).join("")}</tbody>
-        </table>
-      </div>
-    </section>
-  `;
 }
 
 function ClientEmptyState(title, text = "", action = "") {
@@ -338,9 +321,9 @@ function bindClientSpace() {
   });
 
   document.querySelectorAll("[data-client-form]").forEach((form) => {
+    form.querySelectorAll('input, select, textarea, button').forEach((control) => { control.disabled = true; });
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      form.querySelector("[data-client-success]")?.classList.add("is-visible");
     });
   });
 
@@ -385,6 +368,10 @@ function renderClientSpace() {
   if (alerts) void import("../saved/alerts-page.mjs").then(({ mountAlerts }) => mountAlerts(alerts, { title: "Toutes mes alertes" }));
   const notifications = document.querySelector("#pencmi-notifications");
   if (notifications) void import("../saved/notifications-page.mjs").then(({ mountNotifications }) => mountNotifications(notifications));
+  const requests = document.querySelector('#pencmi-client-requests');
+  if (requests) void import('./requests-page.mjs').then(({ mountClientRequests }) => mountClientRequests(requests, requests.dataset.requestType));
+  const summary = document.querySelector('#pencmi-request-summary-status');
+  if (summary) void import('./requests-page.mjs').then(({ mountRequestSummary }) => mountRequestSummary(summary));
 }
 
 /** Unread counts of the most recent conversations, shown only once the API has answered. */

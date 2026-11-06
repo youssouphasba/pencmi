@@ -103,6 +103,7 @@ describe('Hotel publication HTTP permissions and whitelist', () => {
     expect(reservations.createReservationRequest).toHaveBeenCalledWith(
       'h',
       requestBody,
+      undefined,
     );
     await request(app.getHttpServer())
       .post('/hotels/h/stay-quote')

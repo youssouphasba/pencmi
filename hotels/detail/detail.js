@@ -245,7 +245,10 @@ function bindHotelDetailActions() {
     });
   });
 
-  hotelDetailReservation.bindHotelReservation({ property: hotelDetailState.listing, api: pencmiApiRequest, formatPrice: pencmiFormatPrice, escape: hotelDetailEscape });
+  hotelDetailReservation.bindHotelReservation({ property: hotelDetailState.listing, api: pencmiApiRequest,
+    send: async (path, options) => (await import('../../compte/request-api.mjs')).sendClientRequest('hotel', path, JSON.parse(options.body)),
+    onReceived: (root, receipt) => { if (receipt.accountUrl) { const link = document.createElement('a'); link.href = receipt.accountUrl; link.className = 'btn btn-light'; link.textContent = 'Suivre ma demande'; root.append(link); } },
+    formatPrice: pencmiFormatPrice, escape: hotelDetailEscape });
 
   document.querySelector("[data-open-contact]")?.addEventListener("click", () => {
     document.querySelector("#contact-modal")?.classList.add("is-open");

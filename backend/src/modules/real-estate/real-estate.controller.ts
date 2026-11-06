@@ -14,7 +14,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
-import { Public } from '../../common/decorators/public.decorator';
+import { Public, OptionalAuthentication } from '../../common/decorators/public.decorator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
 import {
@@ -49,11 +49,13 @@ export class RealEstateController {
 
   @Public()
   @Post('immobilier/:id/visit-requests')
+  @OptionalAuthentication()
   createVisitRequest(
     @Param('id') id: string,
     @Body() dto: CreateVisitRequestDto,
+    @CurrentUser() user?: AuthenticatedUser,
   ) {
-    return this.service.createVisitRequest(id, dto);
+    return this.service.createVisitRequest(id, dto, user?.id);
   }
 
   @ApiBearerAuth()

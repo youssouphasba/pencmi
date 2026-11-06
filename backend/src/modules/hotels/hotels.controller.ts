@@ -14,7 +14,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
-import { Public } from '../../common/decorators/public.decorator';
+import { Public, OptionalAuthentication } from '../../common/decorators/public.decorator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
 import {
@@ -55,12 +55,14 @@ export class HotelsController {
 
   @Public()
   @Post('hotels/:id/reservation-requests')
+  @OptionalAuthentication()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   createReservationRequest(
     @Param('id') id: string,
     @Body() dto: CreateHotelReservationRequestDto,
+    @CurrentUser() user?: AuthenticatedUser,
   ) {
-    return this.service.createReservationRequest(id, dto);
+    return this.service.createReservationRequest(id, dto, user?.id);
   }
 
   @Public()

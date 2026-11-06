@@ -1,3 +1,4 @@
+import { notifyClientRequestStatus } from '../../common/utils/client-request-notification';
 import {
   BadRequestException,
   ConflictException,
@@ -151,7 +152,7 @@ export class TripOccurrencesService {
       });
     }
   }
-  async createRequest(tripId: string, dto: CreateSeatRequestDto) {
+  async createRequest(tripId: string, dto: CreateSeatRequestDto, clientUserId?: string) {
     if (!dto.occurrenceId || (!dto.clientPhone && !dto.clientEmail))
       throw new BadRequestException(
         "Sélectionnez un départ et renseignez un contact.",
@@ -182,6 +183,7 @@ export class TripOccurrencesService {
       const previous = await tx.tripSeatRequest.findUnique({ where: { id } });
       if (previous) {
         if (
+          (previous.clientUserId ?? null) !== (clientUserId ?? null) ||
           previous.occurrenceId !== dto.occurrenceId ||
           previous.clientName !== dto.clientName ||
           previous.clientEmail !== (dto.clientEmail || null) ||
@@ -205,6 +207,7 @@ export class TripOccurrencesService {
         data: {
           id,
           tripId,
+          clientUserId,
           occurrenceId: occurrence.id,
           allocatedSeats: 0,
           quotedPricePerSeat: occurrence.pricePerSeat,
@@ -340,6 +343,7 @@ export class TripOccurrencesService {
         data: { status: dto.status, allocatedSeats: allocated },
         include: { trip: true, occurrence: true },
       });
+      await notifyClientRequestStatus(tx, 'trip', request, dto.status);
       await this.audit(
         tx,
         initial.tripId,
@@ -398,6 +402,7 @@ export class TripOccurrencesService {
             allocatedSeats: request.allocatedSeats === null ? null : 0,
           },
         });
+        await notifyClientRequestStatus(tx, 'trip', request, 'cancelled');
         await this.audit(tx, tripId, ownerUserId, "trip.request.cancelled", {
           requestId: request.id,
           occurrenceId,

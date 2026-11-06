@@ -23,7 +23,7 @@ export function hotelRequestIntent(propertyId, storage) {
   try { storage.setItem(key, id); } catch { }
   return { id, clear() { try { if (storage.getItem(key) === id) storage.removeItem(key); } catch { } } };
 }
-export function bindHotelReservation({ root = document, property, api, formatPrice, escape, intentFactory = hotelRequestIntent }) {
+export function bindHotelReservation({ root = document, property, api, send = api, onReceived, formatPrice, escape, intentFactory = hotelRequestIntent }) {
   const form = root.querySelector('#hotel-reservation-form');
   if (!form) return;
   const feedback = root.querySelector('#reservation-message');
@@ -77,9 +77,10 @@ export function bindHotelReservation({ root = document, property, api, formatPri
     const sendController = new AbortController();
     const timeout = setTimeout(() => sendController.abort(), 60000);
     try {
-      const receipt = await api(`/hotels/${encodeURIComponent(property.id)}/reservation-requests`, { method: 'POST', signal: sendController.signal, body: JSON.stringify(payload) });
+      const receipt = await send(`/hotels/${encodeURIComponent(property.id)}/reservation-requests`, { method: 'POST', signal: sendController.signal, body: JSON.stringify(payload) });
       if (!receipt?.received || !receipt.id) throw new Error('La réception de votre demande n’a pas été confirmée. Réessayez sans fermer le formulaire.');
       received = true; intent.clear(); feedbackText('Votre demande a été reçue. Ce n’est pas une confirmation de séjour : l’établissement doit encore l’accepter.');
+      onReceived?.(feedback, receipt);
       if (newRequest) newRequest.hidden = false;
     } catch (error) { feedbackText(error.name === 'AbortError' ? 'La réception reste à vérifier. Vos informations sont conservées ; réessayez avec cette même demande.' : error.message || 'L’envoi a échoué. Vos informations sont conservées.', true); }
     finally { clearTimeout(timeout); busy = false; controls.forEach(control => { control.disabled = false; }); submit.disabled = received; }

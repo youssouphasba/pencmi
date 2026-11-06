@@ -371,8 +371,8 @@ export class TripsService {
     return publicTrip({ ...row, selectedOccurrence: selected });
   }
 
-  createSeatRequest(tripId: string, dto: CreateSeatRequestDto) {
-    return this.occurrences.createRequest(tripId, dto);
+  createSeatRequest(tripId: string, dto: CreateSeatRequestDto, clientUserId?: string) {
+    return this.occurrences.createRequest(tripId, dto, clientUserId);
   }
 
   async findMine(ownerUserId: string, dto: PaginationDto) {

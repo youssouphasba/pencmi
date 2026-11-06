@@ -16,6 +16,8 @@ import {
   PaginationDto,
 } from '../../common/pagination/pagination.dto';
 import { PrismaService } from '../../database/prisma/prisma.service';
+import { clientRequestId, assertSameClientRequest } from '../../common/utils/client-request-retry';
+import { notifyClientRequestStatus } from '../../common/utils/client-request-notification';
 import {
   CreateVehicleRequestDto,
   UpdateVehicleRequestStatusDto,
@@ -323,19 +325,29 @@ export class VehiclesService {
     return this.publicListing(listing);
   }
 
-  async createRentalRequest(listingId: string, dto: CreateVehicleRequestDto) {
+  async createRentalRequest(listingId: string, dto: CreateVehicleRequestDto, clientUserId?: string) {
     return this.prisma.$transaction(async (tx) => {
       const listing = await this.requestListing(tx, listingId, 'rental', dto);
+      const fields = {
+        listingId,
+        clientUserId: clientUserId ?? null,
+        clientName: dto.clientName,
+        clientPhone: dto.clientPhone ?? null,
+        clientEmail: dto.clientEmail ?? null,
+        startDate: dto.startDate ? new Date(dto.startDate) : null,
+        endDate: dto.endDate ? new Date(dto.endDate) : null,
+        message: dto.message ?? null,
+      };
+      const id = clientRequestId('rental', listingId, dto.requestId);
+      const previous = id
+        ? await tx.vehicleRentalRequest.findUnique({ where: { id } })
+        : await tx.vehicleRentalRequest.findFirst({ where: { ...fields, createdAt: { gte: new Date(Date.now() - 120000) } } });
+      if (previous) {
+        assertSameClientRequest(previous, fields);
+        return { id: previous.id, status: previous.status };
+      }
       const request = await tx.vehicleRentalRequest.create({
-        data: {
-          listingId,
-          clientName: dto.clientName,
-          clientPhone: dto.clientPhone,
-          clientEmail: dto.clientEmail,
-          startDate: dto.startDate ? new Date(dto.startDate) : undefined,
-          endDate: dto.endDate ? new Date(dto.endDate) : undefined,
-          message: dto.message,
-        },
+        data: { ...fields, ...(id ? { id } : {}) },
       });
       await tx.contactEvent.create({
         data: {
@@ -354,6 +366,7 @@ export class VehiclesService {
   async createChauffeurRequest(
     listingId: string,
     dto: CreateVehicleRequestDto,
+    clientUserId?: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
       const listing = await this.requestListing(
@@ -362,15 +375,25 @@ export class VehiclesService {
         'chauffeur',
         dto,
       );
+      const fields = {
+        listingId,
+        clientUserId: clientUserId ?? null,
+        clientName: dto.clientName,
+        clientPhone: dto.clientPhone ?? null,
+        clientEmail: dto.clientEmail ?? null,
+        serviceDate: dto.startDate ? new Date(dto.startDate) : null,
+        message: dto.message ?? null,
+      };
+      const id = clientRequestId('chauffeur', listingId, dto.requestId);
+      const previous = id
+        ? await tx.vehicleChauffeurRequest.findUnique({ where: { id } })
+        : await tx.vehicleChauffeurRequest.findFirst({ where: { ...fields, createdAt: { gte: new Date(Date.now() - 120000) } } });
+      if (previous) {
+        assertSameClientRequest(previous, fields);
+        return { id: previous.id, status: previous.status };
+      }
       const request = await tx.vehicleChauffeurRequest.create({
-        data: {
-          listingId,
-          clientName: dto.clientName,
-          clientPhone: dto.clientPhone,
-          clientEmail: dto.clientEmail,
-          serviceDate: dto.startDate ? new Date(dto.startDate) : undefined,
-          message: dto.message,
-        },
+        data: { ...fields, ...(id ? { id } : {}) },
       });
       await tx.contactEvent.create({
         data: {
@@ -623,17 +646,19 @@ export class VehiclesService {
           },
         },
       };
-      return mode === 'rental'
-        ? tx.vehicleRentalRequest.update({
+      const updated = mode === 'rental'
+        ? await tx.vehicleRentalRequest.update({
             where: { id },
             data: { status },
             include,
           })
-        : tx.vehicleChauffeurRequest.update({
+        : await tx.vehicleChauffeurRequest.update({
             where: { id },
             data: { status },
             include,
           });
+      await notifyClientRequestStatus(tx, mode, latest, status);
+      return updated;
     });
   }
 

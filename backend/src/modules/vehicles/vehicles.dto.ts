@@ -95,6 +95,10 @@ export class VehiclePhotoOrderDto {
 }
 
 export class CreateVehicleRequestDto {
+  @IsOptional()
+  @IsUUID()
+  requestId?: string;
+
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @MinLength(2)

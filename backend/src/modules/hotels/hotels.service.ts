@@ -256,8 +256,9 @@ export class HotelsService {
   async createReservationRequest(
     propertyId: string,
     dto: CreateHotelReservationRequestDto,
+    clientUserId?: string,
   ) {
-    return this.reservations.create(propertyId, dto);
+    return this.reservations.create(propertyId, dto, clientUserId);
   }
 
   quoteStay(propertyId: string, dto: HotelStayDto) {

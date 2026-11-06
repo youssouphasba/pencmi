@@ -233,9 +233,8 @@ function bindTripDetailActions() {
     try {
     const { publicationOperationId } = await import('../../publier/real-estate-api.mjs');
     tripRequestId ||= publicationOperationId();
-    await pencmiApiRequest(`/voyages/${encodeURIComponent(tripDetailState.listing.id)}/seat-requests`, {
-      method: "POST",
-      body: JSON.stringify({
+    const { sendClientRequest, appendRequestLink } = await import('../../compte/request-api.mjs');
+    const receipt = await sendClientRequest('trip', `/voyages/${encodeURIComponent(tripDetailState.listing.id)}/seat-requests`, {
         requestId: tripRequestId,
         occurrenceId: tripDetailState.listing.occurrenceId,
         clientName: formData.get("clientName"),
@@ -244,13 +243,13 @@ function bindTripDetailActions() {
         requestedSeats: Number(formData.get("requestedSeats") || 1),
         luggage: formData.get("luggage") === "1",
         message: formData.get("message"),
-      }),
     });
 
     const confirmation = document.querySelector("#trip-reservation-confirmation");
     if (confirmation) {
       confirmation.hidden = false;
       confirmation.textContent = 'Votre demande a été reçue. Elle ne constitue pas une réservation confirmée.';
+      appendRequestLink(confirmation, receipt);
     }
     form.hidden = true;
     const close = document.createElement('button'); close.type = 'button'; close.className = 'btn btn-light'; close.textContent = 'Fermer'; close.onclick = () => { const modal = document.querySelector('#trip-reservation-modal'); modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true'); }; confirmation.append(close);

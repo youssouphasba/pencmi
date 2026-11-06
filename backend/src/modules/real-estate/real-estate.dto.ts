@@ -75,15 +75,22 @@ export class UploadListingPhotoDto {
 
 export class CreateVisitRequestDto {
   @IsOptional()
+  @IsUUID()
+  requestId?: string;
+
+  @IsOptional()
   @IsString()
+  @MaxLength(120)
   clientName?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   clientPhone?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(254)
   clientEmail?: string;
 
   @IsOptional()
@@ -92,6 +99,7 @@ export class CreateVisitRequestDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(6000)
   message?: string;
 }
 

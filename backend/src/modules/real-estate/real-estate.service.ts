@@ -20,6 +20,8 @@ import {
   PaginationDto,
 } from '../../common/pagination/pagination.dto';
 import { PrismaService } from '../../database/prisma/prisma.service';
+import { clientRequestId, assertSameClientRequest } from '../../common/utils/client-request-retry';
+import { notifyClientRequestStatus } from '../../common/utils/client-request-notification';
 import {
   CreateRealEstateDto,
   CreateVisitRequestDto,
@@ -170,7 +172,7 @@ export class RealEstateService {
     };
   }
 
-  async createVisitRequest(listingId: string, dto: CreateVisitRequestDto) {
+  async createVisitRequest(listingId: string, dto: CreateVisitRequestDto, clientUserId?: string) {
     return this.prisma.$transaction(async (tx) => {
       await this.lock(tx, listingId);
       const listing = await tx.realEstateListing.findFirst({
@@ -185,17 +187,25 @@ export class RealEstateService {
           'Les demandes de visite ne sont pas activées pour cette annonce.',
         );
       }
+      const fields = {
+        listingId,
+        clientUserId: clientUserId ?? null,
+        clientName: dto.clientName ?? null,
+        clientPhone: dto.clientPhone ?? null,
+        clientEmail: dto.clientEmail ?? null,
+        preferredDate: dto.preferredDate ? new Date(dto.preferredDate) : null,
+        message: dto.message ?? null,
+      };
+      const id = clientRequestId('visit', listingId, dto.requestId);
+      const previous = id
+        ? await tx.realEstateVisitRequest.findUnique({ where: { id } })
+        : await tx.realEstateVisitRequest.findFirst({ where: { ...fields, createdAt: { gte: new Date(Date.now() - 120000) } } });
+      if (previous) {
+        assertSameClientRequest(previous, fields);
+        return previous;
+      }
       const request = await tx.realEstateVisitRequest.create({
-        data: {
-          listingId,
-          clientName: dto.clientName,
-          clientPhone: dto.clientPhone,
-          clientEmail: dto.clientEmail,
-          preferredDate: dto.preferredDate
-            ? new Date(dto.preferredDate)
-            : undefined,
-          message: dto.message,
-        },
+        data: { ...fields, ...(id ? { id } : {}) },
       });
       await tx.contactEvent.create({
         data: {
@@ -262,31 +272,33 @@ export class RealEstateService {
     id: string,
     dto: UpdateVisitRequestStatusDto,
   ) {
-    const request = await this.prisma.realEstateVisitRequest.findFirstOrThrow({
-      where: {
-        id,
-        listing: {
-          ownerUserId,
-          deletedAt: null,
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "RealEstateVisitRequest" WHERE "id" = ${id} FOR UPDATE`;
+      const request = await tx.realEstateVisitRequest.findFirst({
+        where: {
+          id,
+          listing: { ownerUserId, deletedAt: null },
         },
-      },
-      select: { id: true },
-    });
+      });
+      if (!request) throw new NotFoundException('Demande introuvable.');
 
-    return this.prisma.realEstateVisitRequest.update({
-      where: { id: request.id },
-      data: { status: dto.status as RequestStatus },
-      include: {
-        listing: {
-          select: {
-            id: true,
-            title: true,
-            city: true,
-            neighborhood: true,
-            status: true,
+      const updated = await tx.realEstateVisitRequest.update({
+        where: { id: request.id },
+        data: { status: dto.status as RequestStatus },
+        include: {
+          listing: {
+            select: {
+              id: true,
+              title: true,
+              city: true,
+              neighborhood: true,
+              status: true,
+            },
           },
         },
-      },
+      });
+      await notifyClientRequestStatus(tx, 'visit', request, dto.status);
+      return updated;
     });
   }
 

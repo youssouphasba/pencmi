@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -136,9 +136,11 @@ const url = process.env.TEST_DATABASE_URL;
           ],
         });
         expect(saved.rooms).toHaveLength(2);
-        expect(saved.rooms[0].rates).toHaveLength(1);
-        expect(saved.rooms[0].calendar).toHaveLength(1);
-        expect(saved.rooms[0].calendar[0].status).toBe('maintenance');
+        const roomId = 'room_' + createHash('sha256').update(`${id}:${baseRoom.clientId}`).digest('hex');
+        const double = saved.rooms.find((room) => room.id === roomId)!;
+        expect(double.rates).toHaveLength(1);
+        expect(double.calendar).toHaveLength(1);
+        expect(double.calendar[0].status).toBe('maintenance');
         await service.update(owner.id, id, { rooms: saved.rooms });
         expect(
           (await service.owned(owner.id, id)).rooms

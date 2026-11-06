@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           .catch(() => {});
       else await navigator.clipboard?.writeText(location.href).catch(() => {});
     });
-  let busy = false;
+  let busy = false, sendRequest;
   form?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (busy) return;
@@ -171,13 +171,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           : listing.vehicleMode === 'chauffeur'
             ? 'chauffeur-requests'
             : 'contact';
-      const receipt = await pencmiApiRequest(
+      const { createRequestSender, appendRequestLink } = await import('../../compte/request-api.mjs');
+      if (isRequest) sendRequest ||= createRequestSender(listing.vehicleMode === 'rental' ? 'rental' : 'chauffeur', `/voitures/${encodeURIComponent(listing.id)}/${route}`);
+      const receipt = isRequest ? await sendRequest(body) : await pencmiApiRequest(
         `/voitures/${encodeURIComponent(listing.id)}/${route}`,
         { method: 'POST', body: JSON.stringify(body) },
       );
       if (
         !receipt?.id ||
-        (isRequest ? receipt.status !== 'new' : receipt.received !== true)
+        (isRequest ? typeof receipt.status !== 'string' : receipt.received !== true)
       )
         throw new Error(
           'La réception n’a pas été confirmée. Vos informations sont conservées.',
@@ -190,6 +192,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         ? vehicleCopy.requestReceived
         : vehicleCopy.contactReceived;
       confirmation.hidden = false;
+      appendRequestLink(confirmation, receipt);
       document.querySelector('[data-close-success]').hidden = false;
       document.querySelector('[data-close-success]').focus();
     } catch (failure) {

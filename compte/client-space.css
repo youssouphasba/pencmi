@@ -5,6 +5,18 @@
   background: var(--bg);
 }
 
+.cr-list { display: grid; gap: 16px; }
+.cr-request { min-width: 0; padding: 20px; border: 1px solid var(--border, #dbe3ec); border-radius: 8px; background: #fff; overflow-wrap: anywhere; }
+.cr-request header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; }
+.cr-request h2 { margin: 0; font-size: 20px; }
+.cr-request h3 { font-size: 17px; }
+.cr-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px 20px; }
+.cr-facts dt { color: var(--muted, #62758b); font-size: 14px; }
+.cr-facts dd { margin: 4px 0 0; }
+#pencmi-client-requests { display: grid; gap: 16px; min-width: 0; }
+.cr-request .client-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 125px), 1fr)); }
+.client-shortcuts.cr-shortcuts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); }
+
 .client-account-shell {
   display: grid;
   grid-template-columns: 278px minmax(0, 1fr);

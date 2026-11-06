@@ -8,6 +8,7 @@ import {
 import { Prisma, RequestStatus } from '@prisma/client';
 import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../../database/prisma/prisma.service';
+import { notifyClientRequestStatus } from '../../common/utils/client-request-notification';
 import {
   CreateHotelReservationRequestDto,
   HotelStayDto,
@@ -169,7 +170,7 @@ export class HotelReservationsService {
     );
   }
 
-  async create(propertyId: string, input: CreateHotelReservationRequestDto) {
+  async create(propertyId: string, input: CreateHotelReservationRequestDto, clientUserId?: string) {
     const data = parseHotelInput(hotelRequestSchema, input);
     const phone = data.clientPhone?.replace(/[ ()-]/g, '') || undefined;
     if (phone && !/^\+?\d{7,15}$/.test(phone))
@@ -181,6 +182,7 @@ export class HotelReservationsService {
     const { requestId, clientPhone, ...fields } = data;
     const canonical = {
       ...fields,
+      ...(clientUserId ? { clientUserId } : {}),
       clientPhone: phone || null,
       clientEmail: data.clientEmail || null,
       message: data.message || '',
@@ -194,7 +196,7 @@ export class HotelReservationsService {
           where: { idempotencyKey: key },
         });
         if (existing) {
-          if (existing.requestFingerprint !== fingerprint)
+          if ((existing.clientUserId ?? null) !== (clientUserId ?? null) || existing.requestFingerprint !== fingerprint)
             throw new ConflictException(
               'Cette demande a déjà été envoyée avec des informations différentes.',
             );
@@ -221,6 +223,7 @@ export class HotelReservationsService {
         const duplicate = await tx.hotelReservationRequest.findFirst({
           where: {
             propertyId,
+            clientUserId: clientUserId ?? null,
             requestFingerprint: fingerprint,
             createdAt: { gte: new Date(Date.now() - 120000) },
           },
@@ -245,6 +248,7 @@ export class HotelReservationsService {
           data: {
             propertyId,
             roomId: data.roomId,
+            clientUserId,
             units: data.units,
             guests: data.guests,
             checkIn: new Date(`${data.checkIn}T00:00:00Z`),
@@ -565,6 +569,7 @@ export class HotelReservationsService {
             },
           },
         });
+        await notifyClientRequestStatus(tx, 'hotel', request, status);
         return this.view(
           await tx.hotelReservationRequest.findUniqueOrThrow({
             where: { id },

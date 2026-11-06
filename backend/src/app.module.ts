@@ -18,6 +18,7 @@ import { VehiclesModule } from './modules/vehicles/vehicles.module';
 import { TripsModule } from './modules/trips/trips.module';
 import { FavoritesModule } from './modules/favorites/favorites.module';
 import { SavedAlertsModule } from './modules/saved-alerts/saved-alerts.module';
+import { ClientRequestsModule } from './modules/client-requests/client-requests.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { EmailsModule } from './modules/emails/emails.module';
@@ -57,6 +58,7 @@ import { PermissionsGuard } from './auth/guards/permissions.guard';
     ConversationsModule,
     FavoritesModule,
     SavedAlertsModule,
+    ClientRequestsModule,
     NotificationsModule,
     EmailsModule,
     ContactsModule,

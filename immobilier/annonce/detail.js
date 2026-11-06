@@ -342,27 +342,32 @@ function bindDetailActions(listing) {
 
   document.querySelector("[data-open-visit]")?.addEventListener("click", () => {
     openModal(VisitRequestModal());
+    let busy = false, send;
     document.querySelector("[data-visit-form]")?.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const form = new FormData(event.currentTarget);
+      if (busy) return;
+      const element = event.currentTarget, button = element.querySelector('[type=submit]');
+      const form = new FormData(element);
+      let failure = element.querySelector('[role=alert]');
+      if (!failure) { failure = document.createElement('p'); failure.setAttribute('role', 'alert'); element.append(failure); }
+      failure.textContent = '';
+      busy = true; button.disabled = true;
       try {
-        await apiRequest(`/immobilier/${listing.id}/visit-requests`, {
-          method: "POST",
-          body: JSON.stringify({
+        const { createRequestSender, appendRequestLink } = await import('../../compte/request-api.mjs');
+        send ||= createRequestSender('visit', `/immobilier/${encodeURIComponent(listing.id)}/visit-requests`);
+        const receipt = await send({
             clientName: form.get("clientName"),
             clientPhone: form.get("clientPhone"),
             clientEmail: form.get("clientEmail"),
             preferredDate: form.get("preferredDate") || undefined,
             message: form.get("message"),
-          }),
         });
         document.querySelector(".modal-panel").innerHTML = VisitRequestFeedback("Votre demande de visite a été envoyée.");
+        appendRequestLink(document.querySelector('.modal-feedback'), receipt);
         document.querySelectorAll("[data-close-modal]").forEach((button) => button.addEventListener("click", closeModal));
-        window.setTimeout(closeModal, 1800);
       } catch (error) {
-        document.querySelector(".modal-panel").innerHTML = VisitRequestFeedback(error instanceof Error ? error.message : "Envoi impossible.", true);
-        document.querySelectorAll("[data-close-modal]").forEach((button) => button.addEventListener("click", closeModal));
-      }
+        failure.textContent = error.message || 'Envoi impossible. Vos informations sont conservées.';
+      } finally { busy = false; button.disabled = false; }
     });
   });
 

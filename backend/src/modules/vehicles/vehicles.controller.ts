@@ -15,7 +15,7 @@ import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
-import { Public } from '../../common/decorators/public.decorator';
+import { Public, OptionalAuthentication } from '../../common/decorators/public.decorator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
 import {
@@ -54,22 +54,26 @@ export class VehiclesController {
 
   @Public()
   @Post('voitures/:id/rental-requests')
+  @OptionalAuthentication()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   createRentalRequest(
     @Param('id') id: string,
     @Body() dto: CreateVehicleRequestDto,
+    @CurrentUser() user?: AuthenticatedUser,
   ) {
-    return this.service.createRentalRequest(id, dto);
+    return this.service.createRentalRequest(id, dto, user?.id);
   }
 
   @Public()
   @Post('voitures/:id/chauffeur-requests')
+  @OptionalAuthentication()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   createChauffeurRequest(
     @Param('id') id: string,
     @Body() dto: CreateVehicleRequestDto,
+    @CurrentUser() user?: AuthenticatedUser,
   ) {
-    return this.service.createChauffeurRequest(id, dto);
+    return this.service.createChauffeurRequest(id, dto, user?.id);
   }
 
   @Public()
