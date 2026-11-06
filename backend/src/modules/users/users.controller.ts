@@ -5,6 +5,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
 import { UpdateUserProfileDto } from './users.dto';
 import { UsersService } from './users.service';
+import { MAX_PHOTO_BYTES } from '../../files/listing-photo.constants';
+import { Throttle } from '@nestjs/throttler';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -23,8 +25,9 @@ export class UsersController {
   }
 
   @Post('me/avatar')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_PHOTO_BYTES, files: 1, fields: 0 } }))
   uploadAvatar(
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file?: { buffer: Buffer; mimetype: string; originalname: string; size: number },

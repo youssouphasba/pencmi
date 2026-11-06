@@ -37,6 +37,7 @@ describe('JWT session security', () => {
     userSession: { findUnique: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
     refreshToken: { findUnique: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
     $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
   };
   const admin = { overview: jest.fn() };
   const hash = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -77,6 +78,7 @@ describe('JWT session security', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    prisma.$queryRaw.mockResolvedValue([]);
     user = { id: 'user-a', role: 'client', status: 'active', deletedAt: null, passwordHash };
     sessions = new Map([
       ['session-a', { id: 'session-a', userId: 'user-a', revokedAt: null }],

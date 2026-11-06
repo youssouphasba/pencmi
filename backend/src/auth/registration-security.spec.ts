@@ -22,9 +22,11 @@ describe('Public registration security', () => {
   let app: INestApplication;
   let service: AuthService;
   const prisma = {
-    user: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
+    user: { findFirst: jest.fn(), findUniqueOrThrow: jest.fn(), create: jest.fn(), update: jest.fn() },
     userSession: { create: jest.fn(), findUnique: jest.fn() },
     refreshToken: { create: jest.fn() },
+    $queryRaw: jest.fn(),
+    $transaction: jest.fn(),
   };
   const jwt = { signAsync: jest.fn(), verifyAsync: jest.fn(), decode: jest.fn() };
   const admin = { overview: jest.fn() };
@@ -51,6 +53,9 @@ describe('Public registration security', () => {
   beforeEach(() => {
     jest.resetAllMocks();
     prisma.user.findFirst.mockResolvedValue(null);
+    prisma.user.findUniqueOrThrow.mockImplementation(() => prisma.user.findFirst());
+    prisma.$queryRaw.mockResolvedValue([]);
+    prisma.$transaction.mockImplementation((work) => work(prisma));
     prisma.user.create.mockImplementation(async ({ data }) => ({ id: 'created-user', ...data }));
     prisma.userSession.create.mockResolvedValue({ id: 'session' });
     jwt.signAsync.mockResolvedValue('test-token');

@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, NotImplementedException, UnauthorizedException } from '@nestjs/common';
+import { isStrongPassword } from 'class-validator';
+import { getPagination, PaginationDto } from '../common/pagination/pagination.dto';
+import { ChangePasswordDto, PASSWORD_MAX_BYTES, PASSWORD_POLICY } from './dto/account-security.dto';
+import { ACCOUNT_SECURITY_COPY } from '../common/constants/account-security-copy';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { AccountStatus, Prisma, UserRole } from '@prisma/client';
@@ -69,7 +73,14 @@ export class AuthService {
     if (!passwordOk || user.status !== AccountStatus.active) {
       throw new UnauthorizedException('Identifiants incorrects.');
     }
-    return this.issueTokens({ id: user.id, role: user.role }, userAgent);
+    return this.prisma.$transaction(async (tx) => {
+      // Same user lock as password changes, without blocking foreign-key checks during refresh.
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR NO KEY UPDATE`;
+      const current = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
+      if (current.passwordHash !== user.passwordHash || current.status !== AccountStatus.active || current.deletedAt)
+        throw new UnauthorizedException('Identifiants incorrects.');
+      return this.issueTokens({ id: current.id, role: current.role }, userAgent, undefined, tx);
+    });
   }
 
   async refresh(refreshToken: string) {
@@ -156,11 +167,66 @@ export class AuthService {
   }
 
   async forgotPassword(_dto: ForgotPasswordDto) {
-    return { sent: true };
+    throw new NotImplementedException('La récupération du mot de passe n’est pas disponible pour le moment. Contactez le support.');
   }
 
   async resetPassword(_dto: ResetPasswordDto) {
-    return { updated: false };
+    throw new NotImplementedException('La réinitialisation du mot de passe n’est pas disponible pour le moment. Contactez le support.');
+  }
+
+  async changePassword(userId: string, sessionId: string, dto: ChangePasswordDto) {
+    if (!isStrongPassword(dto.newPassword, PASSWORD_POLICY) || Buffer.byteLength(dto.newPassword, 'utf8') > PASSWORD_MAX_BYTES)
+      throw new BadRequestException('Le nouveau mot de passe doit respecter les règles de sécurité et ne pas dépasser 72 octets.');
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR NO KEY UPDATE`;
+      const user = await tx.user.findUnique({ where: { id: userId } });
+      const session = await tx.userSession.findFirst({ where: { id: sessionId, userId, revokedAt: null } });
+      if (!user || user.status !== 'active' || user.deletedAt || !session) throw new UnauthorizedException('Authentification requise.');
+      if (!user.passwordHash || !(await bcrypt.compare(dto.currentPassword, user.passwordHash)))
+        throw new BadRequestException('Vérifiez le mot de passe actuel.');
+      if (await bcrypt.compare(dto.newPassword, user.passwordHash)) throw new BadRequestException('Choisissez un mot de passe différent.');
+      const passwordHash = await bcrypt.hash(dto.newPassword, 12);
+      await tx.user.update({ where: { id: userId }, data: { passwordHash } });
+      const revokedAt = new Date();
+      const sessions = await tx.userSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt } });
+      await tx.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt } });
+      await tx.auditLog.create({ data: { actorUserId: userId, action: 'account.password_changed', module: 'users', metadata: { sessionsRevoked: sessions.count } } });
+      await tx.notification.create({ data: { userId, module: 'system', type: 'password_changed', ...ACCOUNT_SECURITY_COPY.passwordChanged, targetUrl: '/compte/parametres/' } });
+      return { changed: true, reauthenticationRequired: true };
+    }, { maxWait: 10000, timeout: 30000 });
+  }
+
+  async findSessions(userId: string, currentId: string, query: PaginationDto) {
+    const pagination = getPagination(query);
+    const where = { userId, revokedAt: null };
+    const [rows, total] = await Promise.all([
+      this.prisma.userSession.findMany({ where, skip: pagination.skip, take: pagination.take, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }], select: { id: true, userAgent: true, createdAt: true, lastUsedAt: true } }),
+      this.prisma.userSession.count({ where }),
+    ]);
+    return { data: rows.map((row) => ({ id: row.id, device: row.userAgent?.slice(0, 200) || 'Appareil non renseigné', createdAt: row.createdAt, lastUsedAt: row.lastUsedAt, current: row.id === currentId })), meta: pagination.meta(total) };
+  }
+
+  async revokeSession(userId: string, id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const session = await tx.userSession.findFirst({ where: { id, userId } });
+      if (!session) throw new NotFoundException('Session introuvable.');
+      const revokedAt = new Date();
+      const result = await tx.userSession.updateMany({ where: { id, userId, revokedAt: null }, data: { revokedAt } });
+      await tx.refreshToken.updateMany({ where: { sessionId: id, userId, revokedAt: null }, data: { revokedAt } });
+      if (result.count) await tx.auditLog.create({ data: { actorUserId: userId, action: 'account.session_revoked', module: 'users' } });
+      return { revoked: true };
+    });
+  }
+
+  async revokeOtherSessions(userId: string, currentId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR NO KEY UPDATE`;
+      const revokedAt = new Date();
+      const result = await tx.userSession.updateMany({ where: { userId, id: { not: currentId }, revokedAt: null }, data: { revokedAt } });
+      await tx.refreshToken.updateMany({ where: { userId, sessionId: { not: currentId }, revokedAt: null }, data: { revokedAt } });
+      if (result.count) await tx.auditLog.create({ data: { actorUserId: userId, action: 'account.other_sessions_revoked', module: 'users', metadata: { count: result.count } } });
+      return { revoked: result.count };
+    });
   }
 
   async validateAccessToken(token: string): Promise<AuthenticatedUser> {

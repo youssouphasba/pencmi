@@ -1,0 +1,89 @@
+.ae-section {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line, #dbe3ec);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ae-section h2 {
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+.ae-section h3 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+.ae-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+}
+.ae-form label,
+.ae-file {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.ae-form > p {
+  grid-column: 1 / -1;
+}
+.ae-form button {
+  align-self: end;
+  min-height: 44px;
+}
+.ae-form input,
+.ae-file input {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+.ae-avatar {
+  width: 128px;
+  height: 128px;
+  display: grid;
+  place-items: center;
+  background: #eef2f6;
+  border-radius: 8px;
+  margin: 0 0 16px;
+}
+.ae-avatar img {
+  width: 128px;
+  height: 128px;
+  object-fit: contain;
+  border-radius: 8px;
+}
+.ae-actions,
+.ae-facts {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  margin: 12px 0;
+}
+.ae-facts dt {
+  color: var(--muted, #62758b);
+  font-size: 14px;
+}
+.ae-facts dd {
+  margin: 4px 0;
+}
+.ae-feedback {
+  padding: 12px 0;
+  overflow-wrap: anywhere;
+}
+.ae-feedback [role='alert'] {
+  color: #a32020;
+}
+.ae-sessions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ae-session {
+  padding: 16px;
+  border: 1px solid var(--line, #dbe3ec);
+  border-radius: 8px;
+  min-width: 0;
+}
+.ae-session p {
+  overflow-wrap: anywhere;
+}

@@ -375,8 +375,7 @@ function ContactPage() {
 }
 
 function ContactForm() {
-  const contact = editableContentDefaults.contact;
-  return `<form class="content-card content-form" data-content-form><label class="content-field"><span>${contact.fields.name}</span><input type="text"></label><label class="content-field"><span>${contact.fields.email}</span><input type="email"></label><label class="content-field"><span>${contact.fields.phone}</span><input type="tel"></label><label class="content-field"><span>${contact.fields.subject}</span><input type="text"></label><label class="content-field"><span>${contact.fields.category}</span><select>${contact.categories.map((category) => `<option>${category}</option>`).join("")}</select></label><label class="content-field"><span>${contact.fields.message}</span><textarea></textarea></label><div class="content-message" data-content-success>${editableContentDefaults.labels.messagePrepared}</div><div class="content-actions"><button class="btn btn-primary" type="submit">${editableContentDefaults.actions.sendMessage}</button></div></form>`;
+  return '<section class="content-card" id="pencmi-account-support"></section>';
 }
 
 function SafetyPage() {
@@ -550,6 +549,8 @@ function renderContentPage() {
     adminSupportDetail: AdminSupportTicketDetailPage
   };
   root.innerHTML = (pages[page] || HelpCenterPage)();
+  const contact = document.querySelector('#pencmi-account-support');
+  if (contact) void import('../compte/account-support.mjs').then(({ mountAccountSupport }) => mountAccountSupport(contact));
   document.querySelectorAll("[data-content-form]").forEach((form) => form.addEventListener("submit", (event) => {
     event.preventDefault();
     form.querySelector("[data-content-success]")?.classList.add("is-visible");

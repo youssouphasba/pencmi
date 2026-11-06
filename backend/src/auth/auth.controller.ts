@@ -1,4 +1,7 @@
-import { Body, Controller, Get, Headers, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, Param, Post, Query } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { PaginationDto } from '../common/pagination/pagination.dto';
+import { ChangePasswordDto, SessionIdDto } from './dto/account-security.dto';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
@@ -55,5 +58,26 @@ export class AuthController {
   @Post('logout')
   logout(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.logout(user.id, user.sessionId);
+  }
+
+  @Post('change-password')
+  @Throttle({ default: { limit: 5, ttl: 900000 } })
+  changePassword(@CurrentUser() user: AuthenticatedUser, @Body() dto: ChangePasswordDto) {
+    return this.authService.changePassword(user.id, user.sessionId, dto);
+  }
+
+  @Get('sessions')
+  sessions(@CurrentUser() user: AuthenticatedUser, @Query() query: PaginationDto) {
+    return this.authService.findSessions(user.id, user.sessionId, query);
+  }
+
+  @Delete('sessions/others')
+  revokeOthers(@CurrentUser() user: AuthenticatedUser) {
+    return this.authService.revokeOtherSessions(user.id, user.sessionId);
+  }
+
+  @Delete('sessions/:id')
+  revokeSession(@CurrentUser() user: AuthenticatedUser, @Param() params: SessionIdDto) {
+    return this.authService.revokeSession(user.id, params.id);
   }
 }

@@ -23,7 +23,7 @@ import {
 } from '@prisma/client';
 import type SharpFactory from 'sharp';
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises';
-import { dirname, extname, join } from 'path';
+import { dirname, join } from 'path';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../database/prisma/prisma.service';
 import { MAX_PHOTO_BYTES, MAX_PHOTO_PIXELS } from './listing-photo.constants';
@@ -193,37 +193,25 @@ export class FilesService {
     ownerUserId: string,
     file: UploadedImage,
     scope: 'avatar' | 'logo',
+    tx: Prisma.TransactionClient = this.prisma,
   ) {
-    assertUploadStorage(this.config);
-    this.validateImage(file);
-    const draft = await this.prisma.fileAsset.create({
-      data: {
-        ownerUserId,
-        module: PencmiModule.users,
-        visibility: FileVisibility.public,
-        mimeType: file.mimetype,
-        sizeBytes: file.size,
-        storageKey: `pending/${ownerUserId}/${Date.now()}`,
-        metadata: { scope },
-      },
-    });
-
-    const storageKey = `${scope}/${ownerUserId}/${draft.id}${this.resolveFileExtension(file)}`;
-
+    const prepared = await this.prepareListingPhoto(file);
+    const buffer = await sharp(prepared.buffer, { limitInputPixels: MAX_PHOTO_PIXELS, failOn: 'warning' })
+      .resize({ width: 1024, height: 1024, fit: 'inside', withoutEnlargement: true }).webp({ quality: 85 }).toBuffer();
+    const normalized = { buffer, size: buffer.length, mimetype: 'image/webp', originalname: 'image.webp' };
+    const id = randomUUID();
+    const storageKey = `${scope}/${ownerUserId}/${id}.webp`;
     try {
-      await this.persistBinary(storageKey, file);
-      const publicUrl = this.buildPublicUrl(draft.id);
-      return await this.prisma.fileAsset.update({
-        where: { id: draft.id },
+      await this.persistBinary(storageKey, normalized);
+      return await tx.fileAsset.create({
         data: {
-          storageKey,
-          publicUrl,
+          id, ownerUserId, module: PencmiModule.users, visibility: FileVisibility.public,
+          mimeType: normalized.mimetype, sizeBytes: normalized.size, storageKey,
+          publicUrl: this.buildPublicUrl(id), metadata: { scope },
         },
       });
     } catch (error) {
-      await this.prisma.fileAsset
-        .delete({ where: { id: draft.id } })
-        .catch(() => undefined);
+      await this.deleteBinary({ storageKey } as FileAsset).catch(() => this.logger.warn('Nettoyage d’une image interrompue à reprendre.'));
       throw error;
     }
   }
@@ -235,6 +223,9 @@ export class FilesService {
     if (!asset) {
       throw new NotFoundException('Fichier introuvable.');
     }
+
+    if (asset.module === PencmiModule.users && !['image/jpeg', 'image/png', 'image/webp'].includes(asset.mimeType))
+      throw new NotFoundException('Fichier introuvable.');
 
     if (
       asset.module === PencmiModule.real_estate ||
@@ -290,6 +281,8 @@ export class FilesService {
     if (!asset) {
       throw new NotFoundException('Fichier introuvable.');
     }
+    if (asset.module === PencmiModule.users)
+      throw new BadRequestException('Gérez cette image depuis son profil.');
 
     if (
       asset.module === PencmiModule.real_estate ||
@@ -307,43 +300,26 @@ export class FilesService {
     return { deleted: true };
   }
 
-  async softDeleteByPublicUrl(ownerUserId: string, publicUrl?: string | null) {
+  async softDeleteByPublicUrl(ownerUserId: string, publicUrl?: string | null, scope?: 'avatar' | 'logo') {
     const fileId = this.extractFileId(publicUrl);
     if (!fileId) {
       return { deleted: false };
     }
-    return this.softDelete(fileId, ownerUserId);
-  }
-
-  private validateImage(file?: UploadedImage): asserts file is UploadedImage {
-    if (!file?.buffer?.length) {
-      throw new BadRequestException('Aucun fichier image n’a été envoyé.');
-    }
-    if (!file.mimetype.startsWith('image/')) {
-      throw new BadRequestException('Le fichier doit être une image.');
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      throw new BadRequestException(
-        'L’image dépasse la taille maximale autorisée de 5 Mo.',
-      );
-    }
-  }
-
-  private resolveFileExtension(file: UploadedImage) {
-    const directExtension = extname(file.originalname || '').toLowerCase();
-    if (directExtension) {
-      return directExtension;
-    }
-
-    const mimeToExt: Record<string, string> = {
-      'image/jpeg': '.jpg',
-      'image/png': '.png',
-      'image/webp': '.webp',
-      'image/gif': '.gif',
-      'image/svg+xml': '.svg',
-    };
-
-    return mimeToExt[file.mimetype] ?? '.bin';
+    const asset = await this.prisma.fileAsset.findFirst({ where: { id: fileId, ownerUserId, publicUrl, module: PencmiModule.users, deletedAt: null } });
+    const assetScope = (asset?.metadata as { scope?: string } | null)?.scope;
+    if (!asset || !['avatar', 'logo'].includes(assetScope || '') || (scope && assetScope !== scope)) return { deleted: false };
+    const references = await Promise.all([
+      this.prisma.user.count({ where: { avatarUrl: publicUrl } }),
+      this.prisma.professionalProfile.count({ where: { logoUrl: publicUrl } }),
+      this.prisma.fileUsage.count({ where: { fileId } }),
+    ]);
+    if (references.some(Boolean)) return { deleted: false };
+    await this.prisma.fileAsset.update({ where: { id: fileId }, data: { deletedAt: new Date() } });
+    try {
+      await this.deleteBinary(asset);
+      await this.prisma.fileAsset.update({ where: { id: fileId }, data: { sizeBytes: 0 } });
+    } catch { this.logger.warn('Nettoyage d’une ancienne image à reprendre.'); }
+    return { deleted: true };
   }
 
   private buildPublicUrl(fileId: string) {

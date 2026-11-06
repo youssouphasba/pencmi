@@ -445,24 +445,16 @@ function RegisterPage() {
 function ForgotPasswordPage() {
   return AuthLayout(`
     <h1>Mot de passe oublié</h1>
-    <p>Renseignez votre email ou téléphone pour recevoir les instructions.</p>
-    <form class="auth-form" data-success-form>
-      <label class="auth-field"><span>Email ou téléphone</span><input type="text" autocomplete="username"></label>
-      <div class="auth-message" data-auth-success>Si un compte existe, vous recevrez les instructions de réinitialisation.</div>
-      <div class="auth-actions"><button class="btn btn-primary" type="submit">Recevoir un lien de réinitialisation</button></div>
-    </form>
+    <p>La récupération du mot de passe n’est pas disponible pour le moment.</p>
+    <a class="btn btn-primary" href="/contact/">Contacter le support</a>
   `);
 }
 
 function ResetPasswordPage() {
   return AuthLayout(`
     <h1>Réinitialiser le mot de passe</h1>
-    <form class="auth-form" data-success-form>
-      <label class="auth-field"><span>Nouveau mot de passe</span><input type="password" autocomplete="new-password"></label>
-      <label class="auth-field"><span>Confirmer le mot de passe</span><input type="password" autocomplete="new-password"></label>
-      <div class="auth-message" data-auth-success>Votre mot de passe a été réinitialisé.</div>
-      <div class="auth-actions"><button class="btn btn-primary" type="submit">Réinitialiser le mot de passe</button></div>
-    </form>
+    <p>La réinitialisation du mot de passe n’est pas disponible pour le moment.</p>
+    <a class="btn btn-primary" href="/contact/">Contacter le support</a>
   `);
 }
 
@@ -613,11 +605,11 @@ function AccountProfilePage(mode = "client") {
         <div class="account-grid">
           <label class="auth-field"><span>Prénom</span><input type="text" name="firstName" autocomplete="given-name"></label>
           <label class="auth-field"><span>Nom</span><input type="text" name="lastName" autocomplete="family-name"></label>
-          <label class="auth-field"><span>Téléphone</span><input type="tel" name="phone" autocomplete="tel"></label>
-          <label class="auth-field"><span>Email</span><input type="email" name="email" autocomplete="email"></label>
-          <label class="auth-field"><span>Photo de profil</span><input type="file" name="avatarFile" accept="image/*"></label>
+          <label class="auth-field"><span>Téléphone de connexion</span><input type="tel" name="phone" autocomplete="tel" readonly></label>
+          <label class="auth-field"><span>Email de connexion</span><input type="email" name="email" autocomplete="email" readonly></label>
+          <label class="auth-field"><span>Photo de profil</span><input type="file" name="avatarFile" accept="image/jpeg,image/png,image/webp"></label>
           <label class="auth-field"><span>Ville</span><input type="text" name="city" autocomplete="address-level2"></label>
-          <label class="auth-field"><span>Langue préférée</span><select name="preferredLanguage"><option>Français</option><option>Wolof</option><option>Anglais</option></select></label>
+          <p>Langue de l’interface : français.</p>
           <label class="auth-field"><span>Type de compte</span><select name="accountRole" disabled>${getRoleOptions().map(([value, label]) => `<option value="${value}">${label}</option>`).join("")}</select></label>
         </div>
         ${shouldShowProfessionalProfile(mode) ? ProfessionalProfileForm() : ""}
@@ -652,38 +644,10 @@ function ProfessionalProfileForm() {
 }
 
 function AccountSettingsPage(mode = "client") {
-  const notificationsHref = mode === "dashboard" ? authRoutes.dashboardNotifications : authRoutes.accountNotifications;
   return AccountLayout(`
     <section class="account-card">
       <h1>Paramètres du compte</h1>
-      <form class="account-form" data-settings-form>
-        <section class="settings-section">
-          <h2>Sécurité</h2>
-          <label class="auth-field"><span>Changer le mot de passe</span><input type="password" autocomplete="new-password"></label>
-          <div class="verification-grid">${VerificationBadge("Email vérifié", false)}${VerificationBadge("Téléphone vérifié", false)}${VerificationBadge("Sessions connectées plus tard", false)}</div>
-        </section>
-        <section class="settings-section">
-          <h2>Notifications</h2>
-          <p><a class="btn btn-light" href="${authRouteHref(notificationsHref)}">Voir mes notifications</a></p>
-        </section>
-        <section class="settings-section">
-          <h2>Confidentialité</h2>
-          ${["Afficher mon téléphone aux annonceurs", "Recevoir des emails importants", "Recevoir des alertes", "Recevoir des recommandations"].map((label) => `<label class="settings-option"><input type="checkbox"><span>${label}</span></label>`).join("")}
-        </section>
-        <section class="settings-section">
-          <h2>Suppression du compte</h2>
-          <button class="btn danger-button" type="button" data-open-delete-modal>Supprimer mon compte</button>
-        </section>
-        <div class="auth-message" data-auth-success>Vos paramètres ont été mis à jour.</div>
-        <div class="settings-actions"><button class="btn btn-primary" type="submit">Enregistrer les modifications</button></div>
-      </form>
-      <div class="modal-backdrop" data-delete-modal>
-        <div class="auth-modal">
-          <h2>Confirmer la suppression</h2>
-          <p>Cette action est prévue pour une future intégration sécurisée. Aucun compte n’est supprimé maintenant.</p>
-          <div class="settings-actions"><button class="btn btn-ghost" type="button" data-close-delete-modal>Annuler</button><button class="btn danger-button" type="button">Supprimer mon compte</button></div>
-        </div>
-      </div>
+      <div id="pencmi-account-settings"></div>
     </section>
   `, "settings", mode);
 }
@@ -807,6 +771,7 @@ async function uploadProfileAsset(path, input) {
 }
 
 async function bindProfileForm(form) {
+  let busy = false;
   const success = form.querySelector("[data-auth-success]");
   const error = form.querySelector("[data-auth-error]");
 
@@ -815,6 +780,7 @@ async function bindProfileForm(form) {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (busy) return;
     showMessage(error, "", false);
     showMessage(success, "", false);
 
@@ -823,13 +789,13 @@ async function bindProfileForm(form) {
       return;
     }
 
+    busy = true;
+    form.querySelectorAll('input, select, button, textarea').forEach((control) => { control.disabled = true; });
     try {
       const userPayload = {
-        firstName: form.querySelector('[name="firstName"]')?.value.trim() || undefined,
-        lastName: form.querySelector('[name="lastName"]')?.value.trim() || undefined,
-        phone: form.querySelector('[name="phone"]')?.value.trim() || undefined,
-        email: form.querySelector('[name="email"]')?.value.trim() || undefined,
-        city: form.querySelector('[name="city"]')?.value.trim() || undefined,
+        firstName: form.querySelector('[name="firstName"]')?.value.trim() || null,
+        lastName: form.querySelector('[name="lastName"]')?.value.trim() || null,
+        city: form.querySelector('[name="city"]')?.value.trim() || null,
       };
 
       authState.currentUser = await apiRequest("/users/me", {
@@ -858,6 +824,9 @@ async function bindProfileForm(form) {
       showMessage(success, "Votre profil a été mis à jour.");
     } catch (apiError) {
       showMessage(error, apiError.message || "La mise à jour du profil a échoué.");
+    } finally {
+      busy = false;
+      form.querySelectorAll('input, select, button, textarea').forEach((control) => { control.disabled = control.name === 'accountRole'; });
     }
   });
 }
@@ -954,12 +923,8 @@ function bindAuthForms() {
     }
   });
 
-  document.querySelectorAll("[data-success-form], [data-settings-form]").forEach((form) => {
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      form.querySelector("[data-auth-success]")?.classList.add("is-visible");
-    });
-  });
+  const settings = document.querySelector('#pencmi-account-settings');
+  if (settings) void import('../compte/settings-page.mjs').then(({ mountAccountSettings }) => mountAccountSettings(settings));
 
   const profileForm = document.querySelector("[data-profile-form]");
   if (profileForm) {

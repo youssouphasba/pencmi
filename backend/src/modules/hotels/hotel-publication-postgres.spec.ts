@@ -149,7 +149,7 @@ const url = process.env.TEST_DATABASE_URL;
         ).toEqual(saved.rooms.map((room) => room.id).sort());
         await expect(
           service.update(owner.id, id, {
-            rooms: [{ ...saved.rooms[0], totalUnits: -1 }],
+            rooms: [{ ...double, totalUnits: -1 }],
           }),
         ).rejects.toThrow();
         await expect(publicService.findPublicOne(id)).rejects.toThrow();
@@ -169,13 +169,13 @@ const url = process.env.TEST_DATABASE_URL;
           service.photo(
             owner.id,
             id,
-            { uploadId, roomId: saved.rooms[0].id },
+            { uploadId, roomId: double.id },
             image,
           ),
           service.photo(
             owner.id,
             id,
-            { uploadId, roomId: saved.rooms[0].id },
+            { uploadId, roomId: double.id },
             image,
           ),
         ]);
@@ -239,7 +239,7 @@ const url = process.env.TEST_DATABASE_URL;
         ).rejects.toThrow();
         await expect(
           service.update(owner.id, id, {
-            rooms: [{ ...saved.rooms[0], remove: true }],
+            rooms: [{ ...double, remove: true }],
           }),
         ).rejects.toThrow();
         await prisma.hotelIntegration.create({
@@ -252,7 +252,7 @@ const url = process.env.TEST_DATABASE_URL;
           service.update(owner.id, id, { name: 'Overwrite' }),
         ).rejects.toThrow();
         const unchanged = await prisma.hotelRoomRate.count({
-          where: { roomId: saved.rooms[0].id },
+          where: { roomId: double.id },
         });
         expect(unchanged).toBe(3);
         await service.removePhoto(owner.id, id, photoId);

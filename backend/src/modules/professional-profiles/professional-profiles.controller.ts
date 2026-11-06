@@ -1,5 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { MAX_PHOTO_BYTES } from '../../files/listing-photo.constants';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -31,7 +32,7 @@ export class ProfessionalProfilesController {
 
   @Post('me/logo')
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_PHOTO_BYTES, files: 1, fields: 0 } }))
   uploadLogo(
     @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() file?: { buffer: Buffer; mimetype: string; originalname: string; size: number },

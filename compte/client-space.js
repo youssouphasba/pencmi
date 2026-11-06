@@ -263,36 +263,11 @@ function ClientRequestPage(currentPage, title, type) {
 }
 
 function ClientProfilePage() {
-  return ClientAccountLayout(`
-    <form class="client-card" data-client-form>
-      <div class="client-form-grid">
-        <label class="client-field"><span>Prénom</span><input type="text" autocomplete="given-name"></label>
-        <label class="client-field"><span>Nom</span><input type="text" autocomplete="family-name"></label>
-        <label class="client-field"><span>Téléphone</span><input type="tel" autocomplete="tel"></label>
-        <label class="client-field"><span>Email</span><input type="email" autocomplete="email"></label>
-        <label class="client-field"><span>Photo de profil</span><input type="file" accept="image/*"></label>
-        <label class="client-field"><span>Ville</span><input type="text" autocomplete="address-level2"></label>
-        <label class="client-field"><span>Langue préférée</span><select><option>Français</option><option>Wolof</option><option>Anglais</option></select></label>
-      </div>
-      <p role="status">La modification du profil n’est pas disponible pour le moment.</p>
-      <div class="client-actions"><button class="btn btn-primary" type="submit">Enregistrer les modifications</button></div>
-    </form>
-  `, "profile", "Profil", "Gérez vos informations personnelles et votre langue préférée.");
+  return ClientAccountLayout('<div id="pencmi-account-profile"></div>', "profile", "Profil", "Gérez vos informations personnelles et votre photo.");
 }
 
 function ClientSettingsPage() {
-  return ClientAccountLayout(`
-    <form class="client-card" data-client-form>
-      <section class="client-settings-section"><h2>Sécurité</h2><label class="client-field"><span>Changer mot de passe</span><input type="password" autocomplete="new-password"></label><div class="client-actions"><button class="btn btn-light" type="button">Vérifier email</button><button class="btn btn-light" type="button">Vérifier téléphone</button></div></section>
-      <section class="client-settings-section"><h2>Notifications</h2>${["Notifications internes", "Notifications email", "Alertes de recherche", "Rappels", "Messages importants"].map(ClientCheckbox).join("")}</section>
-      <section class="client-settings-section"><h2>Emails</h2><p>Emails importants non désactivables : demande envoyée, demande acceptée, demande refusée, annulation, sécurité du compte.</p>${["Alertes de recherche", "Recommandations", "Rappels", "Baisse de prix", "Marketing futur"].map(ClientCheckbox).join("")}</section>
-      <section class="client-settings-section"><h2>Confidentialité</h2>${["Afficher mon téléphone aux annonceurs", "Autoriser les annonceurs à me répondre par email", "Autoriser les annonceurs à me contacter par téléphone si je l’ai fourni"].map(ClientCheckbox).join("")}</section>
-      <section class="client-settings-section"><h2>Suppression du compte</h2><button class="btn danger-button" type="button" data-open-client-modal>Supprimer mon compte</button></section>
-      <p role="status">La modification des paramètres n’est pas disponible pour le moment.</p>
-      <div class="client-actions"><button class="btn btn-primary" type="submit">Enregistrer les modifications</button></div>
-    </form>
-    <div class="client-modal-backdrop" data-client-modal><div class="client-modal"><h2>Confirmer la suppression</h2><p>Aucun compte n’est supprimé maintenant. Cette action est prévue pour une future intégration sécurisée.</p><div class="client-actions"><button class="btn btn-ghost" type="button" data-close-client-modal>Annuler</button><button class="btn danger-button" type="button">Supprimer mon compte</button></div></div></div>
-  `, "settings", "Paramètres", "Configurez la sécurité, les notifications, les emails et la confidentialité de votre compte.");
+  return ClientAccountLayout('<div id="pencmi-account-settings"></div>', "settings", "Paramètres", "Sécurité et gestion de votre compte.");
 }
 
 function ClientCheckbox(label) {
@@ -372,6 +347,10 @@ function renderClientSpace() {
   if (requests) void import('./requests-page.mjs').then(({ mountClientRequests }) => mountClientRequests(requests, requests.dataset.requestType));
   const summary = document.querySelector('#pencmi-request-summary-status');
   if (summary) void import('./requests-page.mjs').then(({ mountRequestSummary }) => mountRequestSummary(summary));
+  const profile = document.querySelector('#pencmi-account-profile');
+  if (profile) void import('./profile-page.mjs').then(({ mountAccountProfile }) => mountAccountProfile(profile));
+  const settings = document.querySelector('#pencmi-account-settings');
+  if (settings) void import('./settings-page.mjs').then(({ mountAccountSettings }) => mountAccountSettings(settings));
 }
 
 /** Unread counts of the most recent conversations, shown only once the API has answered. */
