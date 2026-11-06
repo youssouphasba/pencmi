@@ -60,7 +60,11 @@ Sauvegardes restaurées le 6 novembre 2026 : première archive `pencmi-20261106-
 - Le parcours navigateur connecté à NestJS/PostgreSQL de recette est exécuté séparément en 390 et 1280 px : vraie inscription, sauvegarde, déconnexion, ancien token refusé, reconnexion/reprise, programme régulier et exceptions, arrêts/rendez-vous, validation administrative, recherche publique, choix exact du départ, demande, acceptation, stock diminué puis restitué à l'annulation et suppression logique. Des captures sont conservées localement hors Git.
 - Des exécutions intermédiaires ont été arrêtées sur une divergence RESTRICT/SetNull et une erreur de typage dans un test ; ces défauts sont corrigés avant la recette finale. Le premier lancement npm local a épuisé la mémoire en lançant plusieurs workers ; les vérifications suivantes utilisent un seul worker. Deux sélecteurs du test live ont été rendus stables après annulation ou présence de plusieurs trajets de recette.
 
-Le contrôle post-déploiement de production doit être effectué après le push. Aucun succès de production n'est déduit de ces résultats de recette. Les ressources temporaires sont à supprimer après cette vérification, sans toucher aux sauvegardes locales.
+Contrôle post-push : déploiement de production `5c30a9b6-67b5-4652-aede-6233c602a9c6`, commit `c2b6c5b890805993c652c4a6de2e0a662d8c7850`, état Railway **SUCCESS**. Les sept migrations sont appliquées avec checksums conformes, audit sans problème et schéma `in_sync`. L'empreinte historique, les six utilisateurs, deux trajets et deux demandes de place sont inchangés. Aucun seed ni parcours créant des données n'a été exécuté en production.
+
+Sondes de production : `/health` 200, `/voyages` 200, fourchette de prix inversée 400 ; statistiques, contacts et conversations privés 401 sans authentification. Les confirmations réelles et la reconnexion ont été testées en recette, pas avec des réservations de production. Les deux services temporaires et l'environnement de recette ont été supprimés ; les sauvegardes locales sont conservées. Le CLI Railway est relié de nouveau à `production/pencmi`.
+
+Un correctif frontend complémentaire restitue le véritable message d'erreur de confirmation (stock ou autorisation notamment), sans le remplacer systématiquement par un diagnostic réseau. Le test navigateur vérifie ce retour en 390 et 1280 px ; aucun changement backend ou de migration supplémentaire.
 
 ## Audit npm du 6 novembre 2026
 

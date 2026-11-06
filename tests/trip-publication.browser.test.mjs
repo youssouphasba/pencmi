@@ -391,6 +391,12 @@ test(
         await page
           .getByRole("cell", { name: "Client 104", exact: true })
           .waitFor();
+        failed = true;
+        const failureDialog = page.waitForEvent('dialog');
+        await page.locator('[data-trip-request-status="pending"]').first().click();
+        const dialog = await failureDialog;
+        assert.equal(dialog.message(),'Erreur réseau test');
+        await dialog.accept();
         await page.goto(origin + "/dashboard/voyages/messages/");
         await page.locator("[data-open-trip-conversation]").click();
         assert.equal(await page.locator(".trip-dashboard-card b").count(), 0);

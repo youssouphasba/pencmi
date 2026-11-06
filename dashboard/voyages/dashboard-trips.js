@@ -230,7 +230,7 @@ function TripReservationRow(request) {
 }
 
 async function updateTripReservationStatus(id, status) {
-  const updated = await tripApiRequest(`/dashboard/voyages/seat-requests/${encodeURIComponent(id)}/status`, {
+  await tripApiRequest(`/dashboard/voyages/seat-requests/${encodeURIComponent(id)}/status`, {
     method: "PATCH",
     body: JSON.stringify({ status })
   });
@@ -287,9 +287,9 @@ function renderDashboard() {
   document.querySelectorAll("[data-trip-request-status]").forEach((button) => {
     button.addEventListener("click", () => {
       button.disabled = true;
-      void updateTripReservationStatus(button.dataset.tripRequestId, button.dataset.tripRequestStatus).catch(() => {
+      void updateTripReservationStatus(button.dataset.tripRequestId, button.dataset.tripRequestStatus).catch((error) => {
         button.disabled = false;
-        window.alert("La mise à jour de la demande a échoué. Vérifiez la connexion puis réessayez.");
+        window.alert(error.message || "La mise à jour de la demande a échoué.");
       });
     });
   });
