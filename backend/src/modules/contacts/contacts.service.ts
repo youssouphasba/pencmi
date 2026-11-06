@@ -8,6 +8,7 @@ import {
   LISTING_MODULES,
   ListingModule,
   ownedListings,
+  ownerContactScope,
 } from '../conversations/conversation-listings';
 
 export class ContactListDto extends PaginationDto {
@@ -31,13 +32,7 @@ export class ContactsService {
       const owned = await ownedListings(this.prisma, module, ownerUserId);
       owned.forEach((row) => titles.set(`${module}:${row.id}`, row.title));
       const ids = owned.map((row) => row.id);
-      scopes.push({
-        module,
-        targetType: 'listing',
-        targetId: { in: query.listingId ? ids.filter((id) => id === query.listingId) : ids },
-        // Older visit and reservation events carry no owner: the listing proves it.
-        OR: [{ ownerUserId }, { ownerUserId: null }],
-      });
+      scopes.push(ownerContactScope(module, ownerUserId, query.listingId ? ids.filter((id) => id === query.listingId) : ids));
     }
     const where: Prisma.ContactEventWhereInput = {
       OR: scopes,

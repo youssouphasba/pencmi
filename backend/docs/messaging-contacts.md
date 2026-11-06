@@ -42,7 +42,7 @@ La route `/dashboard/voyages/conversations` reste disponible. L'interface voyage
 
 Les détails ne sont lus que si la demande appartient à la même annonce que l'événement.
 
-Les événements de visite et de réservation créés avant ce lot n'ont pas de `ownerUserId`. La liste des contacts les rattache par l'annonce. Ils ne sont pas réécrits, donc `GET /statistics` (filtré sur `ownerUserId`) ne les compte pas.
+Les événements de visite et de réservation créés avant ce lot n'ont pas de `ownerUserId`. La liste des contacts et les statistiques les rattachent par l'annonce. Ils ne sont pas réécrits.
 
 Les appels et les ouvertures de WhatsApp ou d'email ne sont pas comptés, faute d'instrumentation serveur. Dans les statistiques voyages, `directContacts` exclut `internal_message`, déjà compté dans `inboundMessages`.
 

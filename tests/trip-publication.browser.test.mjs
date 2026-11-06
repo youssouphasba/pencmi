@@ -94,6 +94,21 @@ test(
               }),
             );
             meta = { total: 105, totalPages: 2 };
+          } else if (bulk && path === "/dashboard/stats/report") {
+            data = {
+              module: "trips",
+              listings: { total: 1, deleted: 0, byStatus: { active: 1 } },
+              options: [{ id: "bulk-104", title: "Trajet", status: "active", deleted: false }],
+              requests: { total: 105, accepted: 0, pending: 105, byStatus: { new: 105 }, byType: { seat: 105 } },
+              acceptanceRate: { accepted: 0, received: 105, value: 0 },
+              contacts: { direct: 1, bySource: { form: 1 } },
+              messages: { conversationsOpened: 1, inbound: 1 },
+              series: [{ date: "2026-11-06", requests: 105, contacts: 1, inboundMessages: 1 }],
+              topListings: { rankedBy: "requests", rows: [] },
+              activeWithoutActivity: [],
+              trips: { requestedSeats: 105, allocatedSeats: 0, historicalUnallocatedRequests: 0 },
+              unavailable: [],
+            };
           } else if (bulk && path === "/dashboard/voyages/statistics") {
             data = {
               totalRequests: 105,

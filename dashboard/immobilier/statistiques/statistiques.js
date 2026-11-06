@@ -10,8 +10,6 @@ const routes = {
   profile: "/dashboard/profil"
 };
 
-const stats = null;
-
 function routeHref(path) {
   if (window.location.protocol !== "file:") {
     return path;
@@ -30,59 +28,19 @@ function DashboardSidebar() {
   return `<aside class="dashboard-sidebar" id="dashboard-sidebar"><div class="dashboard-brand"><span>P</span><div><strong>Péncmi</strong><small>Annonceur immobilier</small></div></div><nav class="dashboard-nav">${items.map(([label, href, badge]) => `<a href="${routeHref(href)}"${href === routes.stats ? ' aria-current="page"' : ""}><span>${label}</span>${badge ? `<span class="notification-badge">${badge}</span>` : ""}</a>`).join("")}</nav></aside>`;
 }
 
-function KpiCard(title, key) {
-  return `<article class="kpi-card"><span class="kpi-icon">ST</span><h3>${title}</h3>${stats?.[key] ? `<div class="kpi-value">${stats[key]}</div>` : `<div class="kpi-empty">Aucune donnée disponible</div>`}</article>`;
-}
-
 function StatisticsPage() {
   document.querySelector("#statistics-page").innerHTML = `
     <div class="dashboard-shell">
       ${DashboardSidebar()}
       <main class="dashboard-main">
-        <header class="dashboard-header"><div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>Statistiques</h1><p>Analysez les vues, contacts, favoris et performances de vos annonces.</p></div></header>
-        <section class="stats-filters">
-          <select><option>Aujourd’hui</option><option>7 jours</option><option>30 jours</option><option>90 jours</option></select>
-          <input placeholder="Annonce">
-          <input placeholder="Ville">
-          <select><option>Type de bien</option></select>
-          <select><option>Transaction</option><option>Location</option><option>Vente</option><option>Achat</option></select>
-        </section>
-        <section class="kpi-grid">
-          ${KpiCard("Vues totales", "totalViews")}
-          ${KpiCard("Clics détails", "detailClicks")}
-          ${KpiCard("Contacts", "contacts")}
-          ${KpiCard("Messages", "messages")}
-          ${KpiCard("Demandes de visite", "visitRequests")}
-          ${KpiCard("Favoris", "favorites")}
-          ${KpiCard("Clics WhatsApp", "whatsappClicks")}
-          ${KpiCard("Clics téléphone", "phoneClicks")}
-          ${KpiCard("Clics email", "emailClicks")}
-          ${KpiCard("Taux vue → contact", "viewToContactRate")}
-          ${KpiCard("Taux détail → contact", "detailToContactRate")}
-          ${KpiCard("Délai moyen de réponse", "averageResponseTimeMinutes")}
-        </section>
-        ${EmptyState()}
-        <section class="charts-grid">
-          ${ChartCard("Évolution des vues")}
-          ${ChartCard("Évolution des contacts")}
-          ${ChartCard("Répartition des sources de contact")}
-          ${ChartCard("Meilleures annonces")}
-          ${ChartCard("Annonces sans contact")}
-          ${ChartCard("Annonces à améliorer")}
-          ${ChartCard("Performance par annonce")}
-        </section>
+        <header class="dashboard-header"><div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>Statistiques</h1><p>Vos demandes, contacts et messages réellement enregistrés.</p></div></header>
+        <div id="pencmi-stats"></div>
       </main>
     </div>
   `;
   document.querySelector("[data-open-sidebar]")?.addEventListener("click", () => document.querySelector("#dashboard-sidebar").classList.toggle("is-open"));
-}
-
-function ChartCard(title) {
-  return `<article class="chart-card"><h2>${title}</h2><div class="chart-placeholder">Bloc graphique prévu</div></article>`;
-}
-
-function EmptyState() {
-  return `<section class="empty-stats"><h2>Aucune statistique disponible pour le moment.</h2><p>Les statistiques apparaîtront lorsque vos annonces recevront des vues ou des contacts.</p></section>`;
+  const area = document.querySelector("#pencmi-stats");
+  void import("../../stats-panel.mjs").then(({ mountStats }) => mountStats(area, { module: "real_estate" }), () => { area.textContent = "Chargement impossible. Rechargez la page."; });
 }
 
 StatisticsPage();

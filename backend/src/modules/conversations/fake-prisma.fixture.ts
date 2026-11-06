@@ -21,8 +21,10 @@ function matches(row: any, where: any, db: any): boolean {
     if (condition && typeof condition === "object" && !(condition instanceof Date)) {
       if ("in" in condition && !condition.in.includes(value)) return false;
       if ("notIn" in condition && condition.notIn.includes(value)) return false;
-      if ("not" in condition && value === condition.not) return false;
+      if ("not" in condition && (value ?? null) === condition.not) return false;
       if ("gt" in condition && !(value > condition.gt)) return false;
+      if ("gte" in condition && !(value >= condition.gte)) return false;
+      if ("lte" in condition && !(value <= condition.lte)) return false;
       if ("contains" in condition && !String(value).toLowerCase().includes(condition.contains.toLowerCase())) return false;
       return true;
     }
@@ -134,7 +136,7 @@ export function createFakePrisma() {
   };
   for (const name of ["realEstateListing", "vehicleListing", "tripListing", "hotelProperty"])
     db[name] = new Table(db, { owner });
-  for (const name of ["realEstateVisitRequest", "hotelReservationRequest", "vehicleRentalRequest", "vehicleChauffeurRequest", "tripSeatRequest"])
+  for (const name of ["realEstateVisitRequest", "hotelReservationRequest", "vehicleRentalRequest", "vehicleChauffeurRequest", "tripSeatRequest", "hotelRoom", "hotelStockAllocation", "trackingEvent", "notification"])
     db[name] = new Table(db);
   const tables = () => Object.values(db).filter((value) => value instanceof Table) as Table[];
   let queue: Promise<unknown> = Promise.resolve();

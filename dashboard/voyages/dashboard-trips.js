@@ -241,10 +241,7 @@ function TripContactsPage() {
 }
 
 function TripStatisticsPage() {
-  const stats = tripDashboardData.stats;
-  if (!stats || Array.isArray(stats)) return TripsDashboardLayout(DashboardHeader('Statistiques voyages','Vos données enregistrées.')+EmptyState('Statistiques indisponibles.'),'statistics');
-  const kpis=[['Demandes reçues',stats.totalRequests],['Places demandées',stats.requestedSeats],['Places allouées',stats.confirmedSeats],['Contacts directs',stats.directContacts],['Messages reçus',stats.inboundMessages]];
-  return TripsDashboardLayout(`${DashboardHeader('Statistiques voyages','Données calculées depuis vos demandes, allocations et contacts.') }<section class="trip-kpi-grid">${kpis.map(([label,value])=>KpiCard(label,String(value))).join('')}</section><section class="trip-dashboard-card"><h2>Demandes par statut</h2>${Object.entries(stats.requestsByStatus).map(([status,count])=>`<p>${tripDashboardEscape(formatTripReservationStatus(status))} : ${count}</p>`).join('')}<h2>Contacts directs par source</h2>${Object.entries(stats.contactsBySource).map(([source,count])=>`<p>${tripDashboardEscape(source)} : ${count}</p>`).join('')}${stats.historicalUnallocatedRequests ? `<p>${stats.historicalUnallocatedRequests} demandes historiques sans allocation de stock connue.</p>` : ''}<p>Vues, taux de conversion et délai de réponse : données indisponibles.</p></section>`,'statistics');
+  return TripsDashboardLayout(`${DashboardHeader('Statistiques voyages','Vos demandes, places, contacts et messages réellement enregistrés.')}<div id="pencmi-stats"></div>`,'statistics');
 }
 
 function TripContactSettingsPage() {
@@ -317,6 +314,8 @@ function mountTripMessaging() {
   if (inbox) void import("../../messaging/inbox.mjs").then(({ mountInbox }) => mountInbox(inbox, { scope: "owner", module: "trips", emptyTitle: "Aucun message reçu pour le moment." }));
   const contacts = document.querySelector("#pencmi-contacts");
   if (contacts) void import("../../messaging/contacts-panel.mjs").then(({ mountContacts }) => mountContacts(contacts, { module: "trips", messagesHref: tripDashboardRouteHref(tripDashboardRoutes.messages) }));
+  const stats = document.querySelector("#pencmi-stats");
+  if (stats) void import("../stats-panel.mjs").then(({ mountStats }) => mountStats(stats, { module: "trips" }));
 }
 
 void loadTripDashboardData();

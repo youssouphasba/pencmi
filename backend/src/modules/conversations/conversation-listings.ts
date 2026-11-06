@@ -125,6 +125,19 @@ export async function listingTitles(
   return titles;
 }
 
+/**
+ * Contact events of an owner in one universe. Ownership comes from the listing:
+ * older visit and reservation events carry no owner at all.
+ */
+export function ownerContactScope(module: ListingModule, ownerUserId: string, ids: string[]) {
+  return {
+    module,
+    targetType: "listing" as const,
+    targetId: { in: ids },
+    OR: [{ ownerUserId }, { ownerUserId: null }],
+  };
+}
+
 export function displayName(user?: {
   firstName?: string | null;
   lastName?: string | null;

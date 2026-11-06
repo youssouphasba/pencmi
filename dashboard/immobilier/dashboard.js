@@ -42,8 +42,6 @@ const kpiDefinitions = [
   ["Annonces actives", "activeListings", "AN"],
   ["Annonces en attente", "pendingListings", "AT"],
   ["Annonces suspendues", "suspendedListings", "SU"],
-  ["Vues totales", "totalViews", "VU"],
-  ["Favoris", "favorites", "FA"],
   ["Demandes de visite", "visitRequests", "DV"],
   ["Contacts", "contacts", "CO"],
   ["Messages", "messages", "MS"],
@@ -121,8 +119,8 @@ function formatMetric(value) {
   return Number(value || 0).toLocaleString("fr-FR");
 }
 
-function formatPercentage(value) {
-  return `${Number(value || 0).toLocaleString("fr-FR", { maximumFractionDigits: 1 })}%`;
+function dashboardEscape(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 }
 
 function formatDate(value) {
@@ -180,49 +178,28 @@ function completionScore(listing) {
   return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
 
-function listingViewCount(listing) {
-  return Number(listing.metadata?.views || 0);
-}
-
-function listingFavoriteCount(listing) {
-  return Number(listing.metadata?.favorites || 0);
-}
-
-function mapListingPerformance(listing, visitRequests) {
-  const listingVisits = visitRequests.filter((visit) => visit.listing?.id === listing.id);
-  const views = listingViewCount(listing);
-  const contacts = listingVisits.length;
-
+function mapListingPerformance(listing, report) {
   return {
     listingId: listing.id,
     title: listing.title,
     status: listing.status,
     city: listing.city,
     propertyType: formatPropertyType(listing.propertyType),
-    views,
-    detailClicks: Number(listing.metadata?.detailClicks || 0),
-    favorites: listingFavoriteCount(listing),
-    messages: Number(listing.metadata?.messages || 0),
-    contacts,
-    visitRequests: contacts,
-    contactRate: views ? (contacts / views) * 100 : 0,
+    visitRequests: report.requestsByListing?.[listing.id] || 0,
     completionScore: completionScore(listing),
     updatedAt: listing.updatedAt,
   };
 }
 
-function buildDashboardStats(listings, visitRequests) {
-  const performances = listings.map((listing) => mapListingPerformance(listing, visitRequests));
-
+function buildDashboardStats(report) {
   return {
-    activeListings: listings.filter((listing) => listing.status === "active").length,
-    pendingListings: listings.filter((listing) => listing.status === "pending_review").length,
-    suspendedListings: listings.filter((listing) => listing.status === "suspended").length,
-    totalViews: performances.reduce((sum, listing) => sum + listing.views, 0),
-    favorites: performances.reduce((sum, listing) => sum + listing.favorites, 0),
-    visitRequests: visitRequests.length,
-    contacts: visitRequests.length,
-    messages: performances.reduce((sum, listing) => sum + listing.messages, 0),
+    activeListings: report.listings.byStatus.active || 0,
+    pendingListings: report.listings.byStatus.pending_review || 0,
+    suspendedListings: report.listings.byStatus.suspended || 0,
+    visitRequests: report.requests.total,
+    pendingVisits: report.requests.pending,
+    contacts: report.contacts.direct,
+    messages: report.messages.inbound,
   };
 }
 
@@ -245,7 +222,7 @@ function DashboardSidebar() {
   const badges = {
     messages: dashboardStats?.messages || 0,
     contacts: dashboardStats?.contacts || 0,
-    visits: recentVisitRequests.length,
+    visits: dashboardStats?.pendingVisits || 0,
     listings: listingPerformanceStats.filter((listing) => listing.status !== "active").length,
     stats: 0,
     contactSettings: 0,
@@ -363,24 +340,18 @@ function ListingPerformanceTable() {
             <th>Statut</th>
             <th>Ville</th>
             <th>Type</th>
-            <th>Vues</th>
-            <th>Favoris</th>
-            <th>Demandes</th>
-            <th>Taux contact</th>
+            <th>Demandes sur la période</th>
             <th>Score</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>${listingPerformanceStats.map((listing) => `
           <tr>
-            <td>${listing.title}</td>
+            <td>${dashboardEscape(listing.title)}</td>
             <td>${ListingStatusBadge(listing.status)}</td>
-            <td>${listing.city || ""}</td>
-            <td>${listing.propertyType || ""}</td>
-            <td>${formatMetric(listing.views)}</td>
-            <td>${formatMetric(listing.favorites)}</td>
+            <td>${dashboardEscape(listing.city)}</td>
+            <td>${dashboardEscape(listing.propertyType)}</td>
             <td>${formatMetric(listing.visitRequests)}</td>
-            <td>${formatPercentage(listing.contactRate)}</td>
             <td>${ListingCompletionScore(listing.completionScore)}</td>
             <td>
               <a href="${routeHref(`/immobilier/annonce/${listing.listingId}`)}">Voir</a>
@@ -395,9 +366,9 @@ function ListingPerformanceTable() {
 function ListingPerformanceCard(listing) {
   return `
     <article class="dashboard-card">
-      <h3>${listing.title}</h3>
-      <p>${ListingStatusBadge(listing.status)} ${listing.city || ""}</p>
-      <p>Vues : ${formatMetric(listing.views)} · Demandes : ${formatMetric(listing.visitRequests)}</p>
+      <h3>${dashboardEscape(listing.title)}</h3>
+      <p>${ListingStatusBadge(listing.status)} ${dashboardEscape(listing.city)}</p>
+      <p>Demandes sur la période : ${formatMetric(listing.visitRequests)}</p>
       ${ListingCompletionScore(listing.completionScore)}
     </article>
   `;
@@ -422,8 +393,8 @@ function RecentVisitRequestsList() {
       </div>
       ${recentVisitRequests.length ? recentVisitRequests.map((visit) => `
         <article>
-          <strong>${visit.clientName || "Client"}</strong>
-          <p>${visit.listingTitle}</p>
+          <strong>${dashboardEscape(visit.clientName || "Client")}</strong>
+          <p>${dashboardEscape(visit.listingTitle)}</p>
           <p>${formatDate(visit.preferredDate)}</p>
           ${VisitStatusBadge(visit.status)}
         </article>
@@ -433,11 +404,11 @@ function RecentVisitRequestsList() {
 }
 
 function TopListingsCard() {
-  const topListings = [...listingPerformanceStats].sort((left, right) => right.views - left.views).slice(0, 3);
+  const topListings = listingPerformanceStats.filter((listing) => listing.visitRequests).sort((left, right) => right.visitRequests - left.visitRequests).slice(0, 3);
   return `
     <section class="dashboard-card">
-      <h3>Meilleures annonces</h3>
-      ${topListings.length ? topListings.map((listing) => `<p>${listing.title} · ${formatMetric(listing.views)} vues</p>`).join("") : EmptyDashboardState("Aucune statistique disponible pour le moment.")}
+      <h3>Annonces les plus demandées</h3>
+      ${topListings.length ? topListings.map((listing) => `<p>${dashboardEscape(listing.title)} · ${formatMetric(listing.visitRequests)} demandes</p>`).join("") : EmptyDashboardState("Aucune demande sur cette période.")}
     </section>
   `;
 }
@@ -446,7 +417,7 @@ function DashboardFavoritesOverview() {
   return `
     <section class="dashboard-card">
       <h3>Favoris reçus</h3>
-      <p>${formatMetric(dashboardStats?.favorites || 0)} favoris enregistrés</p>
+      <p>Donnée indisponible : les favoris et les vues ne sont pas encore mesurés.</p>
     </section>
   `;
 }
@@ -481,7 +452,7 @@ function bindDashboardEvents() {
 
   document.querySelector("[data-period-filter]")?.addEventListener("change", (event) => {
     selectedPeriod = event.currentTarget.value;
-    RealEstateDashboardLayout();
+    void loadDashboardData();
   });
 }
 
@@ -491,22 +462,23 @@ async function loadDashboardData() {
   RealEstateDashboardLayout();
 
   try {
-    const [listingsPayload, visitsPayload] = await Promise.all([
+    const [listingsPayload, visitsPayload, report] = await Promise.all([
       apiRequest("/dashboard/immobilier"),
       apiRequest("/dashboard/immobilier/visits"),
+      apiRequest(`/dashboard/stats/report?module=real_estate&period=${encodeURIComponent(selectedPeriod)}`),
     ]);
 
     const listings = listingsPayload?.data || listingsPayload || [];
     const visits = visitsPayload?.data || visitsPayload || [];
 
-    listingPerformanceStats = listings.map((listing) => mapListingPerformance(listing, visits));
+    listingPerformanceStats = listings.map((listing) => mapListingPerformance(listing, report));
     recentVisitRequests = visits.slice(0, 5).map((visit) => ({
       clientName: visit.clientName,
       listingTitle: visit.listing?.title || "Annonce",
       preferredDate: visit.preferredDate,
       status: visit.status,
     }));
-    dashboardStats = buildDashboardStats(listings, visits);
+    dashboardStats = buildDashboardStats(report);
   } catch (error) {
     dashboardError = error instanceof Error ? error.message : "Chargement impossible.";
   } finally {

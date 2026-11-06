@@ -289,13 +289,7 @@ function HotelContactsPage() {
 }
 
 function HotelStatisticsPage() {
-  const kpis = ["Vues", "Clics détails", "Favoris", "Contacts", "Messages", "Demandes de réservation", "Réservations acceptées", "Taux d’occupation", "Taux vue → réservation", "Taux vue → contact", "Délai moyen de réponse"];
-  return HotelsDashboardLayout(`
-    ${DashboardHeader("Statistiques hôtels", "Analysez les performances de vos hébergements et chambres.")}
-    <section class="hotel-kpi-grid">${kpis.map((title) => KpiCard(title)).join("")}</section>
-    ${EmptyState("Aucune statistique disponible pour le moment.")}
-    <div class="dashboard-grid"><section class="hotel-dashboard-card"><h2>Hébergements les plus consultés</h2><div class="hotel-chart-placeholder">Bloc graphique prévu</div></section><section class="hotel-dashboard-card"><h2>Chambres les plus demandées</h2><div class="hotel-chart-placeholder">Bloc graphique prévu</div></section><section class="hotel-dashboard-card"><h2>Hébergements sans contact</h2><div class="hotel-chart-placeholder">Bloc prévu</div></section><section class="hotel-dashboard-card"><h2>Disponibilités non mises à jour</h2><div class="hotel-chart-placeholder">Bloc prévu</div></section></div>
-  `, "statistics");
+  return HotelsDashboardLayout(`${DashboardHeader("Statistiques hôtels", "Vos demandes, chambres, contacts et messages réellement enregistrés.")}<div id="pencmi-stats"></div>`, "statistics");
 }
 
 function HotelContactSettingsPage() {
@@ -348,6 +342,8 @@ function mountHotelMessaging() {
   if (inbox) void import("../../messaging/inbox.mjs").then(({ mountInbox }) => mountInbox(inbox, { scope: "owner", module: "hotels", emptyTitle: "Aucun message reçu pour le moment.", emptyText: "Les conversations liées à vos hébergements apparaîtront ici." }));
   const contacts = document.querySelector("#pencmi-contacts");
   if (contacts) void import("../../messaging/contacts-panel.mjs").then(({ mountContacts }) => mountContacts(contacts, { module: "hotels", messagesHref: hotelDashboardRouteHref(hotelDashboardRoutes.messages) }));
+  const stats = document.querySelector("#pencmi-stats");
+  if (stats) void import("../stats-panel.mjs").then(({ mountStats }) => mountStats(stats, { module: "hotels" }));
 }
 
 async function loadHotelDashboardData() {

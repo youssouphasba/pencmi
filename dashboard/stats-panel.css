@@ -1,0 +1,24 @@
+.ps-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+.ps-filters .pm-field { flex: 1 1 200px; max-width: 360px; }
+.ps-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.ps-kpi { background: #fff; border: 1px solid #e3e8e5; border-radius: 12px; padding: 12px; min-width: 0; }
+.ps-kpi h3 { margin: 0 0 6px; font-size: .9rem; font-weight: 600; }
+.ps-kpi .kpi-value { font-size: 1.5rem; font-weight: 700; }
+.ps-kpi small { display: block; color: #5f6b66; margin-top: 4px; }
+.ps-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 12px; }
+.ps-card { background: #fff; border: 1px solid #e3e8e5; border-radius: 12px; padding: 14px; min-width: 0; margin-bottom: 12px; }
+.ps-card h2 { margin: 0 0 10px; font-size: 1.05rem; }
+.ps-card ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.ps-row { display: flex; justify-content: space-between; gap: 12px; overflow-wrap: anywhere; }
+.ps-row strong { white-space: nowrap; }
+.ps-chart { width: 100%; height: 120px; display: block; }
+.ps-chart rect { fill: #268d6e; }
+.ps-chart .ps-axis { stroke: #cfd8d3; stroke-width: 1; }
+.ps-chart-range { display: flex; justify-content: space-between; color: #5f6b66; font-size: .8rem; margin-top: 4px; }
+.ps-card details { margin-top: 8px; }
+.ps-card details table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.ps-card details td, .ps-card details th { text-align: left; padding: 3px 6px; border-bottom: 1px solid #eef1ef; }
+.ps-table-wrap { overflow-x: auto; }
+.ps-table { width: 100%; border-collapse: collapse; }
+.ps-table th, .ps-table td { text-align: left; padding: 8px; border-bottom: 1px solid #e3e8e5; overflow-wrap: anywhere; }
+.ps-unavailable { color: #5f6b66; }

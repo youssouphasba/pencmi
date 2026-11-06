@@ -243,13 +243,7 @@ async function updateVehicleRequestStatus(id, requestType, status) {
 }
 
 function VehicleStatisticsPage() {
-  const kpis = ["Vues", "Clics détails", "Favoris", "Contacts", "Messages", "Clics WhatsApp", "Clics téléphone", "Clics email", "Taux vue → contact", "Délai moyen de réponse"];
-  return VehiclesDashboardLayout(`
-    ${DashboardHeader("Statistiques voitures", "Analysez les performances détaillées de vos annonces.")}
-    <section class="vehicle-kpi-grid">${kpis.map((title) => KpiCard(title)).join("")}</section>
-    ${EmptyState("Aucune statistique disponible pour le moment.")}
-    <div class="dashboard-grid"><section class="vehicle-dashboard-card"><h2>Annonces les plus consultées</h2><div class="vehicle-chart-placeholder">Bloc graphique prévu</div></section><section class="vehicle-dashboard-card"><h2>Annonces sans contact</h2><div class="vehicle-chart-placeholder">Bloc prévu</div></section><section class="vehicle-dashboard-card"><h2>Annonces à améliorer</h2><div class="vehicle-chart-placeholder">Bloc prévu</div></section></div>
-  `, "statistics");
+  return VehiclesDashboardLayout(`${DashboardHeader("Statistiques voitures", "Vos demandes, contacts et messages réellement enregistrés.")}<div id="pencmi-stats"></div>`, "statistics");
 }
 
 function VehicleContactSettingsPage() {
@@ -323,6 +317,8 @@ function mountVehicleMessaging() {
   if (inbox) void import("../../messaging/inbox.mjs").then(({ mountInbox }) => mountInbox(inbox, { scope: "owner", module: "vehicles", emptyTitle: "Aucun message reçu pour le moment.", emptyText: "Les messages clients liés à vos véhicules apparaîtront ici." }));
   const contacts = document.querySelector("#pencmi-contacts");
   if (contacts) void import("../../messaging/contacts-panel.mjs").then(({ mountContacts }) => mountContacts(contacts, { module: "vehicles", messagesHref: vehicleDashboardRouteHref(vehicleDashboardRoutes.messages) }));
+  const stats = document.querySelector("#pencmi-stats");
+  if (stats) void import("../stats-panel.mjs").then(({ mountStats }) => mountStats(stats, { module: "vehicles" }));
 }
 
 void import('../../voitures/vehicle-content.mjs').then(module => { vehicleDashboardPresentation = module; return loadVehicleDashboardData(); });
