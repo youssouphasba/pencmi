@@ -35,6 +35,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (status === HttpStatus.NOT_FOUND) return 'NOT_FOUND';
     if (status === HttpStatus.BAD_REQUEST) return 'BAD_REQUEST';
     if (status === HttpStatus.CONFLICT) return 'CONFLICT';
+    if (status === HttpStatus.PAYLOAD_TOO_LARGE) return 'PAYLOAD_TOO_LARGE';
+    if (status === HttpStatus.UNSUPPORTED_MEDIA_TYPE) return 'UNSUPPORTED_MEDIA_TYPE';
     return 'INTERNAL_ERROR';
   }
 }

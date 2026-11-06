@@ -50,6 +50,7 @@ async function main() {
       '--test',
       'scripts/audit-migrations.test.cjs',
       'scripts/database-fingerprint.test.cjs',
+      'scripts/security-dependencies.test.cjs',
     ],
   ]) {
     const result = spawnSync(process.execPath, args, { env, stdio: 'inherit' });
