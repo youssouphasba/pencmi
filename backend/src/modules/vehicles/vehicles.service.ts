@@ -149,6 +149,7 @@ export class VehiclesService {
           whatsappEnabled: contacts.whatsappEnabled,
           emailEnabled: contacts.emailEnabled,
           contactFormEnabled: contacts.contactFormEnabled ?? !raw.publication,
+          internalMessagingEnabled: contacts.internalMessagingEnabled === true,
           ...(contacts.phoneEnabled
             ? { phoneNumber: contacts.phoneNumber }
             : {}),

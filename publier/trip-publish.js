@@ -172,6 +172,10 @@ if (new URLSearchParams(location.search).get("category") === "voyage") {
             check(
               "contactPreferences.reservationRequestEnabled",
               "Demande de place",
+            ) +
+            check(
+              "contactPreferences.internalMessagingEnabled",
+              "Messagerie interne Péncmi",
             )
           );
         case 8:

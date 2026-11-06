@@ -215,6 +215,10 @@ if (new URLSearchParams(location.search).get('category') === 'voiture') {
             checkbox(
               `${m}contactPreferences.contactFormEnabled`,
               'Formulaire de contact',
+            ) +
+            checkbox(
+              `${m}contactPreferences.internalMessagingEnabled`,
+              'Messagerie interne Péncmi',
             )
           );
         case 10:

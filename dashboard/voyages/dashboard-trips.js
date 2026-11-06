@@ -192,8 +192,7 @@ function TripOccurrenceRows(trip) {
 }
 
 function TripMessagesPage() {
-  const messages = tripDashboardData.messages;
-  return TripsDashboardLayout(`${DashboardHeader('Messages voyages','Vos conversations liées aux trajets.')}${messages.length ? `<section class="trip-dashboard-card">${messages.map(conversation=>`<button class="btn btn-light" data-open-trip-conversation="${tripDashboardEscape(conversation.id)}">${tripDashboardEscape(tripDashboardData.trips.find(trip=>trip.id===conversation.targetId)?.title || 'Conversation')} · ${tripDashboardEscape(conversation.messages?.[0]?.body || '')}</button>`).join('')}</section>` : EmptyState('Aucun message reçu pour le moment.')}${tripDashboardData.conversation ? `<section class="trip-dashboard-card"><h2>Conversation</h2>${tripDashboardData.conversation.messages.map(message=>`<p>${tripDashboardEscape(message.body)} <small>${formatTripDate(message.createdAt)}</small></p>`).join('')}<form data-trip-reply><label class="trip-form-field"><span>Votre réponse</span><textarea name="body" required maxlength="6000"></textarea></label><button class="btn btn-primary" type="submit">Envoyer</button><p role="alert" data-reply-error></p></form></section>` : ''}`, 'messages');
+  return TripsDashboardLayout(`${DashboardHeader('Messages voyages','Vos conversations liées aux trajets.')}<div id="pencmi-inbox"></div>`, 'messages');
 }
 
 function TripReservationsPage() {
@@ -238,7 +237,7 @@ async function updateTripReservationStatus(id, status) {
 }
 
 function TripContactsPage() {
-  return TripsDashboardLayout(`${DashboardHeader('Contacts reçus','Les événements de contact de vos trajets.')}${tripDashboardData.contacts.length ? `<section class="trip-table-wrap"><table class="trip-table"><thead><tr><th>Trajet</th><th>Source</th><th>Date</th><th>Détails</th></tr></thead><tbody>${tripDashboardData.contacts.map(event=>`<tr><td>${tripDashboardEscape(tripDashboardData.trips.find(trip=>trip.id===event.targetId)?.title || event.targetId)}</td><td>${tripDashboardEscape(event.source)}</td><td>${formatTripDate(event.createdAt)}</td><td>${tripDashboardEscape(event.metadata?.message || '')}</td></tr>`).join('')}</tbody></table></section>` : EmptyState('Aucun contact reçu pour le moment.')}`, 'contacts');
+  return TripsDashboardLayout(`${DashboardHeader('Contacts reçus','Les contacts enregistrés sur vos trajets.')}<div id="pencmi-contacts"></div>`, 'contacts');
 }
 
 function TripStatisticsPage() {
@@ -269,8 +268,6 @@ function renderDashboard() {
   document.querySelector("#trip-dashboard-root").innerHTML = tripDashboardData.loading ? TripsDashboardLayout(EmptyState('Chargement en cours.'), page) : tripDashboardData.error ? TripsDashboardLayout(EmptyState(tripDashboardEscape(tripDashboardData.error), '', '<button class="btn btn-light" data-retry-trip>Réessayer</button>'), page) : pages[page]();
   document.querySelector('[data-retry-trip]')?.addEventListener('click', () => void loadTripDashboardData());
   document.querySelectorAll('[data-cancel-trip-occurrence]').forEach(button=>button.onclick=async()=>{const reason=window.prompt('Motif de l’annulation du départ et de ses demandes');if(!reason?.trim())return;button.disabled=true;try{await tripApiRequest(`/dashboard/voyages/${encodeURIComponent(button.dataset.tripId)}/occurrences/${encodeURIComponent(button.dataset.cancelTripOccurrence)}/cancel`,{method:'POST',body:{reason}});await loadTripDashboardData();}catch(error){window.alert(error.message);button.disabled=false;}});
-  document.querySelectorAll('[data-open-trip-conversation]').forEach(button=>button.onclick=async()=>{button.disabled=true;try{tripDashboardData.conversation=await tripApiRequest(`/messages/conversations/${encodeURIComponent(button.dataset.openTripConversation)}`);renderDashboard();}catch(error){window.alert(error.message);button.disabled=false;}});
-  document.querySelector('[data-trip-reply]')?.addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('[type="submit"]');if(button.disabled)return;button.disabled=true;try{const {publicationOperationId}=await import('../../publier/real-estate-api.mjs');form.dataset.requestId ||= publicationOperationId();await tripApiRequest(`/messages/conversations/${encodeURIComponent(tripDashboardData.conversation.id)}/messages`,{method:'POST',body:{body:form.elements.body.value,requestId:form.dataset.requestId}});tripDashboardData.conversation=await tripApiRequest(`/messages/conversations/${encodeURIComponent(tripDashboardData.conversation.id)}`);await loadTripDashboardData();}catch(error){form.querySelector('[data-reply-error]').textContent=error.message;button.disabled=false;}});
   document.querySelectorAll('[data-trip-page]').forEach(button => button.onclick = () => { tripTablePage += Number(button.dataset.tripPage); renderDashboard(); });
   document.querySelectorAll('[data-trip-action]').forEach(button => button.onclick = async () => {
     if (button.dataset.tripAction === 'delete' && !window.confirm('Supprimer ce trajet ?')) return;
@@ -302,8 +299,8 @@ async function loadTripDashboardData() {
   try {
     tripDashboardContent ||= await import('../../voyages/trip-content.mjs');
     const all = async path => { const rows = []; for (let page = 1; ; page++) { const result = await tripApiRequest(`${path}?page=${page}&limit=100`, { includeMeta: true }); rows.push(...tripListFromPayload(result?.data ?? result)); if (page >= (result.meta?.totalPages || 1)) return rows; } };
-    const [tripsPayload, reservationsPayload, contacts, messages, stats] = await Promise.all([all('/dashboard/voyages'), all('/dashboard/voyages/seat-requests'),all('/dashboard/voyages/contacts'),all('/dashboard/voyages/conversations'),tripApiRequest('/dashboard/voyages/statistics')]);
-    tripDashboardData.contacts=contacts;tripDashboardData.messages=messages;tripDashboardData.stats=stats;
+    const [tripsPayload, reservationsPayload, contacts, stats] = await Promise.all([all('/dashboard/voyages'), all('/dashboard/voyages/seat-requests'),all('/dashboard/voyages/contacts'),tripApiRequest('/dashboard/voyages/statistics')]);
+    tripDashboardData.contacts=contacts;tripDashboardData.stats=stats;
     tripDashboardData.trips = tripListFromPayload(tripsPayload);
     tripDashboardData.reservations = tripListFromPayload(reservationsPayload);
   } catch (error) {
@@ -311,7 +308,15 @@ async function loadTripDashboardData() {
   } finally {
     tripDashboardData.loading = false;
     renderDashboard();
+    mountTripMessaging();
   }
+}
+
+function mountTripMessaging() {
+  const inbox = document.querySelector("#pencmi-inbox");
+  if (inbox) void import("../../messaging/inbox.mjs").then(({ mountInbox }) => mountInbox(inbox, { scope: "owner", module: "trips", emptyTitle: "Aucun message reçu pour le moment." }));
+  const contacts = document.querySelector("#pencmi-contacts");
+  if (contacts) void import("../../messaging/contacts-panel.mjs").then(({ mountContacts }) => mountContacts(contacts, { module: "trips", messagesHref: tripDashboardRouteHref(tripDashboardRoutes.messages) }));
 }
 
 void loadTripDashboardData();

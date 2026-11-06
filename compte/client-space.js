@@ -1,4 +1,5 @@
 const clientMessages = [];
+let clientUnreadLoaded = false;
 const clientFavorites = [];
 const clientAlerts = [];
 const clientNotifications = [];
@@ -168,7 +169,7 @@ function ClientSidebar(currentPage = "overview") {
   const nav = [
     ["Vue d’ensemble", clientRoutes.overview, "overview"],
     ["Profil", clientRoutes.profile, "profile"],
-    ["Messages", clientRoutes.messages, "messages", 0],
+    ["Messages", clientRoutes.messages, "messages", clientUnreadLoaded ? clientMessages.reduce((total, item) => total + item.unreadCount, 0) : undefined],
     ["Favoris", clientRoutes.favorites, "favorites"],
     ["Alertes", clientRoutes.alerts, "alerts"],
     ["Notifications", clientRoutes.notifications, "notifications", 0],
@@ -191,7 +192,7 @@ function ClientSidebar(currentPage = "overview") {
 
 function ClientOverviewPage() {
   const summaries = [
-    ["Messages non lus", clientMessages.reduce((total, item) => total + item.unreadCount, 0)],
+    ["Messages non lus", clientUnreadLoaded ? clientMessages.reduce((total, item) => total + item.unreadCount, 0) : "—"],
     ["Favoris", clientFavorites.length],
     ["Alertes actives", clientAlerts.filter((item) => item.enabled).length],
     ["Réservations hôtels en attente", clientHotelReservations.length],
@@ -226,30 +227,7 @@ function ClientSummaryCard(label, value = 0) {
 }
 
 function ClientMessagesPage() {
-  return ClientAccountLayout(`
-    <section class="client-card">
-      <div class="client-filter-row">${["Tous", "Immobilier", "Hôtels", "Voitures", "Voyages", "Non lus"].map((label, index) => `<button type="button" aria-pressed="${index === 0}">${label}</button>`).join("")}</div>
-    </section>
-    ${clientMessages.length ? ClientConversationList(clientMessages) : ClientEmptyState("Vous n’avez aucun message pour le moment.", "", `<a class="btn btn-primary" href="${clientRouteHref(clientRoutes.realEstate)}">Explorer Péncmi</a>`)}
-    ${ClientConversationThread()}
-  `, "messages", "Messages", "Retrouvez vos conversations avec les annonceurs immobiliers, hôtels, loueurs, garages, chauffeurs et transporteurs.");
-}
-
-function ClientConversationList(items) {
-  return `
-    <section class="client-table-shell client-section">
-      <div class="client-scroll">
-        <table class="client-table">
-          <thead><tr><th>Module</th><th>Annonce ou service</th><th>Dernier message</th><th>Statut</th><th>Date</th></tr></thead>
-          <tbody>${sortByRecent(items).map((item) => `<tr><td>${ClientModuleBadge(item.module)}</td><td>${item.listingTitle || ""}</td><td>${item.lastMessage || ""}</td><td>${item.unreadCount ? "Non lu" : "Lu"}</td><td>${item.updatedAt || ""}</td></tr>`).join("")}</tbody>
-        </table>
-      </div>
-    </section>
-  `;
-}
-
-function ClientConversationThread() {
-  return `<section class="client-card client-section"><h2>Conversation ouverte</h2><p>Sélectionnez une conversation pour afficher les messages et répondre.</p><label class="client-field"><span>Réponse</span><input type="text" disabled placeholder="Aucune conversation sélectionnée"></label></section>`;
+  return ClientAccountLayout(`<div id="pencmi-inbox"></div>`, "messages", "Messages", "Retrouvez vos conversations avec les annonceurs immobiliers, hôtels, loueurs, garages, chauffeurs et transporteurs.");
 }
 
 function ClientFavoritesPage() {
@@ -416,6 +394,24 @@ function renderClientSpace() {
   };
   root.innerHTML = (pages[page] || ClientOverviewPage)();
   bindClientSpace();
+  const inbox = document.querySelector("#pencmi-inbox");
+  if (inbox) void import("../messaging/inbox.mjs").then(({ mountInbox }) => mountInbox(inbox, { scope: "participant", emptyTitle: "Vous n’avez aucun message pour le moment.", emptyText: "Écrivez à un annonceur depuis une annonce où la messagerie est activée." }));
 }
 
-document.addEventListener("DOMContentLoaded", renderClientSpace);
+/** Unread counts of the most recent conversations, shown only once the API has answered. */
+async function loadClientUnread() {
+  try {
+    const { apiRequest, hasSession } = await import("../messaging/messaging-ui.mjs");
+    if (!hasSession()) return;
+    clientMessages.splice(0, clientMessages.length, ...await apiRequest("/messages/conversations?limit=100"));
+    clientUnreadLoaded = true;
+    if (document.body.dataset.clientPage !== "messages") renderClientSpace();
+  } catch {
+    clientUnreadLoaded = false;
+  }
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  renderClientSpace();
+  void loadClientUnread();
+});

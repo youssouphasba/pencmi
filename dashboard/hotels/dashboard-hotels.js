@@ -201,8 +201,8 @@ function HotelsDashboardPage() {
     ["Hébergements en attente", pendingHotels],
     ["Demandes de réservation", hotelDashboardData.reservations.length],
     ["Réservations à confirmer", pendingReservations],
-    ["Messages reçus", hotelDashboardData.messages.length],
-    ["Contacts", hotelDashboardData.contacts.length]
+    ["Conversations", hotelDashboardData.conversationTotal ?? "—"],
+    ["Contacts", hotelDashboardData.contactTotal ?? "—"]
   ];
   return HotelsDashboardLayout(`
     ${DashboardHeader("Dashboard hôtels", "Suivez vos hébergements, disponibilités, demandes et performances.", `<a class="btn btn-primary" href="${hotelDashboardRouteHref(hotelDashboardRoutes.publish)}">Publier un hébergement</a>`)}
@@ -238,7 +238,7 @@ function HotelAvailabilityPage() {
 }
 
 function HotelMessagesPage() {
-  return HotelsDashboardLayout(`${DashboardHeader("Messages hôtels", "Suivez les conversations clients et les réponses annonceur.")}${EmptyState("Aucun message reçu pour le moment.", "Les conversations liées à vos hébergements apparaîtront ici.")}`, "messages");
+  return HotelsDashboardLayout(`${DashboardHeader("Messages hôtels", "Suivez les conversations clients et les réponses annonceur.")}<div id="pencmi-inbox"></div>`, "messages");
 }
 
 function HotelReservationsPage() {
@@ -285,12 +285,7 @@ async function updateHotelReservationStatus(id, status, note) {
 }
 
 function HotelContactsPage() {
-  const sources = ["WhatsApp", "Téléphone", "Email", "Message interne", "Formulaire", "Demande de réservation"];
-  return HotelsDashboardLayout(`
-    ${DashboardHeader("Contacts reçus", "Suivez les contacts générés par vos hébergements.")}
-    <section class="hotel-dashboard-card"><h2>Sources prévues</h2><div class="hotel-chip-row">${sources.map((source) => `<span class="hotel-chip">${source}</span>`).join("")}</div></section>
-    ${hotelDashboardData.reservations.length ? `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Client</th><th>Hébergement</th><th>Téléphone</th><th>Email</th><th>Message</th><th>Source</th><th>Date</th></tr></thead><tbody>${hotelDashboardData.reservations.map((request) => `<tr><td>${hotelDashboardEscape(request.clientName || "Client")}</td><td>${hotelDashboardEscape(request.property?.name || "Hébergement")}</td><td>${hotelDashboardEscape(request.clientPhone || "")}</td><td>${hotelDashboardEscape(request.clientEmail || "")}</td><td>${hotelDashboardEscape(request.message || "")}</td><td>Demande de réservation</td><td>${formatHotelDate(request.createdAt)}</td></tr>`).join("")}</tbody></table></section>` : EmptyState("Aucun contact reçu pour le moment.")}
-  `, "contacts");
+  return HotelsDashboardLayout(`${DashboardHeader("Contacts reçus", "Suivez les contacts générés par vos hébergements.")}<div id="pencmi-contacts"></div>`, "contacts");
 }
 
 function HotelStatisticsPage() {
@@ -348,6 +343,13 @@ function renderDashboard() {
   }));
 }
 
+function mountHotelMessaging() {
+  const inbox = document.querySelector("#pencmi-inbox");
+  if (inbox) void import("../../messaging/inbox.mjs").then(({ mountInbox }) => mountInbox(inbox, { scope: "owner", module: "hotels", emptyTitle: "Aucun message reçu pour le moment.", emptyText: "Les conversations liées à vos hébergements apparaîtront ici." }));
+  const contacts = document.querySelector("#pencmi-contacts");
+  if (contacts) void import("../../messaging/contacts-panel.mjs").then(({ mountContacts }) => mountContacts(contacts, { module: "hotels", messagesHref: hotelDashboardRouteHref(hotelDashboardRoutes.messages) }));
+}
+
 async function loadHotelDashboardData() {
   hotelDashboardData.loading = true;
   hotelDashboardData.error = "";
@@ -361,11 +363,18 @@ async function loadHotelDashboardData() {
     hotelDashboardData.hotels = listFromPayload(hotelsPayload);
     hotelDashboardData.reservations = listFromPayload(reservationsPayload);
     hotelDashboardData.reservationsMeta = reservationsPayload?.meta || null;
+    const [conversationCount, contactCount] = await Promise.all([
+      hotelApiRequest("/messages/conversations?scope=owner&module=hotels&limit=1", { includeMeta: true }).catch(() => null),
+      hotelApiRequest("/dashboard/contacts?module=hotels&limit=1", { includeMeta: true }).catch(() => null),
+    ]);
+    hotelDashboardData.conversationTotal = conversationCount?.meta?.total ?? null;
+    hotelDashboardData.contactTotal = contactCount?.meta?.total ?? null;
   } catch (error) {
     hotelDashboardData.error = error instanceof Error ? error.message : "Chargement impossible.";
   } finally {
     hotelDashboardData.loading = false;
     renderDashboard();
+    mountHotelMessaging();
   }
 }
 

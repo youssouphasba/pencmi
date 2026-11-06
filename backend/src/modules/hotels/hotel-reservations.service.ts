@@ -261,6 +261,7 @@ export class HotelReservationsService {
         });
         await tx.contactEvent.create({
           data: {
+            ownerUserId: property.ownerUserId,
             module: 'hotels',
             source: 'reservation_request',
             targetType: 'listing',

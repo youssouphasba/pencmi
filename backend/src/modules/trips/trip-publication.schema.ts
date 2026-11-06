@@ -141,7 +141,7 @@ export const tripPublicationSchema = z
         phoneNumber: text(30),
         contactEmail: z.union([z.literal(""), z.email().max(254)]).optional(),
         reservationRequestEnabled: flag,
-        internalMessagingEnabled: z.literal(false).optional(),
+        internalMessagingEnabled: flag,
         contactFormEnabled: z.literal(false).optional(),
         emailNotificationsEnabled: z.literal(false).optional(),
       })

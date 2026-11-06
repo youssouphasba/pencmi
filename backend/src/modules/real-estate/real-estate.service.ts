@@ -199,6 +199,7 @@ export class RealEstateService {
       });
       await tx.contactEvent.create({
         data: {
+          ownerUserId: listing.ownerUserId,
           module: PencmiModule.real_estate,
           source: ContactSource.visit_request,
           targetType: TargetType.listing,

@@ -114,7 +114,9 @@ test(
                 createdAt: "2099-01-01",
               },
             ];
-          } else if (bulk && path === "/dashboard/voyages/conversations") {
+          } else if (bulk && path === "/messages/conversations/conversation/read") {
+            data = { lastReadAt: new Date().toISOString() };
+          } else if (bulk && path === "/messages/conversations") {
             data = [
               {
                 id: "conversation",
@@ -398,13 +400,12 @@ test(
         assert.equal(dialog.message(),'Erreur réseau test');
         await dialog.accept();
         await page.goto(origin + "/dashboard/voyages/messages/");
-        await page.locator("[data-open-trip-conversation]").click();
-        assert.equal(await page.locator(".trip-dashboard-card b").count(), 0);
-        await page
-          .locator("[data-trip-reply] textarea")
-          .fill("Réponse envoyée");
-        await page.locator('[data-trip-reply] button[type="submit"]').click();
-        await page.getByText("Réponse envoyée", { exact: false }).waitFor();
+        await page.locator(".pm-conversation").click();
+        await page.locator(".pm-thread .pm-message-body").first().waitFor();
+        assert.equal(await page.locator(".pm-thread b").count(), 0);
+        await page.locator(".pm-thread textarea").fill("Réponse envoyée");
+        await page.locator('.pm-thread button[type="submit"]').click();
+        await page.locator(".pm-thread .pm-message-body", { hasText: "Réponse envoyée" }).last().waitFor();
         await page.goto(origin + "/dashboard/voyages/statistiques/");
         await page
           .locator(".kpi-value")

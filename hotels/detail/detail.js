@@ -208,6 +208,7 @@ function hotelDetailPage() {
             <button class="btn btn-ghost" type="button" data-share>Partager</button>
             ${typeof ReportButton === "function" ? ReportButton("Signaler") : ""}
             <button class="btn btn-light" type="button" data-open-contact>Contacter</button>
+            <span data-listing-messaging></span>
             <button class="btn btn-primary" type="button" data-open-reservation ${hotelCanRequestReservation() ? '' : 'disabled'}>Demander une réservation</button>
           </div>
         </section>
@@ -230,6 +231,10 @@ function hotelDetailPage() {
 }
 
 function bindHotelDetailActions() {
+  if (hotelDetailMetadata().contactPreferences?.internalMessagingEnabled === true) {
+    const listing = hotelDetailState.listing;
+    void import('../../messaging/listing-messaging.mjs').then(({ mountListingMessaging }) => mountListingMessaging(document.querySelector('[data-listing-messaging]'), { module: 'hotels', listingId: listing.id, listingTitle: listing.name, enabled: true }));
+  }
   const mainPhoto = document.querySelector("#hotel-main-photo");
   document.querySelectorAll("[data-hotel-photo]").forEach((button) => {
     button.addEventListener("click", () => {

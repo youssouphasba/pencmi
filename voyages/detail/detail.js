@@ -170,6 +170,7 @@ function tripDetailPage() {
             <button class="btn btn-ghost" type="button" data-share>Partager</button>
             ${typeof ReportButton === "function" ? ReportButton("Signaler") : ""}
             <button class="btn btn-light" type="button" data-open-contact>Contacter le transporteur</button>
+            <span data-listing-messaging></span>
             ${listing.occurrenceId && listing.availableSeats > 0 && metadata.contactPreferences?.reservationRequestEnabled !== false ? '<button class="btn btn-primary" type="button" data-open-reservation>Demander une place</button>' : ''}
           </div>
         </section>
@@ -191,6 +192,10 @@ function tripDetailPage() {
 }
 
 function bindTripDetailActions() {
+  const tripListing = tripDetailState.listing;
+  if (tripListing?.metadata?.contactPreferences?.internalMessagingEnabled === true) {
+    void import('../../messaging/listing-messaging.mjs').then(({ mountListingMessaging }) => mountListingMessaging(document.querySelector('[data-listing-messaging]'), { module: 'trips', listingId: tripListing.id, listingTitle: tripListing.title, enabled: true }));
+  }
   document.querySelector('[data-select-occurrence]')?.addEventListener('change',event=>{const url=new URL(location.href);url.searchParams.set('occurrenceId',event.target.value);location.href=url;});
   document.querySelector("[data-open-reservation]")?.addEventListener("click", () => {
     document.querySelector("#trip-reservation-modal")?.classList.add("is-open");

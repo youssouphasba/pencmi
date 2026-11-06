@@ -135,7 +135,7 @@ function VehiclesDashboardLayout(content, currentPage) {
 
 function VehiclesDashboardSidebar(currentPage) {
   const listingCount = String(vehicleDashboardData.listings.length || 0);
-  const contactCount = String(vehicleDashboardData.requests.length + vehicleDashboardData.contacts.length || 0);
+  const contactCount = String(vehicleDashboardData.contactTotal ?? vehicleDashboardData.requests.length);
   const items = [
     ["Vue d’ensemble", vehicleDashboardRoutes.overview, "overview"],
     ["Annonces", vehicleDashboardRoutes.listings, "listings", listingCount],
@@ -174,7 +174,8 @@ function VehiclesDashboardPage() {
     ["Annonces actives", activeListings],
     ["Annonces en attente", pendingListings],
     ["Demandes location/chauffeur", vehicleDashboardData.requests.length],
-    ["Contacts", vehicleDashboardData.contacts.length]
+    ["Conversations", vehicleDashboardData.conversationTotal ?? "—"],
+    ["Contacts", vehicleDashboardData.contactTotal ?? "—"]
   ];
   return VehiclesDashboardLayout(`
     ${DashboardHeader("Dashboard voitures", "Suivez vos annonces, contacts, messages et performances.", `<a class="btn btn-primary" href="${vehicleDashboardRouteHref(vehicleDashboardRoutes.publish)}">Publier une voiture</a>`)}
@@ -199,14 +200,14 @@ function VehicleListingsTable() {
 }
 
 function VehicleMessagesPage() {
-  return VehiclesDashboardLayout(`${DashboardHeader("Messages voitures", "Suivez les conversations clients, le véhicule concerné et vos réponses.")}${EmptyState("Aucun message reçu pour le moment.", "Les messages clients liés à vos véhicules apparaîtront ici.")}`, "messages");
+  return VehiclesDashboardLayout(`${DashboardHeader("Messages voitures", "Suivez les conversations clients, le véhicule concerné et vos réponses.")}<div id="pencmi-inbox"></div>`, "messages");
 }
 
 function VehicleContactsPage() {
   return VehiclesDashboardLayout(`
     ${DashboardHeader("Contacts reçus", "Suivez les contacts générés par vos annonces voitures.")}
-    ${vehicleDashboardData.contacts.length ? `<section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Client</th><th>Annonce</th><th>Coordonnées</th><th>Message</th><th>Date</th></tr></thead><tbody>${vehicleDashboardData.contacts.map(contact => { const data = contact.metadata || {}; const esc = vehicleDashboardEscape; return `<tr><td>${esc(data.clientName)}</td><td>${esc(data.listingTitle)}</td><td>${esc([data.clientPhone, data.clientEmail].filter(Boolean).join(' · '))}</td><td>${esc(data.message)}</td><td>${formatVehicleDate(contact.createdAt)}</td></tr>`; }).join('')}</tbody></table></section>` : ''}
-    ${vehicleDashboardData.requests.length ? `<section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Client</th><th>Annonce</th><th>Type</th><th>Début</th><th>Fin</th><th>Message</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead><tbody>${vehicleDashboardData.requests.map(VehicleRequestRow).join("")}</tbody></table></section>` : vehicleDashboardData.contacts.length ? '' : EmptyState("Aucun contact reçu pour le moment.")}
+    <div id="pencmi-contacts"></div>
+    ${vehicleDashboardData.requests.length ? `<h2>Demandes à traiter</h2><section class="vehicle-table-wrap"><table class="vehicle-table"><thead><tr><th>Client</th><th>Annonce</th><th>Type</th><th>Début</th><th>Fin</th><th>Message</th><th>Statut</th><th>Date</th><th>Actions</th></tr></thead><tbody>${vehicleDashboardData.requests.map(VehicleRequestRow).join("")}</tbody></table></section>` : ''}
   `, "contacts");
 }
 
@@ -295,23 +296,33 @@ async function loadVehicleDashboardData() {
   vehicleDashboardData.error = "";
   renderDashboard();
   try {
-    const [listingsPayload, rentalPayload, chauffeurPayload, contacts] = await Promise.all([
+    const [listingsPayload, rentalPayload, chauffeurPayload, contactCount, conversationCount] = await Promise.all([
       vehicleApiList("/dashboard/voitures"),
       vehicleApiList("/dashboard/voitures/rental-requests"),
       vehicleApiList("/dashboard/voitures/chauffeur-requests"),
-      vehicleApiRequest('/dashboard/contacts?module=vehicles'),
+      vehicleApiRequest('/dashboard/contacts?module=vehicles&limit=1', { includeMeta: true }).catch(() => null),
+      vehicleApiRequest('/messages/conversations?scope=owner&module=vehicles&limit=1', { includeMeta: true }).catch(() => null),
     ]);
     const rentalRequests = vehicleListFromPayload(rentalPayload).map((request) => ({ ...request, requestType: "location" }));
     const chauffeurRequests = vehicleListFromPayload(chauffeurPayload).map((request) => ({ ...request, requestType: "chauffeur" }));
     vehicleDashboardData.listings = vehicleListFromPayload(listingsPayload);
-    vehicleDashboardData.contacts = vehicleListFromPayload(contacts).filter(contact => contact.source === 'form');
+    vehicleDashboardData.contactTotal = contactCount?.meta?.total ?? null;
+    vehicleDashboardData.conversationTotal = conversationCount?.meta?.total ?? null;
     vehicleDashboardData.requests = [...rentalRequests, ...chauffeurRequests].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   } catch (error) {
     vehicleDashboardData.error = error instanceof Error ? error.message : "Chargement impossible.";
   } finally {
     vehicleDashboardData.loading = false;
     renderDashboard();
+    mountVehicleMessaging();
   }
+}
+
+function mountVehicleMessaging() {
+  const inbox = document.querySelector("#pencmi-inbox");
+  if (inbox) void import("../../messaging/inbox.mjs").then(({ mountInbox }) => mountInbox(inbox, { scope: "owner", module: "vehicles", emptyTitle: "Aucun message reçu pour le moment.", emptyText: "Les messages clients liés à vos véhicules apparaîtront ici." }));
+  const contacts = document.querySelector("#pencmi-contacts");
+  if (contacts) void import("../../messaging/contacts-panel.mjs").then(({ mountContacts }) => mountContacts(contacts, { module: "vehicles", messagesHref: vehicleDashboardRouteHref(vehicleDashboardRoutes.messages) }));
 }
 
 void import('../../voitures/vehicle-content.mjs').then(module => { vehicleDashboardPresentation = module; return loadVehicleDashboardData(); });

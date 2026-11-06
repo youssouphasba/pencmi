@@ -124,6 +124,7 @@ export function publicTrip(row: any) {
     reservationRequestEnabled: p.contactPreferences
       ? !!c.reservationRequestEnabled
       : true,
+    internalMessagingEnabled: c.internalMessagingEnabled === true,
   };
   return {
     id: row.id,
@@ -524,7 +525,8 @@ export class TripsService {
           module: "trips",
           targetType: "listing",
           targetId: { in: ids },
-          source: { not: "seat_request" },
+          // A conversation is counted once, in inboundMessages.
+          source: { notIn: ["seat_request", "internal_message"] },
         },
         _count: { _all: true },
       }),

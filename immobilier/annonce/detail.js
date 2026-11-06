@@ -261,6 +261,7 @@ function ContactCard(listing) {
       <div class="contact-actions">
         <a class="btn btn-light" href="${advertiserHref}">Voir le profil</a>
         ${listing.contactPreferences.visitRequestEnabled !== false ? '<button class="btn btn-ghost" type="button" data-open-visit>Demander une visite</button>' : ''}
+        <div data-listing-messaging></div>
       </div>
     </aside>
   `;
@@ -398,7 +399,12 @@ async function initializePage() {
 
   try {
     const listing = await apiRequest(`/immobilier/${listingId}`);
-    renderListingDetail(mapListing(listing));
+    const mapped = mapListing(listing);
+    renderListingDetail(mapped);
+    if (mapped.contactPreferences.internalMessagingEnabled === true) {
+      const { mountListingMessaging } = await import('../../messaging/listing-messaging.mjs');
+      mountListingMessaging(document.querySelector('[data-listing-messaging]'), { module: 'real_estate', listingId: listing.id, listingTitle: listing.title, enabled: true });
+    }
   } catch (error) {
     document.querySelector("#listing-detail-page").innerHTML = ListingNotFoundState(error instanceof Error ? error.message : "Annonce introuvable.");
   }
