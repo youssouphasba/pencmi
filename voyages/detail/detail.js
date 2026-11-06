@@ -5,6 +5,10 @@ const tripDetailRoutes = {
   login: "/login",
 };
 
+const tripDetailEscape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const tripDetailDisplay = value => typeof value === 'string' ? tripDetailEscape(value) : Array.isArray(value) ? value.map(tripDetailDisplay) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, tripDetailDisplay(item)])) : value;
+let tripRequestId, tripRequestBusy = false, tripDetailContent;
+
 let tripDetailState = {
   listing: null,
 };
@@ -14,11 +18,13 @@ function tripDetailRouteHref(path) {
 }
 
 function tripDetailMetadata() {
-  return tripDetailState.listing?.metadata || {};
+  return tripDetailDisplay(tripDetailState.listing?.metadata || {});
 }
 
 function tripDetailAdvertiser() {
-  return pencmiBuildAdvertiser(tripDetailState.listing?.owner);
+  const advertiser = pencmiBuildAdvertiser(tripDetailState.listing?.owner);
+  const c = tripDetailState.listing?.metadata?.contactPreferences || {};
+  return tripDetailDisplay({ ...advertiser, phone: c.phoneEnabled ? c.phoneNumber : '', whatsapp: c.whatsappEnabled ? c.whatsappNumber : '', email: c.emailEnabled ? c.contactEmail : '' });
 }
 
 function tripDetailHeader() {
@@ -50,11 +56,15 @@ function tripVehicleSection() {
   const metadata = tripDetailMetadata();
   const items = [
     ["Véhicule", metadata.vehicleLabel],
-    ["Heure d’arrivée estimée", metadata.estimatedArrivalTime],
+    ["Heure d’arrivée estimée", metadata.estimatedArrivalTime ? metadata.estimatedArrivalTime + (metadata.arrivalNextDay ? ' (lendemain)' : '') : ''],
     ["Durée estimée", metadata.estimatedDuration],
     ["Bagages", metadata.luggageAllowed ? "Acceptés" : ""],
     ["Gros bagages", metadata.largeLuggageAllowed ? "Acceptés" : ""],
     ["Climatisation", metadata.airConditioning ? "Oui" : ""],
+    ['Bagages inclus dans le prix', typeof metadata.luggageIncluded === 'boolean' ? metadata.luggageIncluded ? 'Oui' : 'Non' : ''],
+    ['Supplément bagage', metadata.luggageExtra != null ? `${metadata.luggageExtra} FCFA` : ''],
+    ['Prix négociable', metadata.negotiable ? 'Oui' : ''],
+    ['Informations passagers', metadata.passengerInfo],
     ["Trajet direct", metadata.directTrip ? "Oui" : ""],
   ].filter(([, value]) => value);
   return `<section class="trip-detail-card"><h2>Informations véhicule</h2>${items.length ? `<div class="trip-chip-row">${items.map(([label, value]) => `<span class="trip-chip">${label} : ${value}</span>`).join("")}</div>` : `<p>Aucune information véhicule disponible.</p>`}</section>`;
@@ -98,6 +108,7 @@ function tripReservationModal() {
           </div>
         </form>
         <p id="trip-reservation-confirmation" hidden>Votre demande de place a été envoyée.</p>
+        <p id="trip-reservation-error" role="alert" hidden></p>
       </section>
     </div>
   `;
@@ -127,7 +138,7 @@ function tripDetailPage() {
     return;
   }
 
-  const listing = tripDetailState.listing;
+  const listing = tripDetailDisplay(tripDetailState.listing);
   const metadata = tripDetailMetadata();
 
   document.querySelector("#trip-detail-page").innerHTML = `
@@ -141,17 +152,20 @@ function tripDetailPage() {
             <div><span>${metadata.estimatedArrivalTime || ""}</span><strong>${listing.arrivalCity}</strong><small>${listing.arrivalPoint || ""}</small></div>
           </div>
           <div class="trip-chip-row">
-            ${listing.vehicleType ? `<span class="trip-chip">${listing.vehicleType}</span>` : ""}
+            ${listing.vehicleType ? `<span class="trip-chip">${tripDetailContent.tripTypes[listing.vehicleType] || listing.vehicleType}</span>` : ""}
             ${listing.availableSeats ? `<span class="trip-chip">${listing.availableSeats} places</span>` : ""}
             ${listing.pricePerSeat ? `<span class="trip-chip">${pencmiFormatPrice(listing.pricePerSeat, listing.currency || "FCFA")}</span>` : ""}
-            ${listing.departureDate ? `<span class="trip-chip">${pencmiFormatDate(listing.departureDate)}</span>` : ""}
+            ${listing.departureDate ? `<span class="trip-chip">${new Date(listing.departureDate).toLocaleDateString('fr-FR', { timeZone: 'Africa/Dakar' })}</span>` : ""}
           </div>
           ${metadata.description ? `<p>${metadata.description}</p>` : ""}
+          ${metadata.instructions ? `<p>${metadata.instructions}</p>` : ''}
+          ${metadata.meetingPoints ? `<p>Rendez-vous : ${metadata.meetingPoints}</p>` : ''}
+          <p>Places déclarées, à confirmer avec le transporteur.</p>
           <div class="trip-detail-actions" id="reservation">
             <button class="btn btn-ghost" type="button" data-share>Partager</button>
             ${typeof ReportButton === "function" ? ReportButton("Signaler") : ""}
-            <button class="btn btn-light" type="button" data-open-contact>Envoyer un message</button>
-            <button class="btn btn-primary" type="button" data-open-reservation>Demander une place</button>
+            <button class="btn btn-light" type="button" data-open-contact>Contacter le transporteur</button>
+            ${metadata.contactPreferences?.reservationRequestEnabled !== false ? '<button class="btn btn-primary" type="button" data-open-reservation>Demander une place</button>' : ''}
           </div>
         </section>
         ${tripVehicleSection()}
@@ -174,15 +188,19 @@ function tripDetailPage() {
 function bindTripDetailActions() {
   document.querySelector("[data-open-reservation]")?.addEventListener("click", () => {
     document.querySelector("#trip-reservation-modal")?.classList.add("is-open");
+    document.querySelector('#trip-reservation-modal')?.setAttribute('aria-hidden', 'false');
   });
   document.querySelector("[data-close-reservation]")?.addEventListener("click", () => {
     document.querySelector("#trip-reservation-modal")?.classList.remove("is-open");
+    document.querySelector('#trip-reservation-modal')?.setAttribute('aria-hidden', 'true');
   });
   document.querySelector("[data-open-contact]")?.addEventListener("click", () => {
     document.querySelector("#trip-contact-modal")?.classList.add("is-open");
+    document.querySelector('#trip-contact-modal')?.setAttribute('aria-hidden', 'false');
   });
   document.querySelector("[data-close-contact]")?.addEventListener("click", () => {
     document.querySelector("#trip-contact-modal")?.classList.remove("is-open");
+    document.querySelector('#trip-contact-modal')?.setAttribute('aria-hidden', 'true');
   });
   document.querySelector("[data-share]")?.addEventListener("click", async () => {
     const url = window.location.href;
@@ -195,13 +213,21 @@ function bindTripDetailActions() {
 
   document.querySelector("#trip-reservation-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    if (tripRequestBusy) return;
+    const form = event.currentTarget, button = form.querySelector('[type="submit"]'), errorBox = document.querySelector('#trip-reservation-error');
+    const formData = new FormData(form);
+    if (!formData.get('clientPhone') && !formData.get('clientEmail')) { errorBox.textContent = 'Renseignez un téléphone ou un email.'; errorBox.hidden = false; return; }
+    tripRequestBusy = true; button.disabled = true; errorBox.hidden = true;
+    try {
+    const { publicationOperationId } = await import('../../publier/real-estate-api.mjs');
+    tripRequestId ||= publicationOperationId();
     await pencmiApiRequest(`/voyages/${encodeURIComponent(tripDetailState.listing.id)}/seat-requests`, {
       method: "POST",
       body: JSON.stringify({
+        requestId: tripRequestId,
         clientName: formData.get("clientName"),
-        clientPhone: formData.get("clientPhone"),
-        clientEmail: formData.get("clientEmail"),
+        clientPhone: formData.get("clientPhone") || undefined,
+        clientEmail: formData.get("clientEmail") || undefined,
         requestedSeats: Number(formData.get("requestedSeats") || 1),
         luggage: formData.get("luggage") === "1",
         message: formData.get("message"),
@@ -211,8 +237,12 @@ function bindTripDetailActions() {
     const confirmation = document.querySelector("#trip-reservation-confirmation");
     if (confirmation) {
       confirmation.hidden = false;
+      confirmation.textContent = 'Votre demande a été reçue. Elle ne constitue pas une réservation confirmée.';
     }
-    event.currentTarget.reset();
+    form.hidden = true;
+    const close = document.createElement('button'); close.type = 'button'; close.className = 'btn btn-light'; close.textContent = 'Fermer'; close.onclick = () => { const modal = document.querySelector('#trip-reservation-modal'); modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true'); }; confirmation.append(close);
+    } catch (error) { errorBox.textContent = error.message || 'Envoi impossible. Vos données sont conservées.'; errorBox.hidden = false; }
+    finally { tripRequestBusy = false; button.disabled = false; }
   });
 }
 
@@ -226,6 +256,7 @@ async function loadTripDetail() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  tripDetailContent = await import('../trip-content.mjs');
   tripDetailHeader();
   try {
     await loadTripDetail();

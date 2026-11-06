@@ -334,7 +334,8 @@ body[data-real-estate-publication] .photo-dropzone input { box-sizing: border-bo
   }
 
   body[data-real-estate-publication] .publish-nav,
-  body[data-hotel-publication] .publish-nav { position: static; }
+  body[data-hotel-publication] .publish-nav,
+  body[data-trip-publication] .publish-nav { position: static; }
 
   .publish-nav .btn {
     width: 100%;
@@ -353,6 +354,10 @@ body[data-hotel-publication] .step-pill { white-space: normal; text-align: left;
 .hotel-photo-actions { display: flex; flex-wrap: wrap; gap: 4px; }
 body[data-vehicle-publication] .publish-main { min-width: 0; }
 body[data-vehicle-publication] .stepper { flex-wrap: wrap; overflow: visible; }
+body[data-trip-publication] .stepper { flex-wrap: wrap; overflow: visible; }
+body[data-trip-publication] .step-pill { white-space: normal; max-width: 100%; text-align: left; cursor: pointer; }
+body[data-trip-publication] .publish-shell { grid-template-columns: minmax(0, 1fr); }
+body[data-trip-publication] .preview-box { overflow-wrap: anywhere; }
 body[data-vehicle-publication] .step-pill { white-space: normal; text-align: left; max-width: 100%; cursor: pointer; }
 body[data-vehicle-publication] .publish-nav { position: static; }
 body[data-vehicle-publication] input, body[data-vehicle-publication] select, body[data-vehicle-publication] textarea { min-width: 0; max-width: 100%; }

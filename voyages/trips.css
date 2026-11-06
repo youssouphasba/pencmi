@@ -126,11 +126,12 @@
 }
 
 .trip-results-layout {
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr) 280px;
   gap: 16px;
   align-items: start;
 }
+.trip-card, .trip-detail-card, .trip-modal-card { min-width: 0; overflow-wrap: anywhere; }
 
 .trip-filters,
 .trip-map,

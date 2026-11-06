@@ -423,7 +423,26 @@ function AdminListingsPage() {
 }
 
 function AdminListingsByModulePage(moduleKey, title, items, currentPage) {
+  if (moduleKey === 'trips') return AdminTripListingsPage();
   return AdminDataPage(currentPage, title, "Consultez les annonces de ce module.", AdminListingFilters(), ["Titre", "Annonceur", "Ville", "Statut", "Publication"], normalizeListingRows(items, moduleKey).map((row) => [row[0], row[2], row[3], row[4], row[5]]), "Aucune annonce disponible.");
+}
+
+let adminTripPage = 1;
+let adminTripStatus = new URLSearchParams(window.location?.search || '').get('status') || '';
+function AdminTripListingsPage() {
+  const rows = adminState.listings.trips.filter(item => !adminTripStatus || item.status === adminTripStatus);
+  const actions = { pending_review: [['active', 'Valider'], ['refused', 'Refuser']], active: [['suspended', 'Suspendre']], suspended: [['active', 'Réactiver'], ['refused', 'Refuser']] };
+  return AdminLayout(`<section class="admin-filter-row"><label>Statut<select data-trip-admin-filter><option value="">Tous</option>${['draft', 'pending_review', 'active', 'refused', 'suspended', 'expired'].map(status => `<option value="${status}"${adminTripStatus === status ? ' selected' : ''}>${escapeHtml(formatStatus(status))}</option>`).join('')}</select></label></section><p id="trip-moderation-error" role="alert"></p>${rows.length ? `<section class="admin-table-shell admin-section"><div class="admin-scroll"><table class="admin-table"><thead><tr><th>Trajet</th><th>Statut</th><th>Départ</th><th>Places / prix</th><th>Actions</th></tr></thead><tbody>${rows.slice((adminTripPage - 1) * 20, adminTripPage * 20).map(item => `<tr><td>${escapeHtml(item.title || 'Sans titre')}<details><summary>Examiner le trajet</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(JSON.stringify(item.metadata?.publication || {}, null, 2))}</pre></details></td><td>${escapeHtml(formatStatus(item.status))}</td><td>${escapeHtml(item.departureCity)} → ${escapeHtml(item.arrivalCity)}<br>${escapeHtml(formatDate(item.departureDate))} ${escapeHtml(item.departureTime)}</td><td>${escapeHtml(item.availableSeats ?? '')} / ${escapeHtml(item.pricePerSeat ?? '')} FCFA</td><td>${(actions[item.status] || []).map(([status, label]) => `<button class="btn btn-light" data-trip-moderation="${status}" data-id="${escapeHtml(item.id)}">${label}</button>`).join('')}</td></tr>`).join('')}</tbody></table></div></section><div class="admin-filter-row">${adminTripPage > 1 ? '<button class="btn btn-light" data-trip-admin-page="-1">Précédent</button>' : ''}${adminTripPage * 20 < rows.length ? '<button class="btn btn-light" data-trip-admin-page="1">Suivant</button>' : ''}</div>` : AdminEmptyState('Aucun trajet correspondant.')}`, 'listingsTrips', 'Modération des voyages', 'Examinez les trajets avant leur publication.');
+}
+
+async function loadTripModerationData() {
+  const { publicationRequest } = await import('../publier/real-estate-api.mjs');
+  const rows = [];
+  for (let page = 1; ; page++) {
+    const result = await publicationRequest(`/admin/listings/trips?page=${page}&limit=100`, { includeMeta: true });
+    rows.push(...listFrom(result.data ?? result));
+    if (page >= (result.meta?.totalPages || 1)) return rows;
+  }
 }
 
 function AdminValidationPage() {
@@ -548,6 +567,20 @@ function AdminOption(label) {
 }
 
 function bindAdmin() {
+  document.querySelector('[data-trip-admin-filter]')?.addEventListener('change', event => { adminTripStatus = event.target.value; adminTripPage = 1; document.querySelector('#admin-root').innerHTML = AdminTripListingsPage(); bindAdmin(); });
+  document.querySelectorAll('[data-trip-admin-page]').forEach(button => button.onclick = () => { adminTripPage += Number(button.dataset.tripAdminPage); document.querySelector('#admin-root').innerHTML = AdminTripListingsPage(); bindAdmin(); });
+  document.querySelectorAll('[data-trip-moderation]').forEach(button => button.onclick = async () => {
+    const status = button.dataset.tripModeration;
+    let reason;
+    if (status !== 'active') { reason = window.prompt('Motif de la décision'); if (!reason?.trim()) return; }
+    else if (!window.confirm('Valider et rendre ce trajet public ?')) return;
+    button.disabled = true;
+    try {
+      const { publicationRequest } = await import('../publier/real-estate-api.mjs');
+      await publicationRequest(`/admin/listings/trips/${encodeURIComponent(button.dataset.id)}/status`, { method: 'PATCH', body: { status, reason } });
+      await renderAdmin();
+    } catch (error) { document.querySelector('#trip-moderation-error').textContent = error.message; button.disabled = false; }
+  });
   document.querySelector("[data-open-admin-sidebar]")?.addEventListener("click", () => {
     document.querySelector("#admin-sidebar")?.classList.toggle("is-open");
   });
@@ -583,7 +616,7 @@ async function loadAdminData() {
       optionalApiRequest("/admin/listings/real-estate"),
       optionalApiRequest("/hotels"),
       optionalApiRequest("/voitures"),
-      optionalApiRequest("/voyages"),
+      loadTripModerationData(),
       optionalApiRequest("/admin/reports"),
     ]);
 

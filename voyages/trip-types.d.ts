@@ -10,6 +10,8 @@ type TripVehicleType =
 type TripStatus =
   | "draft"
   | "pending_review"
+  | "refused"
+  | "suspended"
   | "active"
   | "full"
   | "cancelled"

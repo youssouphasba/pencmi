@@ -1,60 +1,88 @@
-import { Type } from 'class-transformer';
-import { IsBoolean, IsDateString, IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { PaginationDto } from '../../common/pagination/pagination.dto';
+import { Type, Transform } from "class-transformer";
+import {
+  IsBoolean,
+  IsEmail,
+  IsIn,
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from "class-validator";
+import { TRIP_TYPES, TRIP_PHONE_PATTERN } from "./trip-publication.schema";
+import { PaginationDto } from "../../common/pagination/pagination.dto";
 
 export class TripSearchDto extends PaginationDto {
   @IsOptional()
   @IsString()
+  @MaxLength(150)
   departureCity?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(150)
   arrivalCity?: string;
+
+  @IsOptional() @IsString() @MaxLength(200) query?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) date?: string;
+  @IsOptional() @IsIn(TRIP_TYPES) vehicleType?: string;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  passengers?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(2147483647)
+  minPrice?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(2147483647)
+  maxPrice?: number;
+  @IsOptional()
+  @IsIn(["morning", "afternoon", "evening", "night"])
+  timeOfDay?: string;
 }
 
 export class CreateTripDto {
-  @IsString()
-  slug: string;
-
-  @IsString()
-  title: string;
-
-  @IsString()
-  vehicleType: string;
-
-  @IsString()
-  departureCity: string;
-
-  @IsString()
-  arrivalCity: string;
-
-  @IsOptional()
-  @IsDateString()
-  departureDate?: string;
-
-  @IsOptional()
-  @IsString()
-  departureTime?: string;
+  @IsUUID() requestId: string;
+  @IsOptional() @IsObject() publication?: Record<string, unknown>;
+}
+export class UpdateTripDto {
+  @IsObject() publication: Record<string, unknown>;
 }
 
-export class UpdateTripDto extends CreateTripDto {}
-
 export class CreateSeatRequestDto {
-  @IsOptional()
+  @IsUUID() requestId: string;
+  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
   @IsString()
-  clientName?: string;
+  @MinLength(2)
+  @MaxLength(150)
+  clientName: string;
 
   @IsOptional()
-  @IsString()
+  @Matches(TRIP_PHONE_PATTERN)
   clientPhone?: string;
 
   @IsOptional()
-  @IsString()
+  @IsEmail()
+  @MaxLength(254)
   clientEmail?: string;
 
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(200)
   requestedSeats: number;
 
   @IsOptional()
@@ -63,12 +91,25 @@ export class CreateSeatRequestDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(3000)
   message?: string;
 }
 
-const seatRequestStatuses = ['pending', 'accepted', 'refused', 'cancelled', 'completed', 'requires_more_info'] as const;
+const seatRequestStatuses = [
+  "pending",
+  "refused",
+  "cancelled",
+  "requires_more_info",
+] as const;
 
 export class UpdateSeatRequestStatusDto {
   @IsIn(seatRequestStatuses)
   status: (typeof seatRequestStatuses)[number];
+}
+export class ModerateTripDto {
+  @IsIn(["active", "refused", "suspended"]) status:
+    | "active"
+    | "refused"
+    | "suspended";
+  @IsOptional() @IsString() @MaxLength(2000) reason?: string;
 }

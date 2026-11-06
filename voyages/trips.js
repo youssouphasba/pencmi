@@ -11,7 +11,13 @@ const tripRoutes = {
 let tripState = {
   all: [],
   filtered: [],
+  meta: null,
+  error: '',
 };
+
+const tripEscape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const tripDisplay = value => typeof value === 'string' ? tripEscape(value) : Array.isArray(value) ? value.map(tripDisplay) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, item]) => [key, tripDisplay(item)])) : value;
+let tripContent;
 
 function tripRouteHref(path) {
   return window.PencmiConfig?.routeHref ? window.PencmiConfig.routeHref(path) : path;
@@ -37,6 +43,7 @@ function tripQueryValues() {
     minPrice: params.get("minPrice") || "",
     maxPrice: params.get("maxPrice") || "",
     timeOfDay: params.get("timeOfDay") || "",
+    page: params.get('page') || '1',
   };
 }
 
@@ -69,7 +76,7 @@ function tripsHeader() {
 }
 
 function tripHero() {
-  const values = tripQueryValues();
+  const values = tripDisplay(tripQueryValues());
   document.querySelector("#trip-hero").innerHTML = `
     <div class="trip-hero-inner">
       <h1>Trouvez un trajet entre les villes du Sénégal</h1>
@@ -114,12 +121,12 @@ function tripQuickSuggestions() {
 }
 
 function tripFiltersMarkup() {
-  const values = tripQueryValues();
+  const values = tripDisplay(tripQueryValues());
   return `
     <aside class="trip-filters">
       <form id="trip-filter-form">
-        <fieldset class="trip-filter-group"><legend>Recherche</legend><div class="trip-filter-grid"><input name="query" value="${values.query}" placeholder="Transporteur, ville ou point"><input name="depart" value="${values.depart}" placeholder="Départ"><input name="arrivee" value="${values.arrivee}" placeholder="Arrivée"></div></fieldset>
-        <fieldset class="trip-filter-group"><legend>Type de trajet</legend><select name="vehicleType"><option value="">Tous</option><option value="bus"${values.vehicleType === "bus" ? " selected" : ""}>Bus</option><option value="car"${values.vehicleType === "car" ? " selected" : ""}>Car</option><option value="minibus"${values.vehicleType === "minibus" ? " selected" : ""}>Minibus</option><option value="sept_places"${values.vehicleType === "sept_places" ? " selected" : ""}>7 places</option><option value="covoiturage"${values.vehicleType === "covoiturage" ? " selected" : ""}>Covoiturage</option></select></fieldset>
+        <fieldset class="trip-filter-group"><legend>Recherche</legend><div class="trip-filter-grid"><input name="query" value="${values.query}" placeholder="Titre, ville ou point"><input name="depart" value="${values.depart}" placeholder="Départ"><input name="arrivee" value="${values.arrivee}" placeholder="Arrivée"></div></fieldset>
+        <fieldset class="trip-filter-group"><legend>Type de trajet</legend><select name="vehicleType"><option value="">Tous</option>${Object.entries(tripContent.tripTypes).map(([code, label]) => `<option value="${code}"${values.vehicleType === code ? ' selected' : ''}>${tripEscape(label)}</option>`).join('')}</select></fieldset>
         <fieldset class="trip-filter-group"><legend>Date et horaire</legend><div class="trip-filter-grid"><input name="date" type="date" value="${values.date}"><select name="timeOfDay"><option value="">Tous</option><option value="morning"${values.timeOfDay === "morning" ? " selected" : ""}>Matin</option><option value="afternoon"${values.timeOfDay === "afternoon" ? " selected" : ""}>Après-midi</option><option value="evening"${values.timeOfDay === "evening" ? " selected" : ""}>Soir</option><option value="night"${values.timeOfDay === "night" ? " selected" : ""}>Nuit</option></select></div></fieldset>
         <fieldset class="trip-filter-group"><legend>Prix</legend><div class="trip-filter-grid"><input name="minPrice" type="number" min="0" value="${values.minPrice}" placeholder="Minimum"><input name="maxPrice" type="number" min="0" value="${values.maxPrice}" placeholder="Maximum"></div></fieldset>
         <div class="trip-card-actions"><button class="btn btn-primary" type="submit">Appliquer</button><a class="btn btn-ghost" href="${tripRouteHref(tripRoutes.trips)}">Réinitialiser</a></div>
@@ -129,6 +136,7 @@ function tripFiltersMarkup() {
 }
 
 function tripCard(listing) {
+  listing = tripDisplay(listing);
   const metadata = tripMetadata(listing);
   const advertiser = tripAdvertiser(listing);
   return `
@@ -136,17 +144,17 @@ function tripCard(listing) {
       <div class="trip-card-line">
         <div><span>${listing.departureTime || ""}</span><strong>${listing.departureCity}</strong><small>${listing.departurePoint || ""}</small></div>
         <div class="trip-line-dot"></div>
-        <div><span>${metadata.estimatedArrivalTime || ""}</span><strong>${listing.arrivalCity}</strong><small>${listing.arrivalPoint || ""}</small></div>
+        <div><span>${metadata.estimatedArrivalTime ? `${metadata.estimatedArrivalTime}${metadata.arrivalNextDay ? ' (lendemain)' : ''} · estimée` : ''}</span><strong>${listing.arrivalCity}</strong><small>${listing.arrivalPoint || ""}</small></div>
       </div>
       <div class="trip-chip-row">
-        ${listing.vehicleType ? `<span class="trip-chip">${listing.vehicleType}</span>` : ""}
+        ${listing.vehicleType ? `<span class="trip-chip">${tripContent.tripTypes[listing.vehicleType] || listing.vehicleType}</span>` : ""}
         ${listing.availableSeats ? `<span class="trip-chip">${listing.availableSeats} places</span>` : ""}
         ${listing.pricePerSeat ? `<span class="trip-chip">${pencmiFormatPrice(listing.pricePerSeat, listing.currency || "FCFA")}</span>` : ""}
         ${advertiser.verified ? `<span class="trip-chip">Vérifié</span>` : ""}
       </div>
-      <div class="trip-card-actions">
+      <p>Places déclarées, à confirmer avec le transporteur.</p><div class="trip-card-actions">
         <a class="btn btn-light" href="${tripRouteHref(`/voyages/${listing.id}`)}">Voir détails</a>
-        <a class="btn btn-primary" href="${tripRouteHref(`/voyages/${listing.id}`)}#reservation">Demander une place</a>
+        ${metadata.contactPreferences?.reservationRequestEnabled !== false ? `<a class="btn btn-primary" href="${tripRouteHref(`/voyages/${listing.id}`)}#reservation">Demander une place</a>` : ''}
       </div>
     </article>
   `;
@@ -158,17 +166,20 @@ function tripEmptyState() {
 
 function tripsPage() {
   const values = tripQueryValues();
-  const label = [values.depart, values.arrivee, values.vehicleType].filter(Boolean).join(" · ");
+  const label = tripEscape([values.depart, values.arrivee, values.vehicleType].filter(Boolean).join(" · "));
   document.querySelector("#trip-results").innerHTML = `
     <div class="trip-results-layout">
       ${tripFiltersMarkup()}
       <section class="trip-list">
-        <section class="trip-detail-card" style="margin-bottom:16px;"><h2>Résultats</h2><p>${tripState.filtered.length} trajet${tripState.filtered.length > 1 ? "s" : ""}${label ? ` pour ${label}` : ""}</p></section>
-        ${tripState.filtered.length ? tripState.filtered.map(tripCard).join("") : tripEmptyState()}
+        <section class="trip-detail-card" style="margin-bottom:16px;"><h2>Résultats</h2><p>${tripState.meta?.total ?? tripState.filtered.length} trajet(s)${label ? ` pour ${label}` : ""}</p></section>
+        ${tripState.error ? `<p role="alert">${tripEscape(tripState.error)}</p><button class="btn btn-light" data-trip-retry>Réessayer</button>` : tripState.filtered.length ? tripState.filtered.map(tripCard).join("") : tripEmptyState()}
+        <div class="trip-card-actions">${Number(values.page) > 1 ? '<button class="btn btn-light" data-trip-page="-1">Précédent</button>' : ''}${Number(values.page) < (tripState.meta?.totalPages || 1) ? '<button class="btn btn-light" data-trip-page="1">Suivant</button>' : ''}</div>
       </section>
-      <aside class="trip-map"><div class="trip-map-placeholder">Carte et points de départ prévus ici.</div></aside>
     </div>
   `;
+
+  document.querySelectorAll('[data-trip-page]').forEach(button => button.onclick = () => setTripQuery({ ...values, page: Number(values.page) + Number(button.dataset.tripPage) }));
+  document.querySelector('[data-trip-retry]')?.addEventListener('click', () => location.reload());
 
   document.querySelector("#trip-filter-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -199,67 +210,28 @@ function tripsFooter() {
   `;
 }
 
-function tripHourCategory(timeValue) {
-  if (!timeValue) return "";
-  const hour = Number(String(timeValue).split(":")[0]);
-  if (Number.isNaN(hour)) return "";
-  if (hour < 12) return "morning";
-  if (hour < 17) return "afternoon";
-  if (hour < 21) return "evening";
-  return "night";
-}
-
-function filterTrips(listings) {
-  const values = tripQueryValues();
-  const normalizedQuery = pencmiNormalizeText(values.query);
-  const normalizedDepart = pencmiNormalizeText(values.depart);
-  const normalizedArrivee = pencmiNormalizeText(values.arrivee);
-  const minPrice = Number(values.minPrice || 0);
-  const maxPrice = Number(values.maxPrice || 0);
-
-  return listings.filter((listing) => {
-    const metadata = tripMetadata(listing);
-    const haystack = pencmiNormalizeText([
-      listing.title,
-      listing.departureCity,
-      listing.arrivalCity,
-      listing.departurePoint,
-      listing.arrivalPoint,
-      metadata.transporterName,
-      metadata.description,
-    ].filter(Boolean).join(" "));
-    const price = Number(listing.pricePerSeat || 0);
-
-    if (normalizedQuery && !haystack.includes(normalizedQuery)) return false;
-    if (normalizedDepart && pencmiNormalizeText(listing.departureCity) !== normalizedDepart) return false;
-    if (normalizedArrivee && pencmiNormalizeText(listing.arrivalCity) !== normalizedArrivee) return false;
-    if (values.vehicleType && pencmiNormalizeText(listing.vehicleType) !== pencmiNormalizeText(values.vehicleType)) return false;
-    if (values.date && pencmiFormatDate(listing.departureDate) !== pencmiFormatDate(values.date)) return false;
-    if (minPrice && (!price || price < minPrice)) return false;
-    if (maxPrice && price > maxPrice) return false;
-    if (values.timeOfDay && tripHourCategory(listing.departureTime) !== values.timeOfDay) return false;
-    return true;
-  });
-}
-
 async function loadTrips() {
   const values = tripQueryValues();
   const apiParams = new URLSearchParams();
   if (values.depart) apiParams.set("departureCity", values.depart);
   if (values.arrivee) apiParams.set("arrivalCity", values.arrivee);
-  const payload = await pencmiApiRequest(`/voyages${apiParams.toString() ? `?${apiParams.toString()}` : ""}`);
+  for (const key of ['query', 'date', 'passengers', 'vehicleType', 'minPrice', 'maxPrice', 'timeOfDay', 'page']) if (values[key]) apiParams.set(key, values[key]);
+  const payload = await pencmiApiRequest(`/voyages?${apiParams}`, { includeMeta: true });
   const data = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.items) ? payload.items : [];
   tripState.all = data;
-  tripState.filtered = filterTrips(data);
+  tripState.filtered = data;
+  tripState.meta = payload?.meta || null;
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+  tripContent = await import('./trip-content.mjs');
   tripsHeader();
   tripHero();
   tripQuickSuggestions();
   try {
     await loadTrips();
-  } catch {
+  } catch (error) {
+    tripState.error = error.message || 'Chargement impossible.';
     tripState.all = [];
     tripState.filtered = [];
   }

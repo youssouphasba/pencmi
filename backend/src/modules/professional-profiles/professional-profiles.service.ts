@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { tripPublicWhere, publicTrip } from '../trips/trips.service';
 import { AdvertiserReviewStatus, ListingStatus, ProfessionalType } from '@prisma/client';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { FilesService } from '../../files/files.service';
@@ -54,7 +55,7 @@ export class ProfessionalProfilesService {
         take: 12,
       }),
       this.prisma.tripListing.findMany({
-        where: { ownerUserId: userId, status: ListingStatus.active, deletedAt: null },
+        where: { ownerUserId: userId, ...tripPublicWhere({}) },
         orderBy: { updatedAt: 'desc' },
         take: 12,
       }),
@@ -73,7 +74,7 @@ export class ProfessionalProfilesService {
         realEstate: realEstateListings,
         hotels: hotelListings,
         vehicles: vehicleListings,
-        trips: tripListings,
+        trips: tripListings.map(publicTrip),
       },
       reviewSummary,
     };
