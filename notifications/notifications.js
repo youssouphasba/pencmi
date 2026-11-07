@@ -108,13 +108,13 @@ function NotificationsPage() {
         <h1>Notifications</h1>
         <p>Suivez les événements importants de vos espaces Péncmi.</p>
       </div>
-      <button class="btn btn-primary" type="button" data-mark-all-read>Tout marquer comme lu</button>
     </section>
-    ${NotificationFilters()}
-    <section class="notifications-card">
-      ${pencmiNotifications.length ? NotificationList() : EmptyNotificationsState()}
-    </section>
+    <section class="notifications-card" data-notifications-inbox></section>
   `;
+  const inbox = root.querySelector('[data-notifications-inbox]');
+  void import('../saved/notifications-page.mjs')
+    .then(({ mountNotifications }) => mountNotifications(inbox))
+    .catch(() => { inbox.textContent = 'Chargement des notifications impossible.'; });
 }
 
 function bindNotificationBell() {

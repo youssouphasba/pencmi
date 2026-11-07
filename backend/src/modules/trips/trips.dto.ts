@@ -4,6 +4,7 @@ import {
   IsEmail,
   IsIn,
   IsInt,
+  IsISO8601,
   IsObject,
   IsOptional,
   IsString,
@@ -116,6 +117,7 @@ export class ModerateTripDto {
     | "refused"
     | "suspended";
   @IsOptional() @IsString() @MaxLength(2000) reason?: string;
+  @IsOptional() @IsISO8601({ strict: true }) @MaxLength(35) expectedUpdatedAt?: string;
 }
 export class CancelTripOccurrenceDto {
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))

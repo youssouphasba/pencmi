@@ -37,6 +37,20 @@ import {
   validateSubmission,
 } from './publication.schema';
 
+export function validateStoredRealEstatePublication(listing: Pick<import('@prisma/client').RealEstateListing, 'title' | 'description' | 'transaction' | 'propertyType' | 'metadata'>) {
+  const metadata = listing.metadata;
+  const publication = metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata.publication : undefined;
+  const value = validatePublication({
+    title: listing.title,
+    description: listing.description ?? '',
+    transaction: listing.transaction || undefined,
+    propertyType: listing.propertyType || undefined,
+    metadata: publication ?? {},
+  });
+  validateSubmission(value);
+  return value;
+}
+
 @Injectable()
 export class RealEstateService {
   private readonly logger = new Logger(RealEstateService.name);
@@ -451,15 +465,7 @@ export class RealEstateService {
     return this.prisma.$transaction(async (tx) => {
       await this.lock(tx, id);
       const listing = await this.owned(tx, ownerUserId, id, true);
-      const metadata = (listing.metadata || {}) as Record<string, any>;
-      const value = validatePublication({
-        title: listing.title,
-        description: listing.description,
-        transaction: listing.transaction || undefined,
-        propertyType: listing.propertyType || undefined,
-        metadata: metadata.publication || {},
-      });
-      validateSubmission(value);
+      validateStoredRealEstatePublication(listing);
       return tx.realEstateListing.update({
         where: { id },
         data: { status: ListingStatus.pending_review },

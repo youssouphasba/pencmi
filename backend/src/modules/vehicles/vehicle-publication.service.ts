@@ -97,6 +97,17 @@ export function vehiclePublicationFromListing(listing: any) {
   };
 }
 
+export function validateStoredVehiclePublication(listing: import('@prisma/client').VehicleListing) {
+  const input = validateVehiclePublication({
+    vehicleMode: listing.vehicleMode || undefined,
+    title: listing.title,
+    description: listing.description ?? '',
+    metadata: vehiclePublicationFromListing(listing),
+  });
+  validateVehicleSubmission(input);
+  return input;
+}
+
 @Injectable()
 export class VehiclePublicationService {
   private readonly logger = new Logger(VehiclePublicationService.name);
@@ -275,13 +286,7 @@ export class VehiclePublicationService {
     await this.prisma.$transaction(
       async (tx) => {
         const listing = await this.lock(tx, ownerUserId, id);
-        const input = validateVehiclePublication({
-          vehicleMode: listing.vehicleMode || undefined,
-          title: listing.title,
-          description: listing.description ?? '',
-          metadata: vehiclePublicationFromListing(listing),
-        });
-        validateVehicleSubmission(input);
+        validateStoredVehiclePublication(listing);
         await tx.vehicleListing.update({
           where: { id },
           data: { status: 'pending_review' },

@@ -1,3 +1,4 @@
+import { assertModerationTransition, assertModerationVersion, recordListingDecision } from '../../common/utils/listing-moderation';
 import {
   BadRequestException,
   ConflictException,
@@ -265,14 +266,9 @@ export class TripPublicationService {
       const row = await tx.tripListing.findFirst({
         where: { id, deletedAt: null },
       });
-      if (!row) throw new NotFoundException("Trajet introuvable.");
-      const transitions: Record<string, string[]> = {
-        pending_review: ["active", "refused"],
-        active: ["suspended"],
-        suspended: ["active", "refused"],
-      };
-      if (!transitions[row.status]?.includes(dto.status))
-        throw new ConflictException("Transition de modération non autorisée.");
+      if (!row || row.status === 'deleted') throw new NotFoundException("Trajet introuvable.");
+      assertModerationVersion(row.updatedAt, dto.expectedUpdatedAt);
+      assertModerationTransition(row.status, dto.status, dto.reason);
       if (dto.status === "active") {
         const p = validateTripPublication(tripPublicationFromListing(row));
         validateTripSubmission(p);
@@ -282,16 +278,7 @@ export class TripPublicationService {
         where: { id },
         data: { status: dto.status },
       });
-      await tx.auditLog.create({
-        data: {
-          actorUserId,
-          action: `trip.${dto.status}`,
-          module: "trips",
-          targetType: "listing",
-          targetId: id,
-          metadata: { previousStatus: row.status, reason: dto.reason || null },
-        },
-      });
+      await recordListingDecision(tx, actorUserId, 'trips', row, dto.status, dto.reason);
       return updated;
     });
   }

@@ -25,8 +25,4 @@ export class AdminController {
     return this.service.advertisers();
   }
 
-  @Get('listings/real-estate')
-  realEstateListings() {
-    return this.service.realEstateListings();
-  }
 }

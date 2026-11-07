@@ -40,11 +40,11 @@ export function hotelRoomDraft(room: any) {
     room.metadata,
   );
   return {
+    ...metadata,
     id: room.id,
     name: room.name,
     roomType: room.roomType || '',
     capacity: room.capacity ?? undefined,
-    ...metadata,
     enabled: room.status === 'active',
     rates:
       draftRates ??
@@ -73,6 +73,19 @@ export function hotelRoomDraft(room: any) {
         };
       }),
   };
+}
+
+export function validateStoredHotelPublication(property: Prisma.HotelPropertyGetPayload<{ include: { rooms: { include: typeof hotelRoomsInclude } } }>) {
+  const publication = validateHotelPublication({
+    name: property.name,
+    propertyType: property.propertyType,
+    city: property.city,
+    description: property.description || '',
+    metadata: hotelSettings(property.contactSettings).publication ?? {},
+    rooms: property.rooms.map(hotelRoomDraft),
+  });
+  validateHotelSubmission(publication);
+  return publication;
 }
 
 @Injectable()
@@ -375,16 +388,7 @@ export class HotelPublicationService {
   async submit(ownerUserId: string, id: string) {
     await this.prisma.$transaction(async (tx) => {
       const property = await this.lock(tx, ownerUserId, id);
-      const settings = hotelSettings(property.contactSettings);
-      const publication = validateHotelPublication({
-        name: property.name,
-        propertyType: property.propertyType,
-        city: property.city,
-        description: property.description || '',
-        metadata: settings.publication || {},
-        rooms: property.rooms.map(hotelRoomDraft),
-      });
-      validateHotelSubmission(publication);
+      validateStoredHotelPublication(property);
       await tx.hotelProperty.update({
         where: { id },
         data: { status: 'pending_review' },

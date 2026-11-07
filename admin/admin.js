@@ -39,12 +39,6 @@ const adminState = {
   overview: null,
   users: [],
   advertisers: [],
-  listings: {
-    realEstate: [],
-    hotels: [],
-    vehicles: [],
-    trips: [],
-  },
   reports: [],
   messages: [],
   contacts: [],
@@ -208,7 +202,7 @@ function formatDate(value) {
 }
 
 function formatMetric(value) {
-  return Number(value || 0).toLocaleString("fr-FR");
+  return value == null ? "—" : Number(value).toLocaleString("fr-FR");
 }
 
 function escapeHtml(value = "") {
@@ -247,26 +241,26 @@ function AdminSidebar(currentPage = "overview") {
     {
       title: "Comptes",
       items: [
-        ["Utilisateurs", adminRoutes.users, "users", adminState.users.length],
-        ["Annonceurs", adminRoutes.advertisers, "advertisers", adminState.advertisers.length],
+        ["Utilisateurs", adminRoutes.users, "users", adminState.overview?.users],
+        ["Annonceurs", adminRoutes.advertisers, "advertisers", adminState.overview?.advertisers],
         ["Vérification", adminRoutes.verification, "verification", 0],
       ],
     },
     {
       title: "Annonces",
       items: [
-        ["Toutes les annonces", adminRoutes.listings, "listings", getAllListings().length],
-        ["Immobilier", adminRoutes.listingsRealEstate, "listingsRealEstate", adminState.listings.realEstate.length],
-        ["Hôtels", adminRoutes.listingsHotels, "listingsHotels", adminState.listings.hotels.length],
-        ["Voitures", adminRoutes.listingsVehicles, "listingsVehicles", adminState.listings.vehicles.length],
-        ["Voyages", adminRoutes.listingsTrips, "listingsTrips", adminState.listings.trips.length],
-        ["Validation", adminRoutes.validation, "validation", countPendingListings()],
+        ["Toutes les annonces", adminRoutes.listings, "listings", listingCount()],
+        ["Immobilier", adminRoutes.listingsRealEstate, "listingsRealEstate", listingCount("real_estate")],
+        ["Hôtels", adminRoutes.listingsHotels, "listingsHotels", listingCount("hotels")],
+        ["Voitures", adminRoutes.listingsVehicles, "listingsVehicles", listingCount("vehicles")],
+        ["Voyages", adminRoutes.listingsTrips, "listingsTrips", listingCount("trips")],
+        ["Validation", adminRoutes.validation, "validation", listingCount(null, "pending")],
       ],
     },
     {
       title: "Sécurité",
       items: [
-        ["Signalements", adminRoutes.reports, "reports", adminState.reports.length],
+        ["Signalements", adminRoutes.reports, "reports", adminState.overview?.reports],
         ["Modération", adminRoutes.moderation, "moderation", 0],
         ["Messages", adminRoutes.messages, "messages", adminState.messages.length],
         ["Contacts", adminRoutes.contacts, "contacts", adminState.contacts.length],
@@ -289,6 +283,7 @@ function AdminSidebar(currentPage = "overview") {
 
   return `
     <aside class="admin-sidebar" id="admin-sidebar">
+      <button class="btn btn-light admin-menu-toggle" type="button" data-close-admin-sidebar>Fermer le menu</button>
       <div class="dashboard-brand"><span>P</span><div><strong>Péncmi</strong><small>Back-office admin</small></div></div>
       <nav class="admin-nav">
         ${groups.map((group) => `
@@ -306,38 +301,30 @@ function AdminHeader(title, subtitle) {
   return `
     <header class="admin-header">
       <div>
-        <button class="btn btn-ghost admin-menu-toggle" type="button" data-open-admin-sidebar>Menu</button>
+        <button class="btn btn-ghost admin-menu-toggle" type="button" data-open-admin-sidebar aria-controls="admin-sidebar" aria-expanded="false">Menu</button>
         <h1>${title}</h1>
-        <p>${subtitle}</p>
+        ${subtitle ? `<p>${subtitle}</p>` : ''}
       </div>
       <div class="admin-header-actions"><a class="btn btn-ghost" href="${adminRouteHref(adminRoutes.home)}">Retour à l’accueil</a><button class="btn btn-light" type="button" data-admin-logout>Se déconnecter</button></div>
     </header>
   `;
 }
 
-function getAllListings() {
-  return [
-    ...adminState.listings.realEstate.map((item) => ({ ...item, module: "real_estate" })),
-    ...adminState.listings.hotels.map((item) => ({ ...item, module: "hotels" })),
-    ...adminState.listings.vehicles.map((item) => ({ ...item, module: "vehicles" })),
-    ...adminState.listings.trips.map((item) => ({ ...item, module: "trips" })),
-  ];
-}
-
-function countPendingListings() {
-  return getAllListings().filter((item) => item.status === "pending_review").length;
+function listingCount(module, field = "total") {
+  const counts = adminState.overview?.listingCounts;
+  if (!counts) return null;
+  if (module) return counts[module]?.[field] ?? null;
+  return Object.values(counts).reduce((sum, value) => sum + value[field], 0);
 }
 
 function AdminOverviewPage() {
   const overview = adminState.overview || {};
-  const allListings = getAllListings();
-  const activeListings = allListings.filter((item) => item.status === "active").length;
   const kpis = [
     ["Utilisateurs", overview.users ?? adminState.users.length],
     ["Annonceurs", overview.advertisers ?? adminState.advertisers.length],
-    ["Toutes les annonces", allListings.length],
-    ["Annonces actives", activeListings],
-    ["Annonces en attente", overview.pendingRealEstate ?? countPendingListings()],
+    ["Toutes les annonces", listingCount()],
+    ["Annonces actives", listingCount(null, "active")],
+    ["Annonces en attente", listingCount(null, "pending")],
     ["Signalements", overview.reports ?? adminState.reports.length],
     ["Messages", adminState.messages.length],
     ["Contacts", adminState.contacts.length],
@@ -350,12 +337,12 @@ function AdminOverviewPage() {
   return AdminLayout(`
     <section class="admin-kpi-grid">${kpis.map(([label, value]) => AdminKpiCard(label, value)).join("")}</section>
     <section class="admin-grid admin-section">
-      ${AdminModuleCard("Immobilier", adminState.listings.realEstate.length, adminRoutes.listingsRealEstate)}
-      ${AdminModuleCard("Hôtels", adminState.listings.hotels.length, adminRoutes.listingsHotels)}
-      ${AdminModuleCard("Voitures", adminState.listings.vehicles.length, adminRoutes.listingsVehicles)}
-      ${AdminModuleCard("Voyages", adminState.listings.trips.length, adminRoutes.listingsTrips)}
-      ${AdminModuleCard("Signalements", adminState.reports.length, adminRoutes.reports)}
-      ${AdminModuleCard("Validation", countPendingListings(), adminRoutes.validation)}
+      ${AdminModuleCard("Immobilier", listingCount("real_estate"), adminRoutes.listingsRealEstate)}
+      ${AdminModuleCard("Hôtels", listingCount("hotels"), adminRoutes.listingsHotels)}
+      ${AdminModuleCard("Voitures", listingCount("vehicles"), adminRoutes.listingsVehicles)}
+      ${AdminModuleCard("Voyages", listingCount("trips"), adminRoutes.listingsTrips)}
+      ${AdminModuleCard("Signalements", overview.reports, adminRoutes.reports)}
+      ${AdminModuleCard("Validation", listingCount(null, "pending"), adminRoutes.validation)}
     </section>
   `);
 }
@@ -393,63 +380,14 @@ function AdminAdvertisersPage() {
   return AdminDataPage("advertisers", "Annonceurs", "Professionnels et comptes annonceurs.", AdminAdvertiserFilters(), ["Annonceur", "Type", "Ville", "Annonces", "Email", "Téléphone"], rows, "Aucun annonceur trouvé.");
 }
 
-function normalizeListingTitle(item) {
-  return item.title || item.name || item.propertyName || item.vehicleTitle || "Annonce";
-}
-
-function normalizeOwnerName(item) {
-  return item.owner?.professionalProfile?.businessName || item.owner?.businessName || item.professionalProfile?.businessName || [item.owner?.firstName, item.owner?.lastName].filter(Boolean).join(" ") || "";
-}
-
-function normalizeListingRows(items, moduleKey) {
-  return items.map((item) => [
-    normalizeListingTitle(item),
-    adminModuleLabels[moduleKey] || moduleKey,
-    normalizeOwnerName(item),
-    item.city || item.departureCity || "",
-    formatStatus(item.status),
-    formatDate(item.createdAt),
-  ]);
-}
-
-function AdminListingsPage() {
-  const rows = [
-    ...normalizeListingRows(adminState.listings.realEstate, "real_estate"),
-    ...normalizeListingRows(adminState.listings.hotels, "hotels"),
-    ...normalizeListingRows(adminState.listings.vehicles, "vehicles"),
-    ...normalizeListingRows(adminState.listings.trips, "trips"),
-  ];
-  return AdminDataPage("listings", "Toutes les annonces", "Supervisez les annonces de tous les modules Péncmi.", AdminListingFilters(), ["Titre", "Module", "Annonceur", "Ville", "Statut", "Publication"], rows, "Aucune annonce disponible.");
-}
-
-function AdminListingsByModulePage(moduleKey, title, items, currentPage) {
-  if (moduleKey === 'trips') return AdminTripListingsPage();
-  return AdminDataPage(currentPage, title, "Consultez les annonces de ce module.", AdminListingFilters(), ["Titre", "Annonceur", "Ville", "Statut", "Publication"], normalizeListingRows(items, moduleKey).map((row) => [row[0], row[2], row[3], row[4], row[5]]), "Aucune annonce disponible.");
-}
-
-let adminTripPage = 1;
-let adminTripStatus = new URLSearchParams(window.location?.search || '').get('status') || '';
-function AdminTripListingsPage() {
-  const rows = adminState.listings.trips.filter(item => !adminTripStatus || item.status === adminTripStatus);
-  const actions = { pending_review: [['active', 'Valider'], ['refused', 'Refuser']], active: [['suspended', 'Suspendre']], suspended: [['active', 'Réactiver'], ['refused', 'Refuser']] };
-  return AdminLayout(`<section class="admin-filter-row"><label>Statut<select data-trip-admin-filter><option value="">Tous</option>${['draft', 'pending_review', 'active', 'refused', 'suspended', 'expired'].map(status => `<option value="${status}"${adminTripStatus === status ? ' selected' : ''}>${escapeHtml(formatStatus(status))}</option>`).join('')}</select></label></section><p id="trip-moderation-error" role="alert"></p>${rows.length ? `<section class="admin-table-shell admin-section"><div class="admin-scroll"><table class="admin-table"><thead><tr><th>Trajet</th><th>Statut</th><th>Départ</th><th>Places / prix</th><th>Actions</th></tr></thead><tbody>${rows.slice((adminTripPage - 1) * 20, adminTripPage * 20).map(item => `<tr><td>${escapeHtml(item.title || 'Sans titre')}<details><summary>Examiner le trajet</summary><pre style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(JSON.stringify(item.metadata?.publication || {}, null, 2))}</pre></details></td><td>${escapeHtml(formatStatus(item.status))}</td><td>${escapeHtml(item.departureCity)} → ${escapeHtml(item.arrivalCity)}<br>${escapeHtml(formatDate(item.departureDate))} ${escapeHtml(item.departureTime)}</td><td>${escapeHtml(item.availableSeats ?? '')} / ${escapeHtml(item.pricePerSeat ?? '')} FCFA</td><td>${(actions[item.status] || []).map(([status, label]) => `<button class="btn btn-light" data-trip-moderation="${status}" data-id="${escapeHtml(item.id)}">${label}</button>`).join('')}</td></tr>`).join('')}</tbody></table></div></section><div class="admin-filter-row">${adminTripPage > 1 ? '<button class="btn btn-light" data-trip-admin-page="-1">Précédent</button>' : ''}${adminTripPage * 20 < rows.length ? '<button class="btn btn-light" data-trip-admin-page="1">Suivant</button>' : ''}</div>` : AdminEmptyState('Aucun trajet correspondant.')}`, 'listingsTrips', 'Modération des voyages', 'Examinez les trajets avant leur publication.');
-}
-
-async function loadTripModerationData() {
-  const { publicationRequest } = await import('../publier/real-estate-api.mjs');
-  const rows = [];
-  for (let page = 1; ; page++) {
-    const result = await publicationRequest(`/admin/listings/trips?page=${page}&limit=100`, { includeMeta: true });
-    rows.push(...listFrom(result.data ?? result));
-    if (page >= (result.meta?.totalPages || 1)) return rows;
-  }
-}
-
-function AdminValidationPage() {
-  const pending = getAllListings().filter((item) => item.status === "pending_review");
-  const rows = normalizeListingRows(pending, "real_estate");
-  return AdminDataPage("validation", "Validation des annonces", "Traitez les annonces en attente de validation.", AdminListingFilters(), ["Titre", "Module", "Annonceur", "Ville", "Statut", "Publication"], rows, "Aucune annonce en attente de validation.");
-}
+const moderationPages = {
+  listings: { title: "Toutes les annonces" },
+  validation: { title: "Validation des annonces", pendingOnly: true },
+  listingsRealEstate: { title: "Annonces immobilières", module: "real_estate" },
+  listingsHotels: { title: "Annonces hôtels", module: "hotels" },
+  listingsVehicles: { title: "Annonces voitures", module: "vehicles" },
+  listingsTrips: { title: "Annonces voyages", module: "trips" },
+};
 
 function AdminReportsPage() {
   const rows = adminState.reports.map((item) => [item.module || "", item.targetType || "", item.reason || "", formatStatus(item.status), item.priority || "", formatDate(item.createdAt)]);
@@ -476,7 +414,7 @@ function AdminStatisticsPage() {
   const rows = [
     ["Utilisateurs", adminState.users.length],
     ["Annonceurs", adminState.advertisers.length],
-    ["Annonces", getAllListings().length],
+    ["Annonces", listingCount()],
     ["Signalements", adminState.reports.length],
     ["Messages", adminState.messages.length],
     ["Contacts", adminState.contacts.length],
@@ -538,9 +476,6 @@ function AdminAdvertiserFilters() {
   return `<section class="admin-filter-row"><label>Type<select><option>Tous</option></select></label><label>Ville<input type="text"></label><label>Vérification<select><option>Tous</option></select></label></section>`;
 }
 
-function AdminListingFilters() {
-  return `<section class="admin-filter-row"><label>Module<select><option>Tous</option><option>Immobilier</option><option>Hôtels</option><option>Voitures</option><option>Voyages</option></select></label><label>Statut<select><option>Tous</option><option>En attente</option><option>Actif</option><option>Suspendu</option></select></label><label>Ville<input type="text"></label><label>Date<input type="date"></label></section>`;
-}
 
 function AdminReportFilters() {
   return `<section class="admin-filter-row"><label>Module<select><option>Tous</option></select></label><label>Statut<select><option>Tous</option></select></label><label>Priorité<select><option>Toutes</option></select></label></section>`;
@@ -567,24 +502,6 @@ function AdminOption(label) {
 }
 
 function bindAdmin() {
-  document.querySelector('[data-trip-admin-filter]')?.addEventListener('change', event => { adminTripStatus = event.target.value; adminTripPage = 1; document.querySelector('#admin-root').innerHTML = AdminTripListingsPage(); bindAdmin(); });
-  document.querySelectorAll('[data-trip-admin-page]').forEach(button => button.onclick = () => { adminTripPage += Number(button.dataset.tripAdminPage); document.querySelector('#admin-root').innerHTML = AdminTripListingsPage(); bindAdmin(); });
-  document.querySelectorAll('[data-trip-moderation]').forEach(button => button.onclick = async () => {
-    const status = button.dataset.tripModeration;
-    let reason;
-    if (status !== 'active') { reason = window.prompt('Motif de la décision'); if (!reason?.trim()) return; }
-    else if (!window.confirm('Valider et rendre ce trajet public ?')) return;
-    button.disabled = true;
-    try {
-      const { publicationRequest } = await import('../publier/real-estate-api.mjs');
-      await publicationRequest(`/admin/listings/trips/${encodeURIComponent(button.dataset.id)}/status`, { method: 'PATCH', body: { status, reason } });
-      await renderAdmin();
-    } catch (error) { document.querySelector('#trip-moderation-error').textContent = error.message; button.disabled = false; }
-  });
-  document.querySelector("[data-open-admin-sidebar]")?.addEventListener("click", () => {
-    document.querySelector("#admin-sidebar")?.classList.toggle("is-open");
-  });
-
   document.querySelector("[data-admin-logout]")?.addEventListener("click", () => {
     void logoutAdmin();
   });
@@ -597,7 +514,24 @@ function bindAdmin() {
   });
 }
 
-async function loadAdminData() {
+function setAdminSidebar(open) {
+  document.querySelector('#admin-sidebar')?.classList.toggle('is-open', open);
+  const trigger = document.querySelector('[data-open-admin-sidebar]');
+  trigger?.setAttribute('aria-expanded', String(open));
+  if (open) document.querySelector('[data-close-admin-sidebar]')?.focus();
+  else trigger?.focus();
+}
+
+document.addEventListener('click', (event) => {
+  if (event.target.closest?.('[data-open-admin-sidebar]')) setAdminSidebar(true);
+  if (event.target.closest?.('[data-close-admin-sidebar]')) setAdminSidebar(false);
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !document.querySelector('dialog[open]') && document.querySelector('#admin-sidebar.is-open')) setAdminSidebar(false);
+});
+
+async function loadAdminData(page) {
   adminState.loading = true;
   adminState.error = "";
 
@@ -609,24 +543,15 @@ async function loadAdminData() {
       return;
     }
 
-    const [overview, users, advertisers, realEstateListings, hotels, vehicles, trips, reports] = await Promise.all([
+    const [overview, users, advertisers, reports] = await Promise.all([
       optionalApiRequest("/admin/overview"),
-      optionalApiRequest("/admin/users"),
-      optionalApiRequest("/admin/advertisers"),
-      optionalApiRequest("/admin/listings/real-estate"),
-      optionalApiRequest("/hotels"),
-      optionalApiRequest("/voitures"),
-      loadTripModerationData(),
-      optionalApiRequest("/admin/reports"),
+      page === 'users' ? apiRequest("/admin/users") : null,
+      page === 'advertisers' ? apiRequest("/admin/advertisers") : null,
+      page === 'reports' ? optionalApiRequest("/admin/reports") : null,
     ]);
-
-    adminState.overview = overview || {};
+    adminState.overview = overview;
     adminState.users = listFrom(users);
     adminState.advertisers = listFrom(advertisers);
-    adminState.listings.realEstate = listFrom(realEstateListings);
-    adminState.listings.hotels = listFrom(hotels);
-    adminState.listings.vehicles = listFrom(vehicles);
-    adminState.listings.trips = listFrom(trips);
     adminState.reports = listFrom(reports);
   } catch (error) {
     adminState.error = error instanceof Error ? error.message : "Chargement admin impossible.";
@@ -640,23 +565,36 @@ async function renderAdmin() {
   const root = document.querySelector("#admin-root");
   if (!root) return;
 
-  await loadAdminData();
+  const page = document.body.dataset.adminPage || "overview";
+  await loadAdminData(page);
   if (adminState.error) {
     root.innerHTML = AdminUnauthorizedState(adminState.error, ["SESSION_INVALID", "REFRESH_UNCERTAIN", "SESSION_CHANGED", "COORDINATION_UNAVAILABLE"].includes(adminState.errorCode));
     return;
   }
 
-  const page = document.body.dataset.adminPage || "overview";
+  if (Object.hasOwn(moderationPages, page)) {
+    const options = moderationPages[page];
+    root.innerHTML = AdminLayout('<section id="moderation-queue" aria-label="Annonces"></section>', page, options.title, '');
+    bindAdmin();
+    const queue = root.querySelector('#moderation-queue');
+    try {
+      const { mountModerationQueue } = await import('./moderation-queue.mjs');
+      mountModerationQueue(queue, { ...options, modules: adminModuleLabels, statuses: adminStatusLabels,
+        refreshCounts: async () => {
+          adminState.overview = await optionalApiRequest('/admin/overview');
+          root.querySelector('#admin-sidebar').outerHTML = AdminSidebar(page);
+          root.querySelector('[data-open-admin-sidebar]')?.setAttribute('aria-expanded', 'false');
+        },
+      });
+    } catch {
+      queue.textContent = 'Impossible de charger la file de modération.';
+    }
+    return;
+  }
   const pages = {
     overview: AdminOverviewPage,
     users: AdminUsersPage,
     advertisers: AdminAdvertisersPage,
-    listings: AdminListingsPage,
-    listingsRealEstate: () => AdminListingsByModulePage("real_estate", "Annonces immobilier", adminState.listings.realEstate, "listingsRealEstate"),
-    listingsHotels: () => AdminListingsByModulePage("hotels", "Annonces hôtels", adminState.listings.hotels, "listingsHotels"),
-    listingsVehicles: () => AdminListingsByModulePage("vehicles", "Annonces voitures", adminState.listings.vehicles, "listingsVehicles"),
-    listingsTrips: () => AdminListingsByModulePage("trips", "Annonces voyages", adminState.listings.trips, "listingsTrips"),
-    validation: AdminValidationPage,
     reports: AdminReportsPage,
     messages: AdminMessagesPage,
     contacts: AdminContactsPage,
