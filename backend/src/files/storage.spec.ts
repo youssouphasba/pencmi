@@ -1,3 +1,4 @@
+import { createTestSecret } from '../common/testing/test-credentials.fixture';
 import { ConfigService } from '@nestjs/config';
 import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import {
@@ -14,13 +15,15 @@ import { assertUploadStorage, remoteStorageConfig } from './storage.config';
 import { publicationDatabase } from '../modules/real-estate/publication.fixture';
 
 const sharp: typeof SharpFactory = require('sharp');
+const fixtureSecret1 = createTestSecret();
+const fixtureSecret2 = createTestSecret();
 const remote = {
   NODE_ENV: 'production',
   STORAGE_DRIVER: 'r2',
   S3_BUCKET: 'pencmi-storage-test',
   S3_ENDPOINT: 'https://storage-test.r2.cloudflarestorage.com',
-  S3_ACCESS_KEY_ID: 'test-access-key-not-a-real-credential',
-  S3_SECRET_ACCESS_KEY: 'test-secret-not-a-real-credential',
+  S3_ACCESS_KEY_ID: fixtureSecret1,
+  S3_SECRET_ACCESS_KEY: fixtureSecret2,
 };
 
 describe('Upload storage configuration', () => {

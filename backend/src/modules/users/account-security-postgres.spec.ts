@@ -1,4 +1,9 @@
 import {
+  createOversizedTestPassword,
+  createTestPassword,
+  createWeakTestPassword,
+} from "../../common/testing/test-credentials.fixture";
+import {
   INestApplication,
   ServiceUnavailableException,
   ValidationPipe,
@@ -48,8 +53,8 @@ const url = process.env.TEST_DATABASE_URL;
       directory: string;
     const a = `account-a-${randomUUID()}`,
       b = `account-b-${randomUUID()}`;
-    let password = "Az9!" + randomUUID();
-    const passwordB = "Az9!" + randomUUID();
+    let password = createTestPassword();
+    const passwordB = createTestPassword();
     let tokens: { accessToken: string; refreshToken: string };
     let tokensB: { accessToken: string; refreshToken: string };
     let png: Buffer;
@@ -549,13 +554,19 @@ const url = process.env.TEST_DATABASE_URL;
       const hash = (await db.user.findUniqueOrThrow({ where: { id: a } }))
         .passwordHash;
       for (const body of [
-        { currentPassword: "wrong", newPassword: "Az9!" + randomUUID() },
-        { currentPassword: password, newPassword: "weak" },
+        {
+          currentPassword: createTestPassword(),
+          newPassword: createTestPassword(),
+        },
+        { currentPassword: password, newPassword: createWeakTestPassword() },
         { currentPassword: password, newPassword: password },
-        { currentPassword: password, newPassword: "Az9!" + "é".repeat(35) },
         {
           currentPassword: password,
-          newPassword: "Az9!" + randomUUID(),
+          newPassword: createOversizedTestPassword(),
+        },
+        {
+          currentPassword: password,
+          newPassword: createTestPassword(),
           userId: b,
         },
       ])
@@ -575,7 +586,7 @@ const url = process.env.TEST_DATABASE_URL;
         identifier: `${a}@example.test`,
         password,
       });
-      const next = "Az9!" + randomUUID();
+      const next = createTestPassword();
       await http()
         .post("/api/v1/auth/change-password")
         .set(headers())
@@ -615,7 +626,7 @@ const url = process.env.TEST_DATABASE_URL;
     });
 
     it("prevents an in-flight old-password login from surviving a concurrent password change", async () => {
-      const next = "Az9!" + randomUUID();
+      const next = createTestPassword();
       const [attempt, changed] = await Promise.all([
         http()
           .post("/api/v1/auth/login")
@@ -646,12 +657,12 @@ const url = process.env.TEST_DATABASE_URL;
         .expect(501);
       await http()
         .post("/api/v1/auth/reset-password")
-        .send({ token: "unused", password: "Az9!" + randomUUID() })
+        .send({ token: "unused", password: createTestPassword() })
         .expect(501);
     });
 
     it("allows exactly one simultaneous password change and a real current-session revocation", async () => {
-      const candidates = ["Az9!" + randomUUID(), "Az9!" + randomUUID()];
+      const candidates = [createTestPassword(), createTestPassword()];
       const responses = await Promise.all(
         candidates.map((newPassword) =>
           http()
@@ -905,7 +916,7 @@ const url = process.env.TEST_DATABASE_URL;
               ).active,
             ).toBe(false);
             await page.goto(frontend.origin + "/compte/parametres/");
-            const next = "Az9!" + randomUUID();
+            const next = createTestPassword();
             await page.locator("[name=currentPassword]").fill(password);
             await page.locator("[name=newPassword]").fill(next);
             await page.locator("[name=confirmation]").fill(next);
@@ -988,16 +999,16 @@ const url = process.env.TEST_DATABASE_URL;
             .post("/api/v1/auth/change-password")
             .set(headers())
             .send({
-              currentPassword: "wrong",
-              newPassword: "Az9!" + randomUUID(),
+              currentPassword: createTestPassword(),
+              newPassword: createTestPassword(),
             })
             .expect(400);
         await request(limited.getHttpServer())
           .post("/api/v1/auth/change-password")
           .set(headers())
           .send({
-            currentPassword: "wrong",
-            newPassword: "Az9!" + randomUUID(),
+            currentPassword: createTestPassword(),
+            newPassword: createTestPassword(),
           })
           .expect(429);
       } finally {

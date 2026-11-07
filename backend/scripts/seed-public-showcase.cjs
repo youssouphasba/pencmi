@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
+const { readSeedPassword, SeedCredentialsError } = require('./seed-credentials.cjs');
 
 function loadEnvFile() {
   const envPath = path.resolve(__dirname, "..", ".env");
@@ -44,7 +45,7 @@ const LEGACY_SEED_KEY = "real-estate-demo-v1";
 const USERS = {
   agency: {
     email: "agence.immo@pencmi.local",
-    password: "AgenceImmoPencmi123!",
+    password: undefined,
     role: UserRole.real_estate_agency,
     firstName: "Awa",
     lastName: "Sarr",
@@ -65,7 +66,7 @@ const USERS = {
   },
   hotel: {
     email: "hotel.manager@pencmi.local",
-    password: "HotelManagerPencmi123!",
+    password: undefined,
     role: UserRole.hotel_manager,
     firstName: "Moussa",
     lastName: "Ndiaye",
@@ -86,7 +87,7 @@ const USERS = {
   },
   vehicle: {
     email: "voitures.pro@pencmi.local",
-    password: "VoituresProPencmi123!",
+    password: undefined,
     role: UserRole.vehicle_renter,
     firstName: "Ibrahima",
     lastName: "Fall",
@@ -107,7 +108,7 @@ const USERS = {
   },
   trip: {
     email: "trajets.pro@pencmi.local",
-    password: "TrajetsProPencmi123!",
+    password: undefined,
     role: UserRole.transport_provider,
     firstName: "Cheikh",
     lastName: "Ba",
@@ -128,7 +129,7 @@ const USERS = {
   },
   client: {
     email: "client.public@pencmi.local",
-    password: "ClientPublicPencmi123!",
+    password: undefined,
     role: UserRole.client,
     firstName: "Fatou",
     lastName: "Diop",
@@ -775,11 +776,11 @@ async function seed() {
 
   return {
     users: {
-      agency: { email: USERS.agency.email, password: USERS.agency.password },
-      hotel: { email: USERS.hotel.email, password: USERS.hotel.password },
-      vehicle: { email: USERS.vehicle.email, password: USERS.vehicle.password },
-      trip: { email: USERS.trip.email, password: USERS.trip.password },
-      client: { email: USERS.client.email, password: USERS.client.password },
+      agency: { email: USERS.agency.email },
+      hotel: { email: USERS.hotel.email },
+      vehicle: { email: USERS.vehicle.email },
+      trip: { email: USERS.trip.email },
+      client: { email: USERS.client.email },
     },
     counts: {
       realEstate: realEstateListings.length,
@@ -800,6 +801,9 @@ async function main() {
     return;
   }
 
+  for (const [kind, user] of Object.entries(USERS)) {
+    user.password = readSeedPassword(`PENCMI_SHOWCASE_${kind.toUpperCase()}_PASSWORD`);
+  }
   await cleanup();
   const result = await seed();
   console.log(JSON.stringify(result, null, 2));
@@ -807,7 +811,7 @@ async function main() {
 
 main()
   .catch((error) => {
-    console.error(error);
+    console.error(error instanceof SeedCredentialsError ? error.message : 'Creation de vitrine interrompue. Verifiez la configuration sans publier les erreurs brutes.');
     process.exitCode = 1;
   })
   .finally(async () => {

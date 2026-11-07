@@ -1,3 +1,4 @@
+import { createTestPassword, createTestSecret } from '../common/testing/test-credentials.fixture';
 import { INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
@@ -19,11 +20,13 @@ type TestUser = { id: string; role: UserRole; status: AccountStatus; deletedAt: 
 type TestSession = { id: string; userId: string; revokedAt: Date | null; lastUsedAt?: Date };
 type TestRefreshToken = { id: string; tokenHash: string; userId: string; sessionId: string; expiresAt: Date; revokedAt: Date | null; consumedAt: Date | null; parentTokenId: string | null };
 
+const testPassword = createTestPassword();
+
 describe('JWT session security', () => {
   const jwt = new JwtService();
   const config: Record<string, string> = {
-    JWT_SECRET: 'test-only-access-secret-not-for-production',
-    REFRESH_TOKEN_SECRET: 'test-only-refresh-secret-not-for-production',
+    JWT_SECRET: createTestSecret(),
+    REFRESH_TOKEN_SECRET: createTestSecret(),
     JWT_EXPIRES_IN: '2m', REFRESH_TOKEN_EXPIRES_IN: '2h',
   };
   let app: INestApplication;
@@ -58,7 +61,7 @@ describe('JWT session security', () => {
   }
 
   beforeAll(async () => {
-    passwordHash = await bcrypt.hash('Test-password-123', 4);
+    passwordHash = await bcrypt.hash(testPassword, 4);
     const module = await Test.createTestingModule({
       controllers: [AuthController, AdminController],
       providers: [AuthService,
@@ -175,7 +178,7 @@ describe('JWT session security', () => {
   });
 
   it('rejects expired and incorrectly signed access tokens', async () => {
-    for (const options of [{ secret: config.JWT_SECRET, expiresIn: -1 }, { secret: 'incorrect-test-secret', expiresIn: 300 }]) {
+    for (const options of [{ secret: config.JWT_SECRET, expiresIn: -1 }, { secret: createTestSecret(), expiresIn: 300 }]) {
       const token = await jwt.signAsync({ id: 'user-a', sessionId: 'session-a' }, options);
       await expect(service.validateAccessToken(token)).rejects.toBeInstanceOf(UnauthorizedException);
     }
@@ -242,7 +245,7 @@ describe('JWT session security', () => {
   it('rejects invalid signatures, expired refresh tokens and refresh tokens without expiration', async () => {
     const payload = { id: 'user-a', sessionId: 'session-a' };
     const invalid = [
-      await jwt.signAsync(payload, { secret: 'incorrect-test-secret', expiresIn: 300 }),
+      await jwt.signAsync(payload, { secret: createTestSecret(), expiresIn: 300 }),
       await jwt.signAsync(payload, { secret: config.REFRESH_TOKEN_SECRET, expiresIn: -1 }),
       await jwt.signAsync(payload, { secret: config.REFRESH_TOKEN_SECRET }),
     ];
@@ -300,7 +303,7 @@ describe('JWT session security', () => {
 
   it('preserves login and refresh response contracts and configured lifetimes', async () => {
     const login = await request(app.getHttpServer()).post('/auth/login')
-      .send({ identifier: 'user@example.test', password: 'Test-password-123' }).expect(201);
+      .send({ identifier: 'user@example.test', password: testPassword }).expect(201);
     expect(Object.keys(login.body).sort()).toEqual(['accessToken', 'refreshToken', 'tokenType']);
     const access = jwt.decode<{ iat: number; exp: number }>(login.body.accessToken);
     const refresh = jwt.decode<{ iat: number; exp: number }>(login.body.refreshToken);

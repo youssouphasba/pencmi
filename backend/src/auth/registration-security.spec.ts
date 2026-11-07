@@ -1,3 +1,4 @@
+import { createTestPassword, createTestSecret } from '../common/testing/test-credentials.fixture';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -18,6 +19,8 @@ import { FilesService } from '../files/files.service';
 import { AdminController } from '../modules/admin/admin.controller';
 import { AdminService } from '../modules/admin/admin.service';
 
+const testPassword = createTestPassword();
+
 describe('Public registration security', () => {
   let app: INestApplication;
   let service: AuthService;
@@ -37,7 +40,7 @@ describe('Public registration security', () => {
       providers: [AuthService, UsersService,
         { provide: PrismaService, useValue: prisma },
         { provide: JwtService, useValue: jwt },
-        { provide: ConfigService, useValue: { get: () => undefined, getOrThrow: () => 'test-only-secret' } },
+        { provide: ConfigService, useValue: { get: () => undefined, getOrThrow: () => createTestSecret() } },
         { provide: FilesService, useValue: {} },
         { provide: AdminService, useValue: admin },
         { provide: APP_GUARD, useClass: JwtAuthGuard },
@@ -71,27 +74,27 @@ describe('Public registration security', () => {
 
   it.each(PUBLIC_REGISTRATION_ROLES)('allows public role %s', async (role) => {
     await request(app.getHttpServer()).post('/auth/register')
-      .send({ role, email: 'registration@example.test', password: 'Test-password-123' }).expect(201);
+      .send({ role, email: 'registration@example.test', password: testPassword }).expect(201);
     expect(prisma.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ role }) }));
     expect(jwt.signAsync).toHaveBeenCalledWith(expect.objectContaining({ role }), expect.anything());
   });
 
   it.each(['admin', 'ADMIN', 'unknown', null, ['admin'], { role: 'admin' }])('rejects invalid or privileged role %j', async (role) => {
     await request(app.getHttpServer()).post('/auth/register')
-      .send({ role, email: 'registration@example.test', password: 'Test-password-123' }).expect(400);
+      .send({ role, email: 'registration@example.test', password: testPassword }).expect(400);
     expect(prisma.user.create).not.toHaveBeenCalled();
     expect(jwt.signAsync).not.toHaveBeenCalled();
   });
 
   it('rejects admin even when DTO validation is bypassed', async () => {
-    await expect(service.register({ role: 'admin', password: 'Test-password-123' } as unknown as RegisterDto)).rejects.toThrow();
+    await expect(service.register({ role: 'admin', password: testPassword } as unknown as RegisterDto)).rejects.toThrow();
     expect(prisma.user.findFirst).not.toHaveBeenCalled();
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
 
   it('rejects injected permissions at registration', async () => {
     await request(app.getHttpServer()).post('/auth/register').send({
-      role: 'client', email: 'registration@example.test', password: 'Test-password-123', permissions: ['access_admin'],
+      role: 'client', email: 'registration@example.test', password: testPassword, permissions: ['access_admin'],
     }).expect(400);
     expect(prisma.user.create).not.toHaveBeenCalled();
   });
@@ -115,9 +118,9 @@ describe('Public registration security', () => {
   });
 
   it('preserves existing administrator login and access', async () => {
-    prisma.user.findFirst.mockResolvedValue({ id: 'existing-admin', role: 'admin', status: 'active', passwordHash: await bcrypt.hash('Test-password-123', 4) });
+    prisma.user.findFirst.mockResolvedValue({ id: 'existing-admin', role: 'admin', status: 'active', passwordHash: await bcrypt.hash(testPassword, 4) });
     await request(app.getHttpServer()).post('/auth/login')
-      .send({ identifier: 'admin@example.test', password: 'Test-password-123' }).expect(201);
+      .send({ identifier: 'admin@example.test', password: testPassword }).expect(201);
     expect(jwt.signAsync).toHaveBeenCalledWith(expect.objectContaining({ role: 'admin' }), expect.anything());
     jwt.verifyAsync.mockResolvedValue({ id: 'existing-admin', role: 'admin', sessionId: 'session', exp: Math.floor(Date.now() / 1000) + 3600 });
     prisma.userSession.findUnique.mockResolvedValue({

@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const bcrypt = require("bcryptjs");
+const { readSeedPassword, SeedCredentialsError } = require('./seed-credentials.cjs');
 
 function loadEnvFile() {
   const envPath = path.resolve(__dirname, "..", ".env");
@@ -45,9 +46,9 @@ const prisma = new PrismaClient();
 
 const DEMO_SEED_KEY = "real-estate-demo-v1";
 const AGENCY_EMAIL = "demo.agence.immo@pencmi.local";
-const AGENCY_PASSWORD = "DemoAgencePencmi123!";
+
 const CLIENT_EMAIL = "demo.client@pencmi.local";
-const CLIENT_PASSWORD = "DemoClientPencmi123!";
+
 
 const agencyProfileData = {
   businessName: "Teranga Habitat",
@@ -557,8 +558,11 @@ async function main() {
     return;
   }
 
-  const agencyPassword = String(args["agency-password"] || AGENCY_PASSWORD);
-  const clientPassword = String(args["client-password"] || CLIENT_PASSWORD);
+  if (args['agency-password'] || args['client-password']) {
+    throw new SeedCredentialsError('Utilisez les variables PENCMI_DEMO_AGENCY_PASSWORD et PENCMI_DEMO_CLIENT_PASSWORD, pas des mots de passe dans les arguments.');
+  }
+  const agencyPassword = readSeedPassword('PENCMI_DEMO_AGENCY_PASSWORD');
+  const clientPassword = readSeedPassword('PENCMI_DEMO_CLIENT_PASSWORD');
 
   const agencyUser = await upsertUserByEmail({
     email: AGENCY_EMAIL,
@@ -610,13 +614,11 @@ async function main() {
     seedKey: DEMO_SEED_KEY,
     agency: {
       email: AGENCY_EMAIL,
-      password: agencyPassword,
       role: "real_estate_agency",
       dashboard: "/dashboard/immobilier",
     },
     client: {
       email: CLIENT_EMAIL,
-      password: clientPassword,
       account: "/compte",
     },
     listings: createdListings.map((listing) => ({
@@ -635,7 +637,7 @@ async function main() {
 
 main()
   .catch((error) => {
-    console.error(error instanceof Error ? error.message : error);
+    console.error(error instanceof SeedCredentialsError ? error.message : 'Creation de demonstration interrompue. Verifiez la configuration sans publier les erreurs brutes.');
     process.exitCode = 1;
   })
   .finally(async () => {

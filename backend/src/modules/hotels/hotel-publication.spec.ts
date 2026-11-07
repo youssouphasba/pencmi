@@ -1,3 +1,4 @@
+import { createTestSecret } from '../../common/testing/test-credentials.fixture';
 import { randomUUID } from 'crypto';
 import {
   validateHotelPublication,
@@ -5,6 +6,8 @@ import {
   hotelPeriodDays,
 } from './hotel-publication.schema';
 import { HotelsService } from './hotels.service';
+
+const fixtureSecret1 = createTestSecret();
 
 describe('Hotel publication validation and public boundaries', () => {
   it('keeps incomplete contact coordinates in drafts but refuses submission', () => {
@@ -160,7 +163,7 @@ describe('Hotel publication validation and public boundaries', () => {
       address: 'Private',
       ownerUserId: 'private',
       contactSettings: {
-        secretHash: 'secret',
+        secretHash: fixtureSecret1,
         photos: [],
         publication: {
           contactPreferences: {
@@ -190,7 +193,7 @@ describe('Hotel publication validation and public boundaries', () => {
       ],
     });
     expect(JSON.stringify(output)).not.toContain('private');
-    expect(JSON.stringify(output)).not.toContain('secret');
+    expect(JSON.stringify(output)).not.toContain(fixtureSecret1);
     expect(output.metadata.priceFrom).toBe(0);
     expect(output.rooms[0].availability[0].status).toBe('unconfirmed');
   });

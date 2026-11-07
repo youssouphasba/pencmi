@@ -1,3 +1,4 @@
+import { createTestSecret } from '../../common/testing/test-credentials.fixture';
 import { INestApplication, UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
@@ -16,6 +17,8 @@ import { MAX_ALERTS_PER_ACCOUNT, SavedAlertsService } from './saved-alerts.servi
 
 const DAY = 86_400_000;
 const USERS = ['awa', 'modou', 'owner'];
+
+const fixtureSecret1 = createTestSecret();
 
 describe('Favorites and saved alerts over HTTP', () => {
   let app: INestApplication;
@@ -95,14 +98,14 @@ describe('Favorites and saved alerts over HTTP', () => {
     });
 
     it('keeps a favorite that became unavailable, without any of its data, and it can still be removed', async () => {
-      await seedListing('vehicleListing', 'v1', { price: 1000, metadata: { secret: 'privé', photos: ['https://cdn.example/a.jpg'] } });
+      await seedListing('vehicleListing', 'v1', { price: 1000, metadata: { secret: fixtureSecret1, photos: ['https://cdn.example/a.jpg'] } });
       await http().put('/favorites/vehicles/v1').set(as('awa')).expect(200);
       expect((await http().get('/favorites').set(as('awa'))).body.data[0]).toMatchObject({ available: true, price: 1000, photo: 'https://cdn.example/a.jpg' });
       await db.vehicleListing.update({ where: { id: 'v1' }, data: { status: 'suspended' } });
       await http().put('/favorites/vehicles/v1').set(as('awa')).expect(200);
       const row = (await http().get('/favorites').set(as('awa'))).body.data[0];
       expect(row).toMatchObject({ listingId: 'v1', available: false, title: null, price: null, url: null, photo: null });
-      expect(JSON.stringify(row)).not.toContain('privé');
+      expect(JSON.stringify(row)).not.toContain(fixtureSecret1);
       await http().delete('/favorites/vehicles/v1').set(as('awa')).expect(200);
       expect(await db.favorite.count()).toBe(0);
     });
