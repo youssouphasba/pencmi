@@ -23,7 +23,7 @@ async function request(path, body) {
   let response;
   try {
     response = await fetch(`${base}/auth/${path}`, {
-      method: body ? 'POST' : 'GET', credentials: 'omit', referrerPolicy: 'no-referrer',
+      method: body ? 'POST' : 'GET', credentials: 'same-origin', referrerPolicy: 'no-referrer',
       headers: body ? { 'Content-Type': 'application/json' } : {},
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(20000),

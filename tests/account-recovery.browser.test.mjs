@@ -43,9 +43,11 @@ test('recovery forms: unavailable mode, anonymous requests, retry, secret-free U
     browser = await chromium.launch({ channel: 'msedge', headless: true });
     for (const width of [360, 1440]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
+      await page.context().addCookies([{ name: 'preview_access', value: 'test-gateway', url: origin }]);
       enabled = false;
       await page.goto(`${origin}/forgot-password/`);
       await page.getByRole('link', { name: 'Contacter le support', exact: true }).waitFor();
+      assert.ok(calls.at(-1).headers.cookie?.includes('preview_access=test-gateway'));
       assert.equal(await page.locator('form').count(), 0);
       enabled = true;
       await page.reload();
