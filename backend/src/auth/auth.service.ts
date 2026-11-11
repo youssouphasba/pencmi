@@ -6,7 +6,8 @@ import { ACCOUNT_SECURITY_COPY } from '../common/constants/account-security-copy
 import { ConfigService } from '@nestjs/config';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { AccountStatus, Prisma, UserRole } from '@prisma/client';
-import { createHash, randomUUID } from 'crypto';
+import { createHash, randomUUID, randomBytes } from 'crypto';
+import { RECOVERY_COPY, RECOVERY_TEMPLATE_KEY, RECOVERY_TTL_MS, recoveryConfig, recoveryEnabled, sealRecoveryEmail } from '../modules/emails/recovery-email';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../database/prisma/prisma.service';
 import { getPermissionsForRole } from '../common/constants/permissions';
@@ -166,12 +167,64 @@ export class AuthService {
     });
   }
 
-  async forgotPassword(_dto: ForgotPasswordDto) {
-    throw new NotImplementedException('La récupération du mot de passe n’est pas disponible pour le moment. Contactez le support.');
+  async recoveryCapabilities() {
+    if (!recoveryEnabled(this.config)) return { passwordRecovery: false };
+    const template = await this.prisma.emailTemplate.findUnique({ where: { key: RECOVERY_TEMPLATE_KEY } });
+    return { passwordRecovery: !template || (template.active && template.body.includes('{{resetUrl}}')) };
   }
 
-  async resetPassword(_dto: ResetPasswordDto) {
-    throw new NotImplementedException('La réinitialisation du mot de passe n’est pas disponible pour le moment. Contactez le support.');
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const config = recoveryConfig(this.config);
+    const template = await this.prisma.emailTemplate.findUnique({ where: { key: RECOVERY_TEMPLATE_KEY } });
+    if (template && (!template.active || !template.body.includes('{{resetUrl}}'))) throw new NotImplementedException(RECOVERY_COPY.unavailable);
+    const identifier = dto.identifier.trim();
+    const user = await this.prisma.user.findFirst({ where: {
+      email: { equals: identifier, mode: 'insensitive' }, status: AccountStatus.active, deletedAt: null,
+    } });
+    if (user?.email && user.passwordHash) await this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR NO KEY UPDATE`;
+      const current = await tx.user.findUnique({ where: { id: user.id } });
+      if (!current || current.status !== AccountStatus.active || current.deletedAt || current.email !== user.email) return;
+      const recent = await tx.passwordResetToken.count({ where: { userId: user.id, createdAt: { gt: new Date(Date.now() - 60000) } } });
+      if (recent) return;
+      const hourly = await tx.passwordResetToken.count({ where: { userId: user.id, createdAt: { gt: new Date(Date.now() - 3600000) } } });
+      if (hourly >= 5) return;
+      const token = randomBytes(32).toString('hex');
+      const tokenHash = createHash('sha256').update(token).digest('hex');
+      const created = await tx.passwordResetToken.create({ data: { userId: user.id, tokenHash, expiresAt: new Date(Date.now() + RECOVERY_TTL_MS) } });
+      const resetUrl = `${config.origin}/reset-password/#token=${token}`;
+      const subject = template?.subject || RECOVERY_COPY.subject;
+      const text = (template?.body || RECOVERY_COPY.body).replaceAll('{{resetUrl}}', resetUrl);
+      const id = randomUUID();
+      const encrypted = sealRecoveryEmail({ from: config.from, to: user.email!, subject, text, resetId: created.id }, config.key, id);
+      await tx.emailLog.create({ data: { id, templateKey: RECOVERY_TEMPLATE_KEY, toEmail: user.email!, subject, payload: { kind: 'password-reset-v1', encrypted, attempts: 0, nextAttemptAt: Date.now() } } });
+    });
+    return { message: RECOVERY_COPY.received };
+  }
+
+  async resetPassword(dto: ResetPasswordDto) {
+    recoveryConfig(this.config);
+    if (!/^[a-f0-9]{64}$/i.test(dto.token)) throw new BadRequestException(RECOVERY_COPY.invalid);
+    if (!isStrongPassword(dto.password, PASSWORD_POLICY) || Buffer.byteLength(dto.password, 'utf8') > PASSWORD_MAX_BYTES)
+      throw new BadRequestException('Le nouveau mot de passe doit respecter les règles de sécurité et ne pas dépasser 72 octets.');
+    const tokenHash = createHash('sha256').update(dto.token).digest('hex');
+    const token = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+    if (!token || token.usedAt || token.expiresAt <= new Date()) throw new BadRequestException(RECOVERY_COPY.invalid);
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${token.userId} FOR NO KEY UPDATE`;
+      const user = await tx.user.findUnique({ where: { id: token.userId } });
+      if (!user || user.status !== AccountStatus.active || user.deletedAt) throw new BadRequestException(RECOVERY_COPY.invalid);
+      const consumed = await tx.passwordResetToken.updateMany({ where: { id: token.id, tokenHash, usedAt: null, expiresAt: { gt: new Date() } }, data: { usedAt: new Date() } });
+      if (consumed.count !== 1) throw new BadRequestException(RECOVERY_COPY.invalid);
+      await tx.user.update({ where: { id: user.id }, data: { passwordHash } });
+      const revokedAt = new Date();
+      await tx.userSession.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt } });
+      await tx.refreshToken.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt } });
+      await tx.passwordResetToken.updateMany({ where: { userId: user.id, usedAt: null }, data: { usedAt: revokedAt } });
+      await tx.auditLog.create({ data: { actorUserId: user.id, action: 'account.password_reset', module: 'users' } });
+      return { changed: true, reauthenticationRequired: true };
+    });
   }
 
   async changePassword(userId: string, sessionId: string, dto: ChangePasswordDto) {
@@ -187,6 +240,7 @@ export class AuthService {
       if (await bcrypt.compare(dto.newPassword, user.passwordHash)) throw new BadRequestException('Choisissez un mot de passe différent.');
       const passwordHash = await bcrypt.hash(dto.newPassword, 12);
       await tx.user.update({ where: { id: userId }, data: { passwordHash } });
+      await tx.passwordResetToken.updateMany({ where: { userId, usedAt: null }, data: { usedAt: new Date() } });
       const revokedAt = new Date();
       const sessions = await tx.userSession.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt } });
       await tx.refreshToken.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt } });

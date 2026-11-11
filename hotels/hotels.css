@@ -457,6 +457,17 @@
   font-weight: 800;
 }
 
+.hotel-sidebar-close { display: none; }
+@media (min-width: 1181px) {
+  .hotel-dashboard-header .dashboard-menu-toggle { display: none; }
+}
+
+@media (max-width: 1180px) {
+  #hotel-sidebar { overflow-y: auto; max-height: 100dvh; box-sizing: border-box; }
+  #hotel-sidebar .hotel-sidebar-close { display: inline-flex; }
+  .hotel-dashboard-shell { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media (max-width: 1160px) {
   .hotel-search-card {
     grid-template-columns: repeat(2, minmax(0, 1fr));

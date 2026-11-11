@@ -37,13 +37,21 @@ export class AuthController {
   }
 
   @Public()
+  @Get('recovery-capabilities')
+  recoveryCapabilities() {
+    return this.authService.recoveryCapabilities();
+  }
+
+  @Public()
   @Post('forgot-password')
+  @Throttle({ default: { limit: 5, ttl: 900000 } })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
   }
 
   @Public()
   @Post('reset-password')
+  @Throttle({ default: { limit: 10, ttl: 900000 } })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
   }

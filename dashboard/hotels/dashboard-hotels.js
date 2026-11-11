@@ -131,7 +131,7 @@ function HotelsDashboardSidebar(currentPage) {
     ["Disponibilités", hotelDashboardRoutes.availability, "availability"],
     ["Messages", hotelDashboardRoutes.messages, "messages"],
     ["Réservations", hotelDashboardRoutes.reservations, "reservations", reservationCount],
-    ["Contacts", hotelDashboardRoutes.contacts, "contacts", reservationCount],
+    ["Contacts", hotelDashboardRoutes.contacts, "contacts", hotelDashboardData.contactTotal || undefined],
     ["Statistiques", hotelDashboardRoutes.statistics, "statistics"],
     ["Moyens de contact", hotelDashboardRoutes.contactSettings, "contactSettings"],
     ["Emails automatiques", hotelDashboardRoutes.emailSettings, "emailSettings"],
@@ -139,7 +139,8 @@ function HotelsDashboardSidebar(currentPage) {
   ];
   return `
     <aside class="dashboard-sidebar" id="hotel-sidebar">
-      <div class="dashboard-brand"><span>P</span><div><strong>Péncmi</strong><small>Annonceur hôtels</small></div></div>
+      <button class="btn btn-ghost hotel-sidebar-close" type="button" data-close-sidebar aria-label="Fermer la navigation">Fermer</button>
+      <a class="dashboard-brand" href="/dashboard/hotels/"><span>P</span><div><strong>Péncmi</strong><small>Annonceur hôtels</small></div></a>
       <nav class="dashboard-nav">${items.map(([label, href, key, badge]) => `<a href="${hotelDashboardRouteHref(href)}"${key === currentPage ? ' aria-current="page"' : ""}><span>${label}</span>${badge ? `<span class="notification-badge">${badge}</span>` : ""}</a>`).join("")}</nav>
     </aside>
   `;
@@ -149,7 +150,7 @@ function DashboardHeader(title, subtitle, actions = "") {
   const bell = typeof NotificationBell === "function" ? NotificationBell() : `<a class="btn btn-ghost" href="${hotelDashboardRouteHref("/dashboard/notifications")}">Notifications</a>`;
   return `
     <header class="hotel-dashboard-header">
-      <div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button><h1>${title}</h1><p>${subtitle}</p></div>
+      <div><button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar aria-controls="hotel-sidebar" aria-expanded="false">Menu</button><h1>${title}</h1><p>${subtitle}</p></div>
       <div class="dashboard-header-actions">${bell}${actions}<button class="btn btn-ghost" type="button" data-dashboard-logout>Se déconnecter</button></div>
     </header>
   `;
@@ -312,7 +313,24 @@ function renderDashboard() {
     contactSettings: HotelContactSettingsPage
   };
   document.querySelector("#hotel-dashboard-root").innerHTML = pages[page]();
-  document.querySelector("[data-open-sidebar]")?.addEventListener("click", () => document.querySelector("#hotel-sidebar").classList.toggle("is-open"));
+  const sidebar = document.querySelector('#hotel-sidebar');
+  const menu = document.querySelector('[data-open-sidebar]');
+  const setMenu = (open) => {
+    sidebar?.classList.toggle('is-open', open);
+    menu?.setAttribute('aria-expanded', String(open));
+    if (open) sidebar?.querySelector('button')?.focus();
+    else menu?.focus();
+  };
+  menu?.addEventListener('click', () => setMenu(!sidebar?.classList.contains('is-open')));
+  sidebar?.querySelector('[data-close-sidebar]')?.addEventListener('click', () => setMenu(false));
+  sidebar?.addEventListener('keydown', event => {
+    if (event.key === 'Escape') setMenu(false);
+    if (event.key === 'Tab' && sidebar.classList.contains('is-open')) {
+      const links = [...sidebar.querySelectorAll('a, button')];
+      if (event.shiftKey && document.activeElement === links[0]) { event.preventDefault(); links.at(-1).focus(); }
+      else if (!event.shiftKey && document.activeElement === links.at(-1)) { event.preventDefault(); links[0].focus(); }
+    }
+  });
   document.querySelector("[data-dashboard-logout]")?.addEventListener("click", () => {
     void hotelLogout();
   });

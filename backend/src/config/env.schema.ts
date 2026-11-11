@@ -35,6 +35,8 @@ export const envSchema = z.object({
   COOKIE_SECRET: z.string().min(16).optional(),
   REDIS_URL: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
+  PASSWORD_RECOVERY_ENABLED: z.enum(['true', 'false']).default('false'),
+  EMAIL_QUEUE_ENCRYPTION_KEY: z.preprocess(value => value === '' ? undefined : value, z.string().regex(/^[a-fA-F0-9]{64}$/).optional()),
   EMAIL_FROM: z.string().optional(),
   STORAGE_DRIVER: z.enum(["local", "s3", "r2"]).default("local"),
   LOCAL_UPLOAD_DIRECTORY: z.string().optional(),

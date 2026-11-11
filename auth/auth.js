@@ -101,8 +101,9 @@ function getNextParam() {
   return new URLSearchParams(window.location.search).get("next");
 }
 
-function getRedirectAfterLogin(role = "client", next = getNextParam()) {
-  return next || getDashboardRouteByRole(role);
+async function getRedirectAfterLogin(role = "client", next = getNextParam()) {
+  const { safeNext } = await import('./navigation.mjs');
+  return safeNext(next, getDashboardRouteByRole(role));
 }
 
 function getDashboardRouteByRole(role) {
@@ -445,16 +446,14 @@ function RegisterPage() {
 function ForgotPasswordPage() {
   return AuthLayout(`
     <h1>Mot de passe oublié</h1>
-    <p>La récupération du mot de passe n’est pas disponible pour le moment.</p>
-    <a class="btn btn-primary" href="/contact/">Contacter le support</a>
+    <div id="account-recovery"></div>
   `);
 }
 
 function ResetPasswordPage() {
   return AuthLayout(`
     <h1>Réinitialiser le mot de passe</h1>
-    <p>La réinitialisation du mot de passe n’est pas disponible pour le moment.</p>
-    <a class="btn btn-primary" href="/contact/">Contacter le support</a>
+    <div id="account-recovery"></div>
   `);
 }
 
@@ -857,7 +856,7 @@ function bindAuthForms() {
       });
       await setStoredTokens(tokens);
       await loadCurrentSession();
-      const target = getRedirectAfterLogin(authState.currentUser?.role || "client", getNextParam());
+      const target = await getRedirectAfterLogin(authState.currentUser?.role || "client", getNextParam());
       window.location.href = authRouteHref(target);
     } catch (apiError) {
       showMessage(error, apiError.message || "Identifiants incorrects. Veuillez réessayer.");
@@ -914,7 +913,7 @@ function bindAuthForms() {
       }
 
       showMessage(success, "Votre compte a été créé avec succès.");
-      const target = getRedirectAfterLogin(authState.currentUser?.role || payload.role);
+      const target = await getRedirectAfterLogin(authState.currentUser?.role || payload.role);
       window.setTimeout(() => {
         window.location.href = authRouteHref(target);
       }, 400);
@@ -951,6 +950,11 @@ async function renderAuthPage() {
   await loadCurrentSession();
 
   const page = document.body.dataset.authPage;
+  if (page === "login" && authState.currentUser) {
+    const { safeNext } = await import('./navigation.mjs');
+    window.location.replace(safeNext(getNextParam(), getDashboardRouteByRole(authState.currentUser.role)));
+    return;
+  }
   if (!canAccessRoute() && getRouteAccessType(window.location.pathname) !== "public" && getApiBaseUrl()) {
     root.innerHTML = UnauthorizedState("Connexion requise", "Connectez-vous pour accéder à cette page.", buildLoginRedirect(window.location.pathname));
     return;
@@ -971,6 +975,11 @@ async function renderAuthPage() {
 
   root.innerHTML = (pages[page] || LoginPage)();
   bindAuthForms();
+  const recovery = root.querySelector('#account-recovery');
+  if (recovery) {
+    const { mountRecovery } = await import('./account-recovery.mjs');
+    await mountRecovery(recovery, page);
+  }
 }
 
 document.addEventListener("DOMContentLoaded", () => {

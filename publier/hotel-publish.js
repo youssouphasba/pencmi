@@ -14,7 +14,7 @@ if (new URLSearchParams(location.search).get('category') === 'hotel') {
     let message = '';
     let errors = [];
     let status = 'draft';
-    let saved = false;
+    let saved = true;
     const objectUrls = new Map();
     const photoAttempts = new Map();
     const root = document.querySelector('#publish-page');
@@ -130,7 +130,7 @@ if (new URLSearchParams(location.search).get('category') === 'hotel') {
       root.querySelectorAll('[data-move-photo]').forEach(button => button.onclick = () => operation(async () => { if (!saved) await save(); const [i, delta] = button.dataset.movePhoto.split(':').map(Number); const order = photos.map(photo => photo.id); [order[i], order[i + delta]] = [order[i + delta], order[i]]; accept(await api.publicationRequest(`/dashboard/hotels/${encodeURIComponent(id)}/photos/order`, { method: 'PATCH', body: { photoIds: order } })); }));
       root.querySelectorAll('[data-delete-photo]').forEach(button => button.onclick = () => operation(async () => { if (!saved) await save(); accept(await api.publicationRequest(`/dashboard/hotels/${encodeURIComponent(id)}/photos/${encodeURIComponent(button.dataset.deletePhoto)}`, { method: 'DELETE' })); }));
     }
-    window.addEventListener('beforeunload', event => { if (!saved && (draft.name || draft.rooms.length)) { event.preventDefault(); event.returnValue = ''; } });
+    window.addEventListener('beforeunload', event => { if (!saved) { event.preventDefault(); event.returnValue = ''; } });
     window.addEventListener('pagehide', () => objectUrls.forEach(url => URL.revokeObjectURL(url)));
     render();
     if (id) await operation(async () => accept(await api.publicationRequest(`/dashboard/hotels/${encodeURIComponent(id)}`)));
