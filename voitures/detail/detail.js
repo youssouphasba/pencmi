@@ -203,6 +203,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       form.querySelector('[type="submit"]').disabled = false;
     }
   });
-  if (typeof bindReportModal === 'function') bindReportModal(document);
+  if (typeof bindListingReports === 'function') bindListingReports(root, 'vehicles', listing.id);
 });
 void import("../../saved/enhance.mjs").catch(() => {});

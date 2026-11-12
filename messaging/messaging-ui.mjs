@@ -84,5 +84,6 @@ export function messageList(messages, { hasOlder, onOlder } = {}) {
     hasOlder ? el('li', { class: 'pm-older' }, el('button', { class: 'btn btn-ghost', type: 'button', text: 'Afficher les messages précédents', onClick: onOlder })) : null,
     messages.map((message) => el('li', { class: `pm-message${message.mine ? ' is-mine' : ''}` },
       el('p', { class: 'pm-message-body', text: message.body }),
-      el('small', { text: `${message.mine ? 'Vous' : 'Reçu'} · ${formatDateTime(message.createdAt)}` }))));
+      el('small', { text: `${message.mine ? 'Vous' : 'Reçu'} · ${formatDateTime(message.createdAt)}` }),
+      !message.mine && message.id ? el('a', { href: `/signaler/?${new URLSearchParams({ module: 'messages', targetType: 'message', targetId: message.id })}`, text: 'Signaler', class: 'pm-message-report' }) : null)));
 }

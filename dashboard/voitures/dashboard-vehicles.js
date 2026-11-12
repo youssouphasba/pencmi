@@ -277,9 +277,10 @@ function renderDashboard() {
   document.querySelectorAll("[data-vehicle-request-status]").forEach((button) => {
     button.addEventListener("click", () => {
       button.disabled = true;
-      void updateVehicleRequestStatus(button.dataset.vehicleRequestId, button.dataset.vehicleRequestType, button.dataset.vehicleRequestStatus).catch(() => {
+      void updateVehicleRequestStatus(button.dataset.vehicleRequestId, button.dataset.vehicleRequestType, button.dataset.vehicleRequestStatus).catch((error) => {
         button.disabled = false;
-        window.alert("La mise à jour de la demande a échoué. Vérifiez la connexion puis réessayez.");
+        // A refusal by the server (dates already booked, transition) explains itself.
+        window.alert(error?.status >= 400 && error?.status < 500 && error.message ? error.message : "La mise à jour de la demande a échoué. Vérifiez la connexion puis réessayez.");
       });
     });
   });

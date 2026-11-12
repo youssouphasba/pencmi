@@ -162,6 +162,61 @@ function vehicleCard(listing) {
   `;
 }
 
+
+// Map of the results: the shared map code is only fetched when the visitor opens it.
+const vehicleScriptSrc = document.currentScript?.src || "";
+let vehicleMapOpen = (() => { try { return sessionStorage.getItem("pencmi.map") === "open"; } catch { return false; } })();
+
+function vehicleMapToggle(onChange) {
+  const button = document.querySelector("[data-toggle-map]");
+  if (!button) return;
+  button.addEventListener("click", () => {
+    vehicleMapOpen = !vehicleMapOpen;
+    try { sessionStorage.setItem("pencmi.map", vehicleMapOpen ? "open" : "closed"); } catch { /* storage unavailable */ }
+    onChange();
+  });
+}
+
+function vehicleMapMarkup(cardClass) {
+  const button = `<p style="margin:10px 0 0;"><button class="btn btn-ghost" type="button" data-toggle-map aria-expanded="${vehicleMapOpen}">${vehicleMapOpen ? "Masquer la carte" : "Voir la carte"}</button></p>`;
+  const panel = vehicleMapOpen ? `<section class="${cardClass}" data-listing-map aria-label="Carte des résultats" style="margin-bottom:16px;padding:10px;"><p role="status">Chargement de la carte...</p></section>` : "";
+  return { button, panel };
+}
+
+async function vehicleRenderMap(items, options) {
+  const panel = document.querySelector("[data-listing-map]");
+  if (!panel) return;
+  try {
+    if (!window.PencmiMap) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = new URL("../config/senegal-map.js", vehicleScriptSrc || window.location.href).href;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.append(script);
+      });
+    }
+    if (panel.isConnected) await window.PencmiMap.mount(panel, items, options);
+  } catch {
+    const note = document.createElement("p");
+    note.setAttribute("role", "alert");
+    note.textContent = "La carte ne peut pas être affichée pour le moment. Les résultats restent disponibles dans la liste.";
+    panel.replaceChildren(note);
+  }
+}
+
+function vehicleMapItems() {
+  return vehicleState.filtered.map((listing) => {
+    const metadata = vehicleMetadata(listing);
+    return {
+      city: listing.city,
+      title: [metadata.brand, metadata.model || listing.title].filter(Boolean).join(" "),
+      href: vehicleRouteHref(`/voitures/${encodeURIComponent(listing.id)}`),
+      detail: vehiclePresentation.vehiclePrice(listing),
+    };
+  });
+}
+
 function vehicleEmptyState() {
   return `<section class="vehicle-empty"><div><h2>Aucune voiture disponible pour le moment.</h2><p>Vous pouvez modifier votre recherche ou créer une alerte pour être informé plus tard.</p><div class="vehicle-empty-actions"><a class="btn btn-ghost" href="${vehicleRouteHref(vehicleRoutes.vehicles)}">Modifier ma recherche</a><a class="btn btn-primary" href="${vehicleRouteHref(vehicleRoutes.alerts)}">Créer une alerte</a></div></div></section>`;
 }
@@ -178,17 +233,21 @@ function vehiclesPage() {
     return;
   }
   const values = vehicleQueryValues();
-  const filtersLabel = [values.brand, values.model, values.city, values.type].filter(Boolean).join(" · ");
+  const typeLabel = { sale: "Achat / vente", rental: "Location", chauffeur: "Avec chauffeur" }[values.type] || values.type;
+  const filtersLabel = [values.brand, values.model, values.city, typeLabel].filter(Boolean).join(" · ");
   document.querySelector("#vehicle-results").innerHTML = `
     <div class="vehicle-results-layout">
       ${vehicleFiltersMarkup()}
       <section class="vehicle-list">
-        <section class="vehicle-detail-card" style="margin-bottom:16px;"><h2>Résultats</h2><div data-save-search="vehicles"></div><p>${vehicleState.meta?.total ?? vehicleState.filtered.length} véhicule(s)${filtersLabel ? ` pour ${vehicleText(filtersLabel)}` : ""}</p></section>
+        <section class="vehicle-detail-card" style="margin-bottom:16px;"><h2>Résultats</h2><div data-save-search="vehicles"></div><p>${vehicleState.meta?.total ?? vehicleState.filtered.length} véhicule(s)${filtersLabel ? ` pour ${vehicleText(filtersLabel)}` : ""}</p>${vehicleMapMarkup("vehicle-detail-card").button}</section>
+        ${vehicleMapMarkup("vehicle-detail-card").panel}
         ${vehicleState.filtered.length ? vehicleState.filtered.map(vehicleCard).join("") : vehicleEmptyState()}
         ${vehicleState.meta?.totalPages > 1 ? `<nav class="vehicle-card-actions" aria-label="Pagination">${vehicleState.meta.page > 1 ? `<button class="btn btn-ghost" data-vehicle-page="${vehicleState.meta.page - 1}">Précédent</button>` : ''}<span>Page ${vehicleState.meta.page} sur ${vehicleState.meta.totalPages}</span>${vehicleState.meta.page < vehicleState.meta.totalPages ? `<button class="btn btn-ghost" data-vehicle-page="${vehicleState.meta.page + 1}">Suivant</button>` : ''}</nav>` : ''}
       </section>
     </div>
   `;
+  vehicleMapToggle(vehiclesPage);
+  void vehicleRenderMap(vehicleMapItems(), { focusCity: values.city, note: "Les véhicules de cette page sont regroupés par ville." });
   document.querySelectorAll('[data-vehicle-page]').forEach(button => button.onclick = () => {
     const url = new URL(location.href); url.searchParams.set('page', button.dataset.vehiclePage); location.href = url;
   });

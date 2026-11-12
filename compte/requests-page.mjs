@@ -92,7 +92,54 @@ function facts(request) {
   );
 }
 
-function card(request, full) {
+const acceptedNotes = {
+  hotel: 'Les nuits confirmées seront libérées.',
+  trip: 'Les places confirmées seront remises en vente.',
+};
+
+/** Two-step withdrawal: nothing is sent before the explicit confirmation. */
+function cancelPanel(request, onCancelled) {
+  const status = el('p', { role: 'alert' });
+  const panel = el('section', { class: 'cr-cancel' });
+  const idle = () =>
+    panel.replaceChildren(
+      el('button', { class: 'btn btn-light', type: 'button', text: 'Annuler ma demande', onClick: confirmStep }),
+      status,
+    );
+  function confirmStep() {
+    status.textContent = '';
+    const confirm = el('button', { class: 'btn btn-primary', type: 'button', text: 'Confirmer l’annulation' });
+    const keep = el('button', { class: 'btn btn-light', type: 'button', text: 'Garder ma demande', onClick: idle });
+    confirm.addEventListener('click', async () => {
+      confirm.disabled = keep.disabled = true;
+      try {
+        onCancelled(
+          await apiRequest(`/compte/requests/${request.type}/${encodeURIComponent(request.id)}/cancel`, { method: 'POST' }),
+        );
+      } catch (error) {
+        idle();
+        status.textContent =
+          error?.status === 401
+            ? 'Votre session a expiré. Reconnectez-vous pour annuler cette demande.'
+            : error?.message || 'Annulation impossible. Réessayez.';
+      }
+    });
+    panel.replaceChildren(
+      el('p', {
+        text: `Cette annulation est définitive et l’annonceur en sera informé.${
+          request.status === 'accepted' && acceptedNotes[request.type] ? ` ${acceptedNotes[request.type]}` : ''
+        }`,
+      }),
+      el('div', { class: 'client-actions' }, confirm, keep),
+      status,
+    );
+    confirm.focus();
+  }
+  idle();
+  return panel;
+}
+
+function card(request, full, onCancelled) {
   return el(
     'article',
     { class: 'cr-request' },
@@ -168,6 +215,7 @@ function card(request, full) {
           })
         : null,
     ),
+    full && request.canCancel && onCancelled ? cancelPanel(request, onCancelled) : null,
   );
 }
 
@@ -193,14 +241,17 @@ export function mountClientRequests(root, type) {
         const request = await apiRequest(
           `/compte/requests/${type}/${encodeURIComponent(id)}`,
         );
-        root.replaceChildren(
-          el('a', {
-            class: 'btn btn-light',
-            href: `/compte/${config.page}/`,
-            text: 'Toutes mes demandes',
-          }),
-          card(request, true),
-        );
+        const show = (current, notice) =>
+          root.replaceChildren(
+            el('a', {
+              class: 'btn btn-light',
+              href: `/compte/${config.page}/`,
+              text: 'Toutes mes demandes',
+            }),
+            notice ? el('p', { role: 'status', text: notice }) : null,
+            card(current, true, (cancelled) => show(cancelled, 'Votre demande a été annulée.')),
+          );
+        show(request);
       } else {
         const result = await apiRequest(
           `/compte/requests?type=${type}&page=${page}&limit=20`,

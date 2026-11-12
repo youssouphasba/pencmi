@@ -368,3 +368,5 @@
     width: 100%;
   }
 }
+.cr-cancel { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border, #dbe3ec); }
+.cr-cancel p { margin: 0 0 12px; }

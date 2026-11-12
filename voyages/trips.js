@@ -162,6 +162,59 @@ function tripCard(listing) {
   `;
 }
 
+
+// Map of the results: the shared map code is only fetched when the visitor opens it.
+const tripScriptSrc = document.currentScript?.src || "";
+let tripMapOpen = (() => { try { return sessionStorage.getItem("pencmi.map") === "open"; } catch { return false; } })();
+
+function tripMapToggle(onChange) {
+  const button = document.querySelector("[data-toggle-map]");
+  if (!button) return;
+  button.addEventListener("click", () => {
+    tripMapOpen = !tripMapOpen;
+    try { sessionStorage.setItem("pencmi.map", tripMapOpen ? "open" : "closed"); } catch { /* storage unavailable */ }
+    onChange();
+  });
+}
+
+function tripMapMarkup(cardClass) {
+  const button = `<p style="margin:10px 0 0;"><button class="btn btn-ghost" type="button" data-toggle-map aria-expanded="${tripMapOpen}">${tripMapOpen ? "Masquer la carte" : "Voir la carte"}</button></p>`;
+  const panel = tripMapOpen ? `<section class="${cardClass}" data-listing-map aria-label="Carte des résultats" style="margin-bottom:16px;padding:10px;"><p role="status">Chargement de la carte...</p></section>` : "";
+  return { button, panel };
+}
+
+async function tripRenderMap(items, options) {
+  const panel = document.querySelector("[data-listing-map]");
+  if (!panel) return;
+  try {
+    if (!window.PencmiMap) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = new URL("../config/senegal-map.js", tripScriptSrc || window.location.href).href;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.append(script);
+      });
+    }
+    if (panel.isConnected) await window.PencmiMap.mount(panel, items, options);
+  } catch {
+    const note = document.createElement("p");
+    note.setAttribute("role", "alert");
+    note.textContent = "La carte ne peut pas être affichée pour le moment. Les résultats restent disponibles dans la liste.";
+    panel.replaceChildren(note);
+  }
+}
+
+function tripMapItems() {
+  return tripState.filtered.map((listing) => ({
+    city: listing.departureCity,
+    toCity: listing.arrivalCity,
+    title: `${listing.departureCity} → ${listing.arrivalCity}`,
+    href: tripRouteHref(`/voyages/detail/?id=${encodeURIComponent(listing.id)}${listing.occurrenceId ? `&occurrenceId=${encodeURIComponent(listing.occurrenceId)}` : ""}`),
+    detail: listing.departureTime || "",
+  }));
+}
+
 function tripEmptyState() {
   return `<section class="trip-empty"><div><h2>Aucun trajet disponible pour le moment.</h2><p>Vous pouvez modifier votre recherche ou créer une alerte pour être informé plus tard.</p><div class="trip-empty-actions"><a class="btn btn-ghost" href="${tripRouteHref(tripRoutes.trips)}">Modifier ma recherche</a><a class="btn btn-primary" href="${tripRouteHref(tripRoutes.alerts)}">Créer une alerte</a></div></div></section>`;
 }
@@ -174,13 +227,16 @@ function tripsPage() {
     <div class="trip-results-layout">
       ${tripFiltersMarkup()}
       <section class="trip-list">
-        <section class="trip-detail-card" style="margin-bottom:16px;"><h2>Résultats</h2><p>${tripState.meta?.total ?? tripState.filtered.length} trajet(s)${label ? ` pour ${label}` : ""}</p></section>
+        <section class="trip-detail-card" style="margin-bottom:16px;"><h2>Résultats</h2><p>${tripState.meta?.total ?? tripState.filtered.length} trajet(s)${label ? ` pour ${label}` : ""}</p>${tripMapMarkup("trip-detail-card").button}</section>
+        ${tripMapMarkup("trip-detail-card").panel}
         ${tripState.error ? `<p role="alert">${tripEscape(tripState.error)}</p><button class="btn btn-light" data-trip-retry>Réessayer</button>` : tripState.filtered.length ? tripState.filtered.map(tripCard).join("") : tripEmptyState()}
         <div class="trip-card-actions">${Number(values.page) > 1 ? '<button class="btn btn-light" data-trip-page="-1">Précédent</button>' : ''}${Number(values.page) < (tripState.meta?.totalPages || 1) ? '<button class="btn btn-light" data-trip-page="1">Suivant</button>' : ''}</div>
       </section>
     </div>
   `;
 
+  tripMapToggle(tripsPage);
+  void tripRenderMap(tripMapItems(), { focusCity: values.depart, note: "Les trajets de cette page sont placés sur leur ville de départ ; la ligne mène à la ville d’arrivée.", countLabel: (count) => `${count} départ${count > 1 ? "s" : ""}` });
   document.querySelectorAll('[data-trip-page]').forEach(button => button.onclick = () => setTripQuery({ ...values, page: Number(values.page) + Number(button.dataset.tripPage) }));
   document.querySelector('[data-trip-retry]')?.addEventListener('click', () => location.reload());
 

@@ -340,8 +340,7 @@ function HotelIntegrationWebhooksPage() {
 }
 
 function HotelIntegrationSyncSettingsPage() {
-  const frequencies = ["realtime", "every_5_minutes", "every_15_minutes", "every_30_minutes", "hourly", "daily", "manual"];
-  return HotelIntegrationLayout(`<section class="hotel-integration-card"><div class="hotel-integration-notice">${hotelIntegrationDefaults.sourceOfTruthText}</div><div class="hotel-integration-form-grid"><label class="hotel-integration-field"><span>Source principale</span><select><option>${getHotelSourceOfTruthLabel("hotel_internal_software")}</option></select></label><label class="hotel-integration-field"><span>Fréquence</span><select>${frequencies.map((item) => `<option>${getHotelSyncFrequencyLabel(item)}</option>`).join("")}</select></label><label class="hotel-integration-field"><span>Conflit</span><select><option>Le logiciel interne gagne</option><option>Revue manuelle</option><option>Afficher disponibilité à confirmer</option></select></label><label class="hotel-integration-field"><span>Modification manuelle</span><select><option>Désactivée pour les données synchronisées</option><option>Autorisée sur certains champs</option><option>Mode mixte</option></select></label></div></section><section class="hotel-integration-card"><h2>Données synchronisées</h2><div class="hotel-integration-form-grid">${["Établissement", "Chambres", "Prix", "Disponibilités", "Restrictions", "Statuts"].map((item) => `<label class="choice-card"><input type="checkbox"><span>${item}</span></label>`).join("")}</div></section>`, "syncSettings", "Paramètres de synchronisation", "Définissez les règles futures sans synchroniser réellement.");
+  return HotelIntegrationLayout(`<div id="hotel-sync-root"><p>Chargement des réglages…</p></div>`, "syncSettings", "Synchronisation des disponibilités", "Reliez votre logiciel hôtelier par calendrier iCal ou par votre channel manager : Péncmi se met à jour sans que vous ayez à vous connecter.");
 }
 
 function HotelIntegrationMappingPage() {
@@ -388,7 +387,7 @@ function AdminHotelIntegrationsDashboard() {
 }
 
 function AdminHotelIntegrationPartnersPage() {
-  return AdminHotelIntegrationLayout(`${HotelIntegrationEmptyState("Aucun partenaire hôtel connecté pour le moment.")}${HotelSyncTable(["Hôtel", "Type d’établissement", "Statut intégration", "Source principale", "Dernière synchronisation", "Erreurs", "Webhooks actifs", "Actions"], [])}`, "partners", "Partenaires hôtels", "Suivez les établissements connectés.");
+  return AdminHotelIntegrationLayout(`<div id="admin-channel-partners-root"><p>Chargement des partenaires…</p></div>`, "partners", "Channel managers partenaires", "Les channel managers reliés à Péncmi. Les hôteliers choisissent le leur dans leurs réglages de synchronisation.");
 }
 
 function AdminHotelIntegrationApiKeysPage() {

@@ -299,8 +299,8 @@ function VerificationDecisionModal() {
         <label>Action<select><option>Approuver</option><option>Refuser</option><option>Demander correction</option><option>Suspendre</option></select></label>
         <label>Motif<select><option>Document illisible</option><option>Document manquant</option><option>Document expiré</option><option>Information incohérente</option><option>Activité non vérifiable</option><option>Photos insuffisantes</option><option>Prix incohérent</option><option>Contact incomplet</option><option>Localisation insuffisante</option><option>Autre</option></select></label>
         <label>Message personnalisé<textarea></textarea></label>
-        <div class="verification-message" data-verification-success>La décision de vérification a été enregistrée.</div>
-        <div class="verification-actions"><button class="btn btn-ghost" type="button" data-close-verification-modal>Annuler</button><button class="btn btn-primary" type="button" data-verification-decision>Enregistrer la décision</button></div>
+        <p class="verification-message is-visible" role="note">La vérification documentaire n’est pas encore reliée au serveur : aucune décision ne peut être enregistrée ici.</p>
+        <div class="verification-actions"><button class="btn btn-ghost" type="button" data-close-verification-modal>Annuler</button><button class="btn btn-primary" type="button" disabled>Enregistrer la décision</button></div>
       </div>
     </div>
   `;
@@ -341,7 +341,6 @@ function renderVerificationPage() {
     adminListings: AdminVerificationListingsPage
   };
   root.innerHTML = (pages[page] || VerificationDashboardPage)();
-  document.querySelector("[data-verification-decision]")?.addEventListener("click", () => document.querySelector("[data-verification-success]")?.classList.add("is-visible"));
   document.querySelector("[data-close-verification-modal]")?.addEventListener("click", () => document.querySelector("[data-verification-modal]")?.classList.remove("is-open"));
 }
 

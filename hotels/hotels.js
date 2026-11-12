@@ -11,6 +11,8 @@ const hotelRoutes = {
 let hotelState = {
   all: [],
   filtered: [],
+  meta: null,
+  error: "",
 };
 let hotelTypeLabels = {};
 
@@ -66,6 +68,50 @@ function hotelSearchValues() {
   };
 }
 
+// Stay searched by the visitor. Dakar time is UTC, so the UTC date is "today".
+function hotelStaySearch() {
+  const values = hotelSearchValues();
+  const isDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const count = (value, min, max) => Math.min(max, Math.max(min, Math.trunc(Number(value)) || min));
+  if (!values.checkIn && !values.checkOut) return { stay: null, error: "" };
+  if (!isDate(values.checkIn) || !isDate(values.checkOut)) {
+    return { stay: null, error: "Indiquez la date d’arrivée et la date de départ pour vérifier les disponibilités." };
+  }
+  if (values.checkOut <= values.checkIn) {
+    return { stay: null, error: "La date de départ doit suivre la date d’arrivée." };
+  }
+  if (values.checkIn < new Date().toISOString().slice(0, 10)) {
+    return { stay: null, error: "La date d’arrivée ne peut pas être passée." };
+  }
+  return {
+    stay: {
+      checkIn: values.checkIn,
+      checkOut: values.checkOut,
+      guests: count(Number(values.adults) + Number(values.children), 1, 100),
+      rooms: count(values.rooms, 1, 10),
+    },
+    error: "",
+  };
+}
+
+function hotelDateLabel(value) {
+  const [year, month, day] = String(value).split("-");
+  return `${day}/${month}/${year}`;
+}
+
+function hotelStayLine(listing) {
+  const stay = listing.stay;
+  if (!stay) return "Disponibilité à confirmer";
+  const nights = `${stay.nights} nuit${stay.nights > 1 ? "s" : ""}`;
+  const units = stay.units > 1 ? ` · ${stay.units} chambres` : "";
+  const total = stay.estimatedTotal !== null && stay.estimatedTotal !== undefined
+    ? ` · environ ${pencmiFormatPrice(stay.estimatedTotal, "FCFA")} le séjour`
+    : "";
+  return stay.status === "on_request"
+    ? `Disponible pour vos dates · ${nights}${units}${total}`
+    : `Disponibilité à confirmer pour vos dates · ${nights}${units}${total}`;
+}
+
 function setHotelQuery(nextValues) {
   const params = new URLSearchParams();
   Object.entries(nextValues).forEach(([key, value]) => {
@@ -113,8 +159,8 @@ function hotelHero() {
       <p>Comparez les hébergements selon votre ville, votre budget, vos dates et vos besoins.</p>
       <form class="hotel-search-card" id="hotel-search-form">
         <label class="hotel-field"><span>Destination</span><input name="query" type="search" value="${hotelEscape(values.query || values.city)}" placeholder="Ville, quartier ou région"></label>
-        <label class="hotel-field"><span>Arrivée</span><input name="checkIn" type="date" value="${hotelEscape(values.checkIn)}"></label>
-        <label class="hotel-field"><span>Départ</span><input name="checkOut" type="date" value="${hotelEscape(values.checkOut)}"></label>
+        <label class="hotel-field"><span>Arrivée</span><input name="checkIn" type="date" min="${new Date().toISOString().slice(0, 10)}" value="${hotelEscape(values.checkIn)}"></label>
+        <label class="hotel-field"><span>Départ</span><input name="checkOut" type="date" min="${new Date().toISOString().slice(0, 10)}" value="${hotelEscape(values.checkOut)}"></label>
         <label class="hotel-field"><span>Adultes</span><input name="adults" type="number" min="1" value="${hotelEscape(values.adults)}"></label>
         <label class="hotel-field"><span>Enfants</span><input name="children" type="number" min="0" value="${hotelEscape(values.children)}"></label>
         <label class="hotel-field"><span>Chambres</span><input name="rooms" type="number" min="1" value="${hotelEscape(values.rooms)}"></label>
@@ -234,7 +280,7 @@ function hotelCard(listing) {
           ${advertiser.verified ? `<span class="hotel-chip">Vérifié</span>` : ""}
         </div>
         ${amenities.length ? `<div class="hotel-chip-row">${amenities.map((item) => `<span class="hotel-chip">${hotelEscape(item)}</span>`).join("")}</div>` : ""}
-        <p>Disponibilité à confirmer</p>
+        <p>${hotelEscape(hotelStayLine(listing))}</p>
         <div class="hotel-card-actions">
           <strong>${pencmiFormatPrice(hotelNightlyPrice(listing), listing.currency || "FCFA")}</strong>
           <a class="btn btn-light" href="${hotelRouteHref(`/hotels/${listing.id}`)}">Voir détails</a>
@@ -261,15 +307,82 @@ function hotelEmptyState() {
   `;
 }
 
+
+// Map of the results: the shared map code is only fetched when the visitor opens it.
+const hotelScriptSrc = document.currentScript?.src || "";
+let hotelMapOpen = (() => { try { return sessionStorage.getItem("pencmi.map") === "open"; } catch { return false; } })();
+
+function hotelMapToggle(onChange) {
+  const button = document.querySelector("[data-toggle-map]");
+  if (!button) return;
+  button.addEventListener("click", () => {
+    hotelMapOpen = !hotelMapOpen;
+    try { sessionStorage.setItem("pencmi.map", hotelMapOpen ? "open" : "closed"); } catch { /* storage unavailable */ }
+    onChange();
+  });
+}
+
+function hotelMapMarkup(cardClass) {
+  const button = `<p style="margin:10px 0 0;"><button class="btn btn-ghost" type="button" data-toggle-map aria-expanded="${hotelMapOpen}">${hotelMapOpen ? "Masquer la carte" : "Voir la carte"}</button></p>`;
+  const panel = hotelMapOpen ? `<section class="${cardClass}" data-listing-map aria-label="Carte des résultats" style="margin-bottom:16px;padding:10px;"><p role="status">Chargement de la carte...</p></section>` : "";
+  return { button, panel };
+}
+
+async function hotelRenderMap(items, options) {
+  const panel = document.querySelector("[data-listing-map]");
+  if (!panel) return;
+  try {
+    if (!window.PencmiMap) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = new URL("../config/senegal-map.js", hotelScriptSrc || window.location.href).href;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.append(script);
+      });
+    }
+    if (panel.isConnected) await window.PencmiMap.mount(panel, items, options);
+  } catch {
+    const note = document.createElement("p");
+    note.setAttribute("role", "alert");
+    note.textContent = "La carte ne peut pas être affichée pour le moment. Les résultats restent disponibles dans la liste.";
+    panel.replaceChildren(note);
+  }
+}
+
+function hotelMapItems() {
+  return hotelState.filtered.map((listing) => ({
+    city: listing.city,
+    title: listing.name,
+    href: hotelRouteHref(`/hotels/${listing.id}`),
+    detail: pencmiFormatPrice(hotelNightlyPrice(listing), listing.currency || "FCFA"),
+  }));
+}
+
+function hotelTotal() {
+  return hotelState.meta?.total ?? hotelState.filtered.length;
+}
+
+function hotelPagination() {
+  const meta = hotelState.meta;
+  if (!meta || !(meta.totalPages > 1)) return "";
+  return `<nav class="hotel-card-actions" aria-label="Pagination">${meta.page > 1 ? `<button class="btn btn-ghost" type="button" data-hotel-page="${meta.page - 1}">Précédent</button>` : ""}<span>Page ${meta.page} sur ${meta.totalPages}</span>${meta.page < meta.totalPages ? `<button class="btn btn-ghost" type="button" data-hotel-page="${meta.page + 1}">Suivant</button>` : ""}</nav>`;
+}
+
 function hotelResultsSummary() {
   const values = hotelSearchValues();
+  const { stay, error } = hotelStaySearch();
   const parts = [values.query || values.city, values.type, values.stars ? `${values.stars}+ étoiles` : ""].filter(Boolean);
   return `
     <section class="hotel-detail-card" style="margin-bottom:16px;">
       <h2>Résultats</h2>
       <div data-save-search="hotels"></div>
-      <p>${hotelState.filtered.length} hébergement${hotelState.filtered.length > 1 ? "s" : ""} ${parts.length ? `pour ${parts.join(" · ")}` : "disponible(s)"}</p>
+      <p>${hotelTotal()} hébergement${hotelTotal() > 1 ? "s" : ""} ${parts.length ? `pour ${parts.join(" · ")}` : "disponible(s)"}</p>
+      ${stay ? `<p>Séjour du ${hotelEscape(hotelDateLabel(stay.checkIn))} au ${hotelEscape(hotelDateLabel(stay.checkOut))} · ${stay.guests} voyageur${stay.guests > 1 ? "s" : ""} · ${stay.rooms} chambre${stay.rooms > 1 ? "s" : ""}. Les établissements complets ou fermés sur ces dates ne sont pas affichés.</p>` : ""}
+      ${error || hotelState.error ? `<p role="alert">${hotelEscape(error || hotelState.error)}</p>` : ""}
+      ${hotelMapMarkup("hotel-detail-card").button}
     </section>
+    ${hotelMapMarkup("hotel-detail-card").panel}
   `;
 }
 
@@ -280,12 +393,20 @@ function hotelsPage() {
       <section class="hotel-list">
         ${hotelResultsSummary()}
         ${hotelState.filtered.length ? hotelState.filtered.map(hotelCard).join("") : hotelEmptyState()}
+        ${hotelPagination()}
       </section>
-      <aside class="hotel-map">
-        <div class="hotel-map-placeholder">Carte et zones de séjour prévues ici.</div>
-      </aside>
     </div>
   `;
+
+  hotelMapToggle(hotelsPage);
+  document.querySelectorAll("[data-hotel-page]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const url = new URL(window.location.href);
+      url.searchParams.set("page", button.dataset.hotelPage);
+      window.location.href = url;
+    });
+  });
+  void hotelRenderMap(hotelMapItems(), { focusCity: hotelSearchValues().city, note: "Les hébergements de cette page sont regroupés par ville." });
 
   document.querySelector("#hotel-filter-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -319,55 +440,6 @@ function hotelsFooter() {
   `;
 }
 
-function filterHotels(listings) {
-  const values = hotelSearchValues();
-  const normalizedQuery = pencmiNormalizeText(values.query);
-  const normalizedCity = pencmiNormalizeText(values.city);
-  const minPrice = Number(values.minPrice || 0);
-  const maxPrice = Number(values.maxPrice || 0);
-  const stars = Number(values.stars || 0);
-  const normalizedAmenity = pencmiNormalizeText(values.amenity);
-
-  return listings.filter((listing) => {
-    const metadata = hotelMetadata(listing);
-    const haystack = pencmiNormalizeText([
-      listing.name,
-      listing.propertyType,
-      listing.city,
-      listing.region,
-      listing.address,
-      listing.description,
-      metadata.district,
-    ].filter(Boolean).join(" "));
-    const price = Number(hotelNightlyPrice(listing) || 0);
-    const amenities = hotelAmenityList(listing).map(pencmiNormalizeText);
-
-    if (normalizedQuery && !haystack.includes(normalizedQuery)) {
-      return false;
-    }
-    if (normalizedCity && pencmiNormalizeText(listing.city) !== normalizedCity) {
-      return false;
-    }
-    if (values.type && pencmiNormalizeText(listing.propertyType) !== pencmiNormalizeText(values.type)) {
-      return false;
-    }
-    if (minPrice && (!price || price < minPrice)) {
-      return false;
-    }
-    if (maxPrice && price > maxPrice) {
-      return false;
-    }
-    if (stars && hotelStars(listing) < stars) {
-      return false;
-    }
-    if (normalizedAmenity && !amenities.includes(normalizedAmenity)) {
-      return false;
-    }
-
-    return true;
-  });
-}
-
 async function loadHotels() {
   const query = hotelSearchValues();
   const apiParams = new URLSearchParams();
@@ -377,11 +449,22 @@ async function loadHotels() {
   if (query.type) {
     apiParams.set("propertyType", query.type);
   }
+  // Every filter is applied by the API on the whole search, not on the page shown.
+  for (const key of ["query", "minPrice", "maxPrice", "stars", "amenity"]) {
+    if (query[key]) apiParams.set(key, query[key]);
+  }
+  const page = Math.trunc(Number(pencmiQueryValue("page", "1")));
+  if (page > 1) apiParams.set("page", String(page));
+  const { stay } = hotelStaySearch();
+  if (stay) {
+    Object.entries(stay).forEach(([key, value]) => apiParams.set(key, String(value)));
+  }
 
-  const payload = await pencmiApiRequest(`/hotels${apiParams.toString() ? `?${apiParams.toString()}` : ""}`);
+  const payload = await pencmiApiRequest(`/hotels${apiParams.toString() ? `?${apiParams.toString()}` : ""}`, { includeMeta: true });
   const data = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : Array.isArray(payload?.items) ? payload.items : [];
   hotelState.all = data;
-  hotelState.filtered = filterHotels(data);
+  hotelState.filtered = data;
+  hotelState.meta = payload?.meta || null;
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -392,9 +475,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   hotelQuickSuggestions();
   try {
     await loadHotels();
-  } catch {
+  } catch (error) {
     hotelState.all = [];
     hotelState.filtered = [];
+    hotelState.error = error instanceof Error && error.message ? error.message : "Chargement impossible.";
   }
   hotelsPage();
   hotelsFooter();

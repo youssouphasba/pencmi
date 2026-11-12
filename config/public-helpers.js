@@ -25,8 +25,12 @@ async function pencmiApiRequest(path, options = {}) {
   return includeMeta ? payload : payload?.data ?? payload;
 }
 
+// Landing pages such as /hotels/auberge preset a filter in data-search-preset;
+// the address of the page always wins over it.
 function pencmiQueryParams() {
-  return new URLSearchParams(window.location.search);
+  const params = new URLSearchParams(document.body?.dataset?.searchPreset || "");
+  new URLSearchParams(window.location.search).forEach((value, key) => params.set(key, value));
+  return params;
 }
 
 function pencmiQueryValue(key, fallback = "") {

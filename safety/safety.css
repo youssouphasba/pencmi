@@ -1,5 +1,22 @@
 @import url("../design-system/design-system.css");
 
+.safety-report-stack {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.safety-report-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.safety-history-item + .safety-history-item {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 8px;
+}
+
 .safety-page {
   min-height: 100vh;
   background: var(--bg);

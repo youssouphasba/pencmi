@@ -122,7 +122,7 @@
 
 .hotel-results-layout {
   display: grid;
-  grid-template-columns: 290px minmax(0, 1fr) 290px;
+  grid-template-columns: 290px minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }

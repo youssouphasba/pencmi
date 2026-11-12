@@ -187,9 +187,7 @@ function tripDetailPage() {
   `;
 
   bindTripDetailActions();
-  if (typeof bindReportModal === "function") {
-    bindReportModal(document);
-  }
+  if (typeof bindListingReports === 'function') bindListingReports(document.querySelector('#trip-detail-page'), 'trips', listing.id);
 }
 
 function bindTripDetailActions() {

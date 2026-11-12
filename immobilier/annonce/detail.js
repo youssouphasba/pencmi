@@ -299,20 +299,6 @@ function VisitRequestFeedback(message, isError = false) {
   `;
 }
 
-function ReportModal() {
-  return `
-    <div class="modal-backdrop" data-modal>
-      <div class="modal-panel">
-        <h2>Signaler l’annonce</h2>
-        <p>Le signalement sera relié plus tard au module de modération.</p>
-        <div class="modal-actions">
-          <button class="btn btn-ghost" type="button" data-close-modal>Fermer</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
 function openModal(content) {
   document.querySelector("#modal-root").innerHTML = content;
   document.querySelectorAll("[data-close-modal]").forEach((button) => button.addEventListener("click", closeModal));
@@ -371,9 +357,6 @@ function bindDetailActions(listing) {
     });
   });
 
-  document.querySelector("[data-open-report]")?.addEventListener("click", () => {
-    openModal(ReportModal());
-  });
 }
 
 function renderListingDetail(listing) {
@@ -391,6 +374,7 @@ function renderListingDetail(listing) {
     </div>
   `;
   bindDetailActions(listing);
+  if (typeof bindListingReports === 'function') bindListingReports(root, 'real_estate', listing.id);
 }
 
 async function initializePage() {

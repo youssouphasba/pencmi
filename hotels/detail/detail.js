@@ -226,9 +226,7 @@ function hotelDetailPage() {
   `;
 
   bindHotelDetailActions();
-  if (typeof bindReportModal === "function") {
-    bindReportModal(document);
-  }
+  if (typeof bindListingReports === 'function') bindListingReports(document.querySelector('#hotel-detail-page'), 'hotels', listing.id);
 }
 
 function bindHotelDetailActions() {

@@ -1,4 +1,5 @@
 import { apiRequest, formatDateTime } from "../messaging/messaging-ui.mjs";
+import { supportStatuses, supportWritable } from './support-copy.mjs';
 import {
   el,
   accountStyles,
@@ -35,16 +36,38 @@ export function mountAccountSupport(root) {
     send,
   );
   let busy = false;
-  async function load() {
+  function ticketCard(ticket) {
+    const feedback = el('div', { role: 'status' });
+    const reply = el('textarea', { required: true, maxLength: 10000, rows: 3 });
+    const sendReply = el('button', { type: 'submit', class: 'btn btn-primary', text: 'Répondre' });
+    const replyForm = el('form', { class: 'ae-form' },
+      el('label', {}, el('span', { text: 'Votre réponse' }), reply), sendReply, feedback);
+    replyForm.onsubmit = async event => {
+      event.preventDefault();
+      if (sendReply.disabled || !replyForm.reportValidity() || !reply.value.trim()) return;
+      sendReply.disabled = reply.disabled = true;
+      try {
+        const result = await apiRequest(`/support/tickets/${encodeURIComponent(ticket.id)}/messages`, {
+          method: 'POST', body: { body: reply.value.trim() },
+        });
+        if (!result?.id) throw Error('La réponse n’a pas été confirmée.');
+        await load(ticket.id);
+      } catch (error) { accountError(feedback, error); }
+      finally { sendReply.disabled = reply.disabled = false; }
+    };
+    const details = el('details', { 'data-ticket': ticket.id },
+      el('summary', { text: ticket.subject }),
+      el('p', { text: `${supportStatuses[ticket.status] || ticket.status} · ${formatDateTime(ticket.updatedAt)}` }),
+      el('div', {}, ...(ticket.messages || []).map(message => el('article', { class: 'ae-section' },
+        el('small', { text: `${message.senderUserId === ticket.userId ? 'Vous' : 'Support Péncmi'} · ${formatDateTime(message.createdAt)}` }),
+        el('p', { text: message.body })))),
+      supportWritable.includes(ticket.status) ? replyForm : null);
+    return el('article', { class: 'ae-session' }, details);
+  }
+  async function load(openId) {
     tickets.replaceChildren(el("p", { text: "Chargement de vos demandes…" }));
     try {
       const rows = await apiRequest("/support/tickets");
-      const labels = {
-        open: "Ouverte",
-        pending: "En attente",
-        resolved: "Résolue",
-        closed: "Fermée",
-      };
       tickets.replaceChildren(
         el("h2", { text: "Vos dernières demandes" }),
         rows.length
@@ -53,23 +76,18 @@ export function mountAccountSupport(root) {
               { class: "ae-sessions" },
               rows
                 .slice(0, 20)
-                .map((ticket) =>
-                  el(
-                    "article",
-                    { class: "ae-session" },
-                    el("h3", { text: ticket.subject }),
-                    el("p", {
-                      text: `${labels[ticket.status] || ticket.status} · ${formatDateTime(ticket.createdAt)}`,
-                    }),
-                  ),
-                ),
+                .map(ticket => {
+                  const card = ticketCard(ticket);
+                  card.querySelector('details').open = ticket.id === openId;
+                  return card;
+                }),
             )
           : el("p", {
               text: "Vous n’avez aucune demande de support pour le moment.",
             }),
       );
     } catch (error) {
-      accountError(tickets, error, load);
+      accountError(tickets, error, () => load(openId));
     }
   }
   form.onsubmit = async (event) => {
@@ -95,7 +113,7 @@ export function mountAccountSupport(root) {
       status.replaceChildren(
         el("p", { text: "Votre demande de support a été enregistrée." }),
       );
-      await load();
+      await load(result.id);
     } catch (error) {
       accountError(status, error);
     } finally {

@@ -51,7 +51,8 @@ const quickTabs = [
 const state = {
   filters: null,
   listings: [],
-  displayedListings: [],
+  meta: { page: 1, total: 0, totalPages: 1 },
+  mapOpen: readMapPreference(),
   agencies: [],
   loading: true,
   error: "",
@@ -91,6 +92,54 @@ function normalizeValue(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, "_");
+}
+
+function escapeValue(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+}
+
+function positiveInteger(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : 0;
+}
+
+// The map code is only fetched when a visitor opens the map. Every page of the
+// section loads this script from a different depth, hence the script-relative URL.
+const searchScriptSrc = document.currentScript?.src || "";
+let mapScriptPromise = null;
+
+function loadMapScript() {
+  if (window.PencmiMap) return Promise.resolve();
+  if (!mapScriptPromise) {
+    mapScriptPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = new URL("../config/senegal-map.js", searchScriptSrc || window.location.href).href;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("Carte indisponible"));
+      document.head.append(script);
+    }).catch((error) => {
+      mapScriptPromise = null;
+      throw error;
+    });
+  }
+  return mapScriptPromise;
+}
+
+// The map choice follows the visitor from page to page of the results.
+function readMapPreference() {
+  try {
+    return window.sessionStorage.getItem("pencmi.map") === "open";
+  } catch {
+    return false;
+  }
+}
+
+function saveMapPreference(open) {
+  try {
+    window.sessionStorage.setItem("pencmi.map", open ? "open" : "closed");
+  } catch {
+    // Storage can be unavailable (private mode); the map still works for this page.
+  }
 }
 
 function capitalize(value) {
@@ -152,13 +201,16 @@ function formatPropertyFeatures(listing) {
 }
 
 function parseSearchParams(search = window.location.search) {
-  const params = new URLSearchParams(search);
+  // Landing pages such as /immobilier/location preset a filter; the address wins over it.
+  const params = new URLSearchParams(document.body?.dataset?.searchPreset || "");
+  new URLSearchParams(search).forEach((value, key) => params.set(key, value));
   return {
     transaction: params.get("transaction") || "",
     type: params.get("type") || "",
     city: params.get("city") || params.get("location") || "",
-    maxPrice: params.get("maxPrice") || "",
-    furnished: params.get("furnished") || "",
+    maxPrice: positiveInteger(params.get("maxPrice")) ? String(positiveInteger(params.get("maxPrice"))) : "",
+    furnished: params.get("furnished") === "true" ? "true" : "",
+    page: positiveInteger(params.get("page")) || 1,
   };
 }
 
@@ -170,6 +222,7 @@ function buildSearchUrl(filters) {
   if (filters.city) params.set("city", filters.city);
   if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
   if (filters.furnished) params.set("furnished", filters.furnished);
+  if (filters.page > 1) params.set("page", String(filters.page));
 
   const query = params.toString();
   return query ? `${routes.realEstate}?${query}` : routes.realEstate;
@@ -181,6 +234,9 @@ function buildApiQuery(filters) {
   if (filters.transaction) params.set("transaction", filters.transaction);
   if (filters.type) params.set("propertyType", filters.type);
   if (filters.city) params.set("city", filters.city);
+  if (filters.maxPrice) params.set("maxPrice", filters.maxPrice);
+  if (filters.furnished === "true") params.set("furnished", "true");
+  if (filters.page > 1) params.set("page", String(filters.page));
 
   return params.toString();
 }
@@ -198,7 +254,7 @@ async function apiRequest(path) {
     throw new Error(payload?.error?.message || "Chargement des annonces impossible.");
   }
 
-  return payload?.data ?? payload;
+  return { data: payload?.data ?? payload, meta: payload?.meta || null };
 }
 
 function listFromApiPayload(payload) {
@@ -229,7 +285,7 @@ function mapListing(listing) {
     surface: metadata.surface,
     bedrooms: metadata.bedrooms,
     bathrooms: metadata.bathrooms,
-    furnished: Boolean(metadata.furnished),
+    furnished: Boolean(metadata.features?.furnished),
     views: Number(metadata.views || 0),
     favorites: Number(metadata.favorites || 0),
     coverPhoto: metadata.coverPhoto || photos[0] || "",
@@ -261,16 +317,6 @@ function buildAgencies(listings) {
       seen.add(key);
       return true;
     });
-}
-
-function applyClientFilters(listings, filters) {
-  const maxPrice = Number(filters.maxPrice || 0);
-
-  return listings.filter((listing) => {
-    if (filters.furnished === "true" && !listing.furnished) return false;
-    if (maxPrice && Number(listing.price || 0) > maxPrice) return false;
-    return true;
-  });
 }
 
 function optionElements(values, selectedValue = "") {
@@ -356,7 +402,7 @@ function RealEstateHeroSearch() {
         </div>
         <div class="field">
           <label for="location">Ville ou quartier</label>
-          <input id="location" name="city" type="search" list="main-cities" value="${filters.city}" placeholder="Dakar, Saly, Thiès">
+          <input id="location" name="city" type="search" list="main-cities" value="${escapeValue(filters.city)}" placeholder="Dakar, Saly, Thiès">
           <datalist id="main-cities">
             ${mainCities.map((city) => `<option value="${city}"></option>`).join("")}
           </datalist>
@@ -461,7 +507,6 @@ function SavedSearchButton() {
 }
 
 function RealEstateListingCard(listing) {
-  const escapeValue = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const media = listing.coverPhoto
     ? `<img src="${escapeValue(listing.coverPhoto)}" alt="${escapeValue(listing.title)}" style="width:100%;height:220px;object-fit:cover;border-radius:8px;">`
     : `<div class="map-placeholder" style="min-height:220px;">Aucune photo disponible</div>`;
@@ -483,10 +528,10 @@ function RealEstateListingCard(listing) {
         <p style="margin:0;color:var(--muted);">${escapeValue([listing.district, listing.city].filter(Boolean).join(", "))}</p>
         ${listing.price ? `<strong style="font-size:1.1rem;color:var(--blue-dark);">${formatPriceFCFA(listing.price)}</strong>` : ""}
         ${formatPropertyFeatures(listing) ? `<p style="margin:0;color:var(--muted);">${formatPropertyFeatures(listing)}</p>` : ""}
-        <p style="margin:0;color:var(--muted);">Annonceur : ${listing.advertiser.name}</p>
+        <p style="margin:0;color:var(--muted);">Annonceur : ${escapeValue(listing.advertiser.name)}</p>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;">
-        <a class="btn btn-primary" href="${routeHref(`/immobilier/annonce/${listing.id}`)}">Voir détails</a>
+        <a class="btn btn-primary" href="${escapeValue(routeHref(`/immobilier/annonce/${listing.id}`))}">Voir détails</a>
         <span data-favorite-module="real_estate" data-favorite-id="${escapeValue(listing.id)}"></span>
       </div>
     </article>
@@ -530,10 +575,10 @@ function AgenciesSection() {
         ${state.agencies.map((agency) => `
           <article class="dashboard-card">
             <div style="display:flex;align-items:center;gap:12px;">
-              ${agency.logoUrl ? `<img src="${agency.logoUrl}" alt="${agency.name}" style="width:48px;height:48px;object-fit:contain;border-radius:8px;border:1px solid var(--line);">` : `<div class="brand-mark" style="width:48px;height:48px;">${agency.name.slice(0, 1).toUpperCase()}</div>`}
+              ${agency.logoUrl ? `<img src="${escapeValue(agency.logoUrl)}" alt="${escapeValue(agency.name)}" style="width:48px;height:48px;object-fit:contain;border-radius:8px;border:1px solid var(--line);">` : `<div class="brand-mark" style="width:48px;height:48px;">${escapeValue(agency.name.slice(0, 1).toUpperCase())}</div>`}
               <div>
-                <strong>${agency.name}</strong>
-                <p style="margin:4px 0 0;color:var(--muted);">${agency.type}${agency.city ? ` · ${agency.city}` : ""}</p>
+                <strong>${escapeValue(agency.name)}</strong>
+                <p style="margin:4px 0 0;color:var(--muted);">${agency.type}${agency.city ? ` · ${escapeValue(agency.city)}` : ""}</p>
               </div>
             </div>
             ${agency.verified ? `<div style="margin-top:12px;"><span class="status-badge">Vérifié</span></div>` : ""}
@@ -612,7 +657,9 @@ function bindFilters() {
   });
 
   document.querySelector("[data-toggle-map]")?.addEventListener("click", () => {
-    document.querySelector("#map-panel")?.classList.toggle("is-open");
+    state.mapOpen = !state.mapOpen;
+    saveMapPreference(state.mapOpen);
+    ResultsLayout();
   });
 
   document.querySelector("#filters-form")?.addEventListener("submit", (event) => {
@@ -629,6 +676,54 @@ function bindFilters() {
   });
 }
 
+function ResultsPagination() {
+  const { page, totalPages } = state.meta;
+  if (state.loading || state.error || totalPages <= 1) return "";
+
+  const link = (label, target) =>
+    `<a class="btn btn-light" href="${escapeValue(routeHref(buildSearchUrl({ ...state.filters, page: target })))}">${label}</a>`;
+
+  return `
+    <nav class="results-pagination" aria-label="Pages de résultats">
+      ${page > 1 ? link("Précédent", Math.min(page - 1, totalPages)) : ""}
+      <span>Page ${page} sur ${totalPages}</span>
+      ${page < totalPages ? link("Suivant", page + 1) : ""}
+    </nav>
+  `;
+}
+
+function ResultsMapPanel() {
+  if (!state.mapOpen) return "";
+  return `
+    <section class="map-panel" id="map-panel" aria-label="Carte des annonces">
+      <p class="map-note" role="status">Chargement de la carte...</p>
+    </section>
+  `;
+}
+
+async function renderResultsMap() {
+  const panel = document.querySelector("#map-panel");
+  if (!panel) return;
+
+  const items = state.listings.map((listing) => ({
+    city: listing.city,
+    title: listing.title,
+    href: routeHref(`/immobilier/annonce/${listing.id}`),
+    detail: listing.price ? formatPriceFCFA(listing.price) : "",
+  }));
+
+  try {
+    await loadMapScript();
+    if (panel.isConnected) await window.PencmiMap.mount(panel, items, { focusCity: state.filters.city });
+  } catch {
+    const note = document.createElement("p");
+    note.className = "map-note";
+    note.setAttribute("role", "alert");
+    note.textContent = "La carte ne peut pas être affichée pour le moment. Les annonces restent disponibles dans la liste.";
+    panel.replaceChildren(note);
+  }
+}
+
 function ResultsLayout() {
   const root = document.querySelector("#real-estate-results");
   if (!root) return;
@@ -638,19 +733,21 @@ function ResultsLayout() {
     content = RealEstateEmptyState("Chargement des annonces...");
   } else if (state.error) {
     content = RealEstateEmptyState(state.error);
-  } else if (state.displayedListings.length) {
-    content = state.displayedListings.map(RealEstateListingCard).join("");
+  } else if (state.listings.length) {
+    content = state.listings.map(RealEstateListingCard).join("");
   }
+
+  const total = state.meta.total;
 
   root.innerHTML = `
     <div class="results-toolbar">
       <div>
         <h2>Annonces immobilières</h2>
-        <p>${state.loading ? "Chargement..." : `${state.displayedListings.length} annonce${state.displayedListings.length > 1 ? "s" : ""} disponible${state.displayedListings.length > 1 ? "s" : ""}`}</p>
+        <p>${state.loading ? "Chargement..." : `${total} annonce${total > 1 ? "s" : ""} disponible${total > 1 ? "s" : ""}`}</p>
       </div>
       <div class="results-actions">
         <button class="btn btn-ghost filter-toggle" type="button" data-open-filters>Filtres</button>
-        <button class="btn btn-ghost map-toggle" type="button" data-toggle-map>Voir la carte</button>
+        <button class="btn btn-ghost map-toggle" type="button" data-toggle-map aria-expanded="${state.mapOpen}" aria-controls="map-panel">${state.mapOpen ? "Masquer la carte" : "Voir la carte"}</button>
         <a class="btn btn-ghost" href="${routeHref(routes.favorites)}">Mes favoris</a>
         ${SavedSearchButton()}
       </div>
@@ -659,19 +756,12 @@ function ResultsLayout() {
     <div data-save-search="real_estate"></div>
     <div class="results-layout">
       ${RealEstateFilters()}
-      <div class="results-list">${content}</div>
-      <aside class="map-panel" id="map-panel" aria-label="Zone d’information">
-        <div class="map-placeholder">
-          <div>
-            <strong>Recherche active</strong>
-            <p style="margin:8px 0 0;">${state.filters.city || "Tout le Sénégal"}${state.filters.transaction ? ` · ${formatTransaction(state.filters.transaction)}` : ""}${state.filters.type ? ` · ${formatPropertyType(state.filters.type)}` : ""}</p>
-          </div>
-        </div>
-      </aside>
+      <div class="results-list">${ResultsMapPanel()}${content}${ResultsPagination()}</div>
     </div>
   `;
 
   bindFilters();
+  void renderResultsMap();
 }
 
 async function loadListings() {
@@ -681,13 +771,17 @@ async function loadListings() {
 
   try {
     const query = buildApiQuery(state.filters);
-    const payload = await apiRequest(`/immobilier${query ? `?${query}` : ""}`);
-    state.listings = listFromApiPayload(payload).map(mapListing);
-    state.displayedListings = applyClientFilters(state.listings, state.filters);
+    const { data, meta } = await apiRequest(`/immobilier${query ? `?${query}` : ""}`);
+    state.listings = listFromApiPayload(data).map(mapListing);
+    state.meta = {
+      page: Number(meta?.page) || state.filters.page,
+      total: Number(meta?.total ?? state.listings.length),
+      totalPages: Number(meta?.totalPages) || 1,
+    };
     state.agencies = buildAgencies(state.listings);
   } catch (error) {
     state.listings = [];
-    state.displayedListings = [];
+    state.meta = { page: 1, total: 0, totalPages: 1 };
     state.agencies = [];
     state.error = error instanceof Error ? error.message : "Chargement impossible.";
   } finally {
