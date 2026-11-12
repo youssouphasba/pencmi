@@ -262,15 +262,15 @@ function AdminSidebar(currentPage = "overview") {
       items: [
         ["Signalements", adminRoutes.reports, "reports", adminState.overview?.reports],
         ["Modération", adminRoutes.moderation, "moderation", 0],
-        ["Messages", adminRoutes.messages, "messages", adminState.messages.length],
-        ["Contacts", adminRoutes.contacts, "contacts", adminState.contacts.length],
+        ["Messages signalés", "/admin/moderation/messages", "messages"],
+        ["Contacts", adminRoutes.contacts, "contacts", adminState.overview?.contacts],
       ],
     },
     {
       title: "Plateforme",
       items: [
-        ["Notifications", adminRoutes.notifications, "notifications", adminState.notifications.length],
-        ["Emails", adminRoutes.emailLogs, "emailLogs", adminState.emailLogs.length],
+        ["Notifications", adminRoutes.notifications, "notifications", adminState.overview?.notifications],
+        ["Emails", adminRoutes.emailLogs, "emailLogs", adminState.overview?.failedEmails],
         ["Contenus", adminRoutes.content, "content", 0],
         ["SEO", adminRoutes.seo, "seo", 0],
         ["GEO", adminRoutes.geo, "geo", 0],
@@ -326,12 +326,10 @@ function AdminOverviewPage() {
     ["Annonces actives", listingCount(null, "active")],
     ["Annonces en attente", listingCount(null, "pending")],
     ["Signalements", overview.reports ?? adminState.reports.length],
-    ["Messages", adminState.messages.length],
-    ["Contacts", adminState.contacts.length],
-    ["Notifications", adminState.notifications.length],
-    ["Emails échoués", adminState.emailLogs.filter((item) => item.status === "failed").length],
-    ["Vérifications", 0],
-    ["Intégrations hôtels", 0],
+    ["Messages visibles", overview.messages],
+    ["Contacts", overview.contacts],
+    ["Notifications", overview.notifications],
+    ["Emails échoués", overview.failedEmails],
   ];
 
   return AdminLayout(`
@@ -347,7 +345,7 @@ function AdminOverviewPage() {
   `);
 }
 
-function AdminKpiCard(label, value = 0) {
+function AdminKpiCard(label, value = null) {
   return `<article class="admin-kpi-card"><span>${label}</span><div class="admin-kpi-value">${formatMetric(value)}</div></article>`;
 }
 
@@ -395,50 +393,28 @@ function AdminReportsPage() {
 }
 
 function AdminMessagesPage() {
-  return AdminDataPage("messages", "Messages signalés", "Supervisez les messages signalés ou nécessitant modération.", AdminModuleFilters(), ["Module", "Conversation", "Expéditeur", "Statut", "Date"], [], "Aucun message signalé.");
+  return AdminLayout('<a class="btn btn-light" href="/admin/moderation/messages/">Ouvrir les messages signalés</a>', 'messages', 'Messages signalés', '');
 }
 
-function AdminContactsPage() {
-  return AdminDataPage("contacts", "Contacts générés", "Suivez les contacts générés par source et par module.", AdminModuleFilters(), ["Module", "Annonce", "Source", "Annonceur", "Date", "Statut"], [], "Aucun contact enregistré pour le moment.");
-}
-
-function AdminNotificationsPage() {
-  return AdminDataPage("notifications", "Notifications internes", "Supervisez les notifications internes envoyées aux clients, annonceurs et admins.", AdminModuleFilters(), ["Audience", "Module", "Type", "Statut", "Priorité", "Date"], [], "Aucune notification disponible.");
-}
-
-function AdminEmailLogsPage() {
-  return AdminDataPage("emailLogs", "Logs emails", "Consultez les emails prévus, envoyés, échoués ou annulés.", AdminEmailFilters(), ["Destinataire", "Module", "Type", "Sujet", "Statut", "Date"], [], "Aucun email enregistré pour le moment.");
-}
+const activityPages = { contacts: 'Contacts générés', notifications: 'Notifications internes', emailLogs: 'Journal des emails' };
 
 function AdminStatisticsPage() {
+  const overview = adminState.overview || {};
   const rows = [
-    ["Utilisateurs", adminState.users.length],
-    ["Annonceurs", adminState.advertisers.length],
+    ["Utilisateurs", overview.users],
+    ["Annonceurs", overview.advertisers],
     ["Annonces", listingCount()],
-    ["Signalements", adminState.reports.length],
-    ["Messages", adminState.messages.length],
-    ["Contacts", adminState.contacts.length],
+    ["Signalements", overview.reports],
+    ["Messages visibles", overview.messages],
+    ["Contacts", overview.contacts],
   ];
   return AdminLayout(`
-    ${AdminStatisticsFilters()}
     <section class="admin-kpi-grid admin-section">${rows.map(([label, value]) => AdminKpiCard(label, value)).join("")}</section>
-  `, "statistics", "Statistiques globales", "Analysez les volumes et performances globales de Péncmi.");
+  `, "statistics", "Statistiques globales", "Totaux enregistrés sur Péncmi.");
 }
 
 function AdminSettingsPage() {
-  const sections = [
-    ["Paramètres généraux", ["Validation manuelle des annonces", "Notifications admin", "Suivi des erreurs"]],
-    ["Sécurité", ["Accès admin", "Journal d’audit", "Sessions administrateur"]],
-    ["Modération", ["Signalements", "Messages signalés", "Annonces suspendues"]],
-    ["Contenus", ["Pages légales", "FAQ", "Conseils de sécurité"]],
-  ];
-  return AdminLayout(`
-    <form class="admin-card" data-admin-form>
-      ${sections.map(([title, options]) => `<section class="admin-settings-section"><h2>${title}</h2>${options.map(AdminOption).join("")}</section>`).join("")}
-      <div class="admin-message" data-admin-success>Les paramètres ont été enregistrés.</div>
-      <div class="admin-actions"><button class="btn btn-primary" type="submit">Enregistrer les paramètres</button></div>
-    </form>
-  `, "settings", "Paramètres admin", "Configurez les règles de validation, modération, notifications et sécurité.");
+  return AdminLayout(AdminEmptyState("Aucun paramètre global modifiable depuis cet écran."), "settings", "Paramètres admin", "");
 }
 
 function AdminPlaceholderPage(currentPage, title, subtitle) {
@@ -506,12 +482,6 @@ function bindAdmin() {
     void logoutAdmin();
   });
 
-  document.querySelectorAll("[data-admin-form]").forEach((form) => {
-    form.addEventListener("submit", (event) => {
-      event.preventDefault();
-      form.querySelector("[data-admin-success]")?.classList.add("is-visible");
-    });
-  });
 }
 
 function setAdminSidebar(open) {
@@ -543,16 +513,14 @@ async function loadAdminData(page) {
       return;
     }
 
-    const [overview, users, advertisers, reports] = await Promise.all([
+    const [overview, users, advertisers] = await Promise.all([
       optionalApiRequest("/admin/overview"),
-      page === 'users' ? apiRequest("/admin/users") : null,
+      null,
       page === 'advertisers' ? apiRequest("/admin/advertisers") : null,
-      page === 'reports' ? optionalApiRequest("/admin/reports") : null,
     ]);
     adminState.overview = overview;
     adminState.users = listFrom(users);
     adminState.advertisers = listFrom(advertisers);
-    adminState.reports = listFrom(reports);
   } catch (error) {
     adminState.error = error instanceof Error ? error.message : "Chargement admin impossible.";
     adminState.errorCode = error?.code || "";
@@ -591,15 +559,36 @@ async function renderAdmin() {
     }
     return;
   }
+  if (Object.hasOwn(activityPages, page)) {
+    root.innerHTML = AdminLayout('<section id="admin-activity"></section>', page, activityPages[page], '');
+    bindAdmin();
+    const target = root.querySelector('#admin-activity');
+    try {
+      const { mountAdminActivity } = await import('./activity.mjs');
+      mountAdminActivity(target, page);
+    } catch {
+      target.textContent = 'Impossible de charger cette page.';
+    }
+    return;
+  }
+  if (page === 'users') {
+    root.innerHTML = AdminLayout('<section id="admin-users" aria-label="Comptes"></section>', page, 'Utilisateurs', 'Comptes présents sur la plateforme.');
+    bindAdmin();
+    const target = root.querySelector('#admin-users');
+    try {
+      const { mountAdminUsers } = await import('./users.mjs');
+      mountAdminUsers(target, { currentUserId: adminState.currentUser?.id });
+    } catch {
+      target.textContent = 'Impossible de charger cette page.';
+    }
+    return;
+  }
   const pages = {
     overview: AdminOverviewPage,
     users: AdminUsersPage,
     advertisers: AdminAdvertisersPage,
     reports: AdminReportsPage,
     messages: AdminMessagesPage,
-    contacts: AdminContactsPage,
-    notifications: AdminNotificationsPage,
-    emailLogs: AdminEmailLogsPage,
     statistics: AdminStatisticsPage,
     verification: () => AdminPlaceholderPage("verification", "Vérification", "Suivez les demandes de vérification des utilisateurs, annonceurs et annonces."),
     content: () => AdminPlaceholderPage("content", "Contenus administrables", "Gérez les pages, FAQ, règles de publication et contenus éditoriaux."),

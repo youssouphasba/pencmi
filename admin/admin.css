@@ -414,3 +414,6 @@
   .moderation-row { grid-template-columns: minmax(0, 1fr) auto; }
   .moderation-row > :first-child { grid-column: 1 / -1; }
 }
+
+.moderation-dialog label { display: grid; gap: 6px; font-weight: 600; }
+.moderation-dialog textarea { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
