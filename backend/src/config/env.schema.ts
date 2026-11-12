@@ -36,6 +36,8 @@ export const envSchema = z.object({
   REDIS_URL: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   PASSWORD_RECOVERY_ENABLED: z.enum(['true', 'false']).default('false'),
+  EMAIL_VERIFICATION_ENABLED: z.enum(['true', 'false']).default('false'),
+  BUSINESS_EMAILS_ENABLED: z.enum(['true', 'false']).default('false'),
   EMAIL_QUEUE_ENCRYPTION_KEY: z.preprocess(value => value === '' ? undefined : value, z.string().regex(/^[a-fA-F0-9]{64}$/).optional()),
   EMAIL_FROM: z.string().optional(),
   STORAGE_DRIVER: z.enum(["local", "s3", "r2"]).default("local"),

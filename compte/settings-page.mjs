@@ -4,6 +4,8 @@ import {
   loginHref,
 } from '../messaging/messaging-ui.mjs';
 import { tokenSession } from '../auth/token-session.mjs';
+import { mountEmailVerification } from './email-verification-settings.mjs';
+import { mountAccountDeletion, mountBusinessEmailPreference } from './account-lifecycle-settings.mjs';
 import {
   el,
   accountStyles,
@@ -16,6 +18,9 @@ export function mountAccountSettings(root) {
   if (sessionRequired(root)) return;
   const feedback = el('div', { role: 'status', class: 'ae-feedback' });
   const sessionBody = el('div');
+  const verificationBody = el('div');
+  const deletionBody = el('div');
+  const businessEmailBody = el('div');
   const section = (title, ...children) =>
     el(
       'section',
@@ -235,9 +240,11 @@ export function mountAccountSettings(root) {
   }
   root.replaceChildren(
     section('Mot de passe', form),
+    section('Adresse email', verificationBody),
     section('Sessions connectées', sessionBody),
     section(
       'Notifications et alertes',
+      businessEmailBody,
       el(
         'div',
         { class: 'ae-actions' },
@@ -253,7 +260,7 @@ export function mountAccountSettings(root) {
         }),
       ),
       el('p', {
-        text: 'Les notifications de sécurité et de suivi des demandes restent actives. Les préférences email et la vérification par email ou SMS sont indisponibles.',
+        text: 'Les notifications de sécurité et de suivi des demandes restent actives. La vérification par SMS est indisponible.',
       }),
     ),
     section(
@@ -263,18 +270,11 @@ export function mountAccountSettings(root) {
         text: 'Les coordonnées fournies dans une demande sont partagées avec l’annonceur concerné. Aucun réglage global de confidentialité n’est disponible pour le moment.',
       }),
     ),
-    section(
-      'Suppression du compte',
-      el('p', {
-        text: 'La suppression automatique n’est pas disponible. Contactez le support pour votre demande.',
-      }),
-      el('a', {
-        class: 'btn btn-light',
-        href: '/contact/',
-        text: 'Contacter le support',
-      }),
-    ),
+    section('Suppression du compte', deletionBody),
     feedback,
   );
   void loadSessions();
+  void mountEmailVerification(verificationBody);
+  void mountBusinessEmailPreference(businessEmailBody);
+  void mountAccountDeletion(deletionBody, () => requireLogin('Votre compte a été supprimé.'));
 }

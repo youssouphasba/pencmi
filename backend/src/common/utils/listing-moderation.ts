@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException } from "@nestjs/common";
 import { ListingStatus, Prisma } from "@prisma/client";
+import { BUSINESS_EMAIL_FLAG, queueBusinessEmail } from '../../modules/emails/business-email';
 
 export const MODERATION_MODULES = [
   "real_estate",
@@ -99,7 +100,7 @@ export async function recordListingDecision(
         message: "Votre annonce a été réactivée.",
       }
     : decisionCopy[next];
-  await tx.notification.create({
+  const notification = await tx.notification.create({
     data: {
       userId: row.ownerUserId,
       module,
@@ -109,4 +110,6 @@ export async function recordListingDecision(
       metadata: { listingId: row.id, status: next },
     },
   });
+  if (process.env[BUSINESS_EMAIL_FLAG] === 'true')
+    await queueBusinessEmail(tx, 'listing_decision', notification.id, row.ownerUserId, ownerRoutes[module]);
 }

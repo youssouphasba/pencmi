@@ -1,3 +1,4 @@
+import { lockRequestAccounts } from '../../common/utils/request-account-lock';
 import {
   BadRequestException,
   ConflictException,
@@ -244,6 +245,7 @@ export class HotelReservationsService {
             'Veuillez patienter avant d’envoyer une nouvelle demande.',
             429,
           );
+        await lockRequestAccounts(tx, property.ownerUserId, clientUserId);
         const request = await tx.hotelReservationRequest.create({
           data: {
             propertyId,

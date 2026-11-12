@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import { BUSINESS_EMAIL_FLAG, BUSINESS_EMAIL_KIND, BUSINESS_EMAIL_TTL_MS } from './business-email';
 import { openRecoveryEmail, recoveryConfig, RECOVERY_TEMPLATE_KEY, RECOVERY_TTL_MS } from './recovery-email';
 
 @Injectable()
@@ -18,13 +19,27 @@ export class EmailsService {
   }
 
   async processNextRecoveryEmail(send: typeof fetch = fetch): Promise<boolean> {
-    const config = recoveryConfig(this.config);
+    return this.processAccountEmail(false, send);
+  }
+
+  async processNextVerificationEmail(send: typeof fetch = fetch): Promise<boolean> {
+    return this.processAccountEmail(true, send);
+  }
+
+  async processNextBusinessEmail(send: typeof fetch = fetch): Promise<boolean> {
+    return this.processAccountEmail(false, send, true);
+  }
+
+  private async processAccountEmail(verification: boolean, send: typeof fetch, business = false): Promise<boolean> {
+    const config = recoveryConfig(this.config, business ? BUSINESS_EMAIL_FLAG : verification ? 'EMAIL_VERIFICATION_ENABLED' : 'PASSWORD_RECOVERY_ENABLED');
+    const templateKey = verification ? 'account.email_verification' : RECOVERY_TEMPLATE_KEY;
+    const kind = business ? BUSINESS_EMAIL_KIND : verification ? 'email-verification-v1' : 'password-reset-v1';
     return this.prisma.$transaction(async tx => {
       // The lock prevents two workers from sending the same queue item concurrently.
       const ids = await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id FROM "EmailLog" WHERE status = 'pending'
-        AND "templateKey" = ${RECOVERY_TEMPLATE_KEY}
-        AND payload->>'kind' = 'password-reset-v1'
+        AND (${business} OR "templateKey" = ${templateKey})
+        AND payload->>'kind' = ${kind}
         AND COALESCE((payload->>'nextAttemptAt')::numeric, 0) <= ${Date.now()}
         ORDER BY "createdAt" LIMIT 1 FOR UPDATE SKIP LOCKED`;
       if (!ids.length) return false;
@@ -33,15 +48,21 @@ export class EmailsService {
       const terminal = (status: 'failed' | 'cancelled', error: string) => tx.emailLog.update({
         where: { id: item.id }, data: { status, error, payload: Prisma.DbNull },
       });
-      if (Date.now() - item.createdAt.getTime() >= RECOVERY_TTL_MS) {
-        await terminal('cancelled', 'Lien expiré avant livraison.'); return true;
+      if (Date.now() - item.createdAt.getTime() >= (business ? BUSINESS_EMAIL_TTL_MS : RECOVERY_TTL_MS)) {
+        await terminal('cancelled', 'Message expiré avant livraison.'); return true;
       }
       let envelope;
       try { envelope = openRecoveryEmail(payload.encrypted, config.key, item.id); }
       catch { await terminal('failed', 'Message chiffré illisible.'); return true; }
-      const token = await tx.passwordResetToken.findUnique({ where: { id: envelope.resetId } });
-      const user = token && await tx.user.findUnique({ where: { id: token.userId } });
-      if (!token || token.usedAt || token.expiresAt <= new Date() || !user || user.status !== 'active' || user.deletedAt || user.email !== envelope.to) {
+      const token = business ? null : verification
+        ? await tx.emailVerificationToken.findUnique({ where: { id: envelope.resetId } })
+        : await tx.passwordResetToken.findUnique({ where: { id: envelope.resetId } });
+      const userId = business ? envelope.resetId : token?.userId;
+      const user = userId && await tx.user.findUnique({ where: { id: userId } });
+      const allowed = business
+        ? user && user.emailVerified && user.businessEmailsEnabled
+        : token && !token.usedAt && token.expiresAt > new Date();
+      if (!allowed || !user || user.status !== 'active' || user.deletedAt || user.email !== envelope.to || (verification && user.emailVerified)) {
         await terminal('cancelled', 'Demande devenue inactive.'); return true;
       }
       const attempts = (Number.isInteger(payload.attempts) ? payload.attempts : 0) + 1;
@@ -64,7 +85,7 @@ export class EmailsService {
       if (permanent || attempts >= 5) await terminal('failed', 'Échec de livraison. Vérifiez la configuration du fournisseur.');
       else await tx.emailLog.update({ where: { id: item.id }, data: {
         error: 'Nouvelle tentative planifiée.',
-        payload: { kind: 'password-reset-v1', encrypted: payload.encrypted, attempts, nextAttemptAt: Date.now() + Math.min(300000, 15000 * 2 ** attempts) },
+        payload: { kind, encrypted: payload.encrypted, attempts, nextAttemptAt: Date.now() + Math.min(300000, 15000 * 2 ** attempts) },
       } });
       return true;
     }, { timeout: 20000, maxWait: 5000 });

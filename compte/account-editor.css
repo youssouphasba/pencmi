@@ -87,3 +87,15 @@
 .ae-session p {
   overflow-wrap: anywhere;
 }
+.ae-confirm-dialog {
+  width: min(32rem, calc(100% - 2rem));
+  max-height: calc(100% - 2rem);
+  overflow: auto;
+  border: 1px solid #dce3ea;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.ae-confirm-dialog::backdrop {
+  background: rgb(15 23 42 / 55%);
+}

@@ -22,19 +22,20 @@ const url = process.env.TEST_DATABASE_URL;
       { id: mine, ownerUserId: owner, status: 'active', slug: mine, title: 'Villa', city: 'Dakar' },
       { id: theirs, ownerUserId: rival, status: 'active', slug: theirs, title: 'Autre', city: 'Dakar' },
     ] });
+    const recent = new Date(Date.now() - 60_000);
     await db.realEstateVisitRequest.createMany({ data: [
-      { listingId: mine, status: 'accepted' },
+      { listingId: mine, status: 'accepted', createdAt: recent },
       { listingId: mine, status: 'new', createdAt: new Date(Date.now() - 40 * 86_400_000) },
-      { listingId: theirs, status: 'new' },
+      { listingId: theirs, status: 'new', createdAt: recent },
     ] });
     await db.contactEvent.createMany({ data: [
-      { module: 'real_estate', source: 'form', targetType: 'listing', targetId: mine, ownerUserId: null },
-      { module: 'real_estate', source: 'visit_request', targetType: 'listing', targetId: mine, ownerUserId: null },
-      { module: 'real_estate', source: 'form', targetType: 'listing', targetId: theirs, ownerUserId: null },
+      { module: 'real_estate', source: 'form', targetType: 'listing', targetId: mine, ownerUserId: null, createdAt: recent },
+      { module: 'real_estate', source: 'visit_request', targetType: 'listing', targetId: mine, ownerUserId: null, createdAt: recent },
+      { module: 'real_estate', source: 'form', targetType: 'listing', targetId: theirs, ownerUserId: null, createdAt: recent },
     ] });
     await db.trackingEvent.createMany({ data: [
-      { module: 'real_estate', eventType: 'view', targetType: 'listing', targetId: mine },
-      { module: 'real_estate', eventType: 'view', targetType: 'listing', targetId: theirs },
+      { module: 'real_estate', eventType: 'view', targetType: 'listing', targetId: mine, createdAt: recent },
+      { module: 'real_estate', eventType: 'view', targetType: 'listing', targetId: theirs, createdAt: recent },
     ] });
   });
   afterAll(async () => {

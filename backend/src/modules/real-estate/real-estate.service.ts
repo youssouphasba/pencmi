@@ -1,3 +1,4 @@
+import { lockRequestAccounts } from '../../common/utils/request-account-lock';
 import {
   BadRequestException,
   ConflictException,
@@ -218,6 +219,7 @@ export class RealEstateService {
         assertSameClientRequest(previous, fields);
         return previous;
       }
+      await lockRequestAccounts(tx, listing.ownerUserId, clientUserId);
       const request = await tx.realEstateVisitRequest.create({
         data: { ...fields, ...(id ? { id } : {}) },
       });

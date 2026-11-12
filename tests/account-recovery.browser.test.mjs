@@ -26,6 +26,7 @@ test('recovery forms: unavailable mode, anonymous requests, retry, secret-free U
         calls.push({ path: url.pathname, headers: req.headers, body: body ? JSON.parse(body) : undefined });
         res.setHeader('Content-Type', 'application/json');
         if (req.method === 'POST' && fail) { fail = false; res.writeHead(503); return res.end(JSON.stringify({ error: { message: 'Réessayez.' } })); }
+        if (url.pathname.endsWith('/email-verification/confirm')) return res.end(JSON.stringify({ success: true, data: { verified: true } }));
         return res.end(JSON.stringify({ success: true, data: req.method === 'GET' ? { passwordRecovery: enabled } : { changed: true, message: 'Demande reçue.' } }));
       }
       const file = url.pathname.endsWith('/') ? url.pathname + 'index.html' : url.pathname;
@@ -74,6 +75,58 @@ test('recovery forms: unavailable mode, anonymous requests, retry, secret-free U
       assert.equal(await page.locator('[name=password]').count(), 0);
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
       assert.equal(calls.filter(call => call.path.endsWith('/reset-password')).at(-1).body.token === token, true);
+      await page.goto(`${origin}/verify-email/#token=${token}`);
+      const confirm = page.getByRole('button', { name: 'Confirmer mon adresse email', exact: true });
+      await confirm.waitFor();
+      assert.equal(page.url().includes(token), false);
+      fail = true;
+      await confirm.click();
+      await page.getByText('Réessayez.', { exact: true }).waitFor();
+      await confirm.click();
+      await page.getByText('Votre adresse email est vérifiée.', { exact: true }).waitFor();
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
+      assert.equal(calls.filter(call => call.path.endsWith('/email-verification/confirm')).at(-1).body.token, token);
+      let blocked = true, deleted = false, optedIn = false;
+      await page.route('**/api/v1/users/me**', async route => {
+        const path = new URL(route.request().url()).pathname;
+        let data;
+        if (path.endsWith('/deletion-blockers')) data = { blockedByRequests: blocked, counts: { stays: blocked ? 1 : 0 } };
+        else if (path.endsWith('/business-email-preference')) {
+          optedIn = route.request().postDataJSON().enabled;
+          data = { businessEmailsEnabled: optedIn };
+        } else if (path.endsWith('/delete-account')) {
+          assert.equal(route.request().postDataJSON().currentPassword, password);
+          deleted = true;
+          data = { deleted: true };
+        } else data = { role: 'client', businessEmailsEnabled: false };
+        await route.fulfill({ json: { success: true, data } });
+      });
+      await page.evaluate(async () => {
+        localStorage.setItem('pencmi_access_token', crypto.randomUUID());
+        const { mountAccountDeletion, mountBusinessEmailPreference } = await import('/compte/account-lifecycle-settings.mjs');
+        const root = document.querySelector('main');
+        const deletion = document.createElement('section');
+        const preference = document.createElement('section');
+        root.replaceChildren(deletion, preference);
+        await Promise.all([
+          mountAccountDeletion(deletion, () => { deletion.textContent = 'Compte fermé'; }),
+          mountBusinessEmailPreference(preference),
+        ]);
+      });
+      await page.getByText('Séjours : 1', { exact: true }).waitFor();
+      assert.equal(await page.getByRole('button', { name: 'Supprimer mon compte', exact: true }).count(), 0);
+      await page.getByRole('checkbox').check();
+      await page.getByText('Préférence enregistrée.', { exact: true }).waitFor();
+      assert.equal(optedIn, true);
+      blocked = false;
+      await page.getByRole('button', { name: 'Actualiser', exact: true }).click();
+      await page.getByRole('button', { name: 'Supprimer mon compte', exact: true }).click();
+      const dialog = page.getByRole('dialog');
+      await dialog.locator('input[type=password]').fill(password);
+      await dialog.getByRole('button', { name: 'Confirmer la suppression', exact: true }).click();
+      await page.getByText('Compte fermé', { exact: true }).waitFor();
+      assert.equal(deleted, true);
+      assert.equal(await page.evaluate(() => localStorage.getItem('pencmi_access_token')), null);
       await page.close();
     }
     assert.equal(calls.every(call => !call.headers.authorization), true);

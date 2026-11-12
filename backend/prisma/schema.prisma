@@ -183,6 +183,8 @@ model User {
   supportTickets           SupportTicket[]
   favorites                Favorite[]
   savedAlerts              SavedAlert[]
+  emailVerificationTokens  EmailVerificationToken[]
+  businessEmailsEnabled    Boolean               @default(false)
   advertiserReviewsReceived AdvertiserReview[]    @relation("AdvertiserReviewsReceived")
   advertiserReviewsWritten  AdvertiserReview[]    @relation("AdvertiserReviewsWritten")
 
@@ -232,6 +234,19 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 
   @@index([userId, expiresAt])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email     String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model ProfessionalProfile {

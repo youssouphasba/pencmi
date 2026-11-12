@@ -1,5 +1,17 @@
 import { Transform } from 'class-transformer';
-import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+
+export class BusinessEmailPreferenceDto {
+  @IsBoolean()
+  enabled: boolean;
+}
+
+export class DeleteAccountDto {
+  @IsString()
+  @MaxLength(1024)
+  @Matches(/[\s\S]/)
+  currentPassword: string;
+}
 
 const profileText = ({ value }: { value: unknown }) =>
   typeof value === 'string'

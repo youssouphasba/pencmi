@@ -1,5 +1,6 @@
 import { Prisma, RequestStatus } from '@prisma/client';
 import { createHash } from 'crypto';
+import { queueBusinessEmail } from '../../modules/emails/business-email';
 import {
   CLIENT_REQUEST_DESTINATIONS,
   ClientRequestType,
@@ -53,4 +54,5 @@ export async function notifyClientRequestStatus(
     ],
     skipDuplicates: true,
   });
+  await queueBusinessEmail(tx, 'request_status', id, user.id, `/compte/${page}/?id=${encodeURIComponent(request.id)}`);
 }

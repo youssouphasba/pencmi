@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { createHash } from "crypto";
+import { BUSINESS_EMAIL_FLAG, queueBusinessEmail } from '../emails/business-email';
 import { PrismaService } from "../../database/prisma/prisma.service";
 import { Prisma } from "@prisma/client";
 import { getPagination } from "../../common/pagination/pagination.dto";
@@ -170,6 +171,13 @@ export class ConversationsService {
           where: { id: conversationId },
           data: { updatedAt: new Date() },
         });
+          if (process.env[BUSINESS_EMAIL_FLAG] === 'true') {
+            const recipients = await tx.conversationParticipant.findMany({
+              where: { conversationId, userId: { not: senderUserId } }, select: { userId: true },
+            });
+            for (const recipient of recipients)
+              await queueBusinessEmail(tx, 'message', message.id, recipient.userId, '/compte/messages/');
+          }
         return message;
       });
     } catch (error) {
@@ -263,6 +271,7 @@ export class ConversationsService {
           metadata: { conversationId },
         },
       });
+      await queueBusinessEmail(tx, 'message', message.id, ownerUserId, '/compte/messages/');
       return { conversationId, created: true, message };
     });
   }

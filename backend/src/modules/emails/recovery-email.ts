@@ -16,8 +16,8 @@ export function recoveryEnabled(config: ConfigService): boolean {
   try { recoveryConfig(config); return true; } catch { return false; }
 }
 
-export function recoveryConfig(config: ConfigService) {
-  const enabled = config.get('PASSWORD_RECOVERY_ENABLED');
+export function recoveryConfig(config: Pick<ConfigService, 'get'>, flag = 'PASSWORD_RECOVERY_ENABLED') {
+  const enabled = config.get(flag);
   const key = config.get<string>('EMAIL_QUEUE_ENCRYPTION_KEY') || '';
   const apiKey = config.get<string>('RESEND_API_KEY') || '';
   const from = config.get<string>('EMAIL_FROM') || '';

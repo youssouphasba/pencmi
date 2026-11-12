@@ -1,4 +1,5 @@
 import { notifyClientRequestStatus } from '../../common/utils/client-request-notification';
+import { lockRequestAccounts } from '../../common/utils/request-account-lock';
 import {
   BadRequestException,
   ConflictException,
@@ -203,6 +204,7 @@ export class TripOccurrencesService {
       }
       if (dto.requestedSeats > occurrence.remainingSeats)
         throw new ConflictException("Les places restantes sont insuffisantes.");
+      await lockRequestAccounts(tx, trip.ownerUserId, clientUserId);
       const request = await tx.tripSeatRequest.create({
         data: {
           id,

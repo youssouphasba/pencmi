@@ -3,7 +3,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
-import { UpdateUserProfileDto } from './users.dto';
+import { BusinessEmailPreferenceDto, DeleteAccountDto, UpdateUserProfileDto } from './users.dto';
 import { UsersService } from './users.service';
 import { MAX_PHOTO_BYTES } from '../../files/listing-photo.constants';
 import { Throttle } from '@nestjs/throttler';
@@ -22,6 +22,22 @@ export class UsersController {
   @Patch('me')
   updateMe(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateUserProfileDto) {
     return this.usersService.updateProfile(user.id, dto);
+  }
+
+  @Get('me/deletion-blockers')
+  deletionBlockers(@CurrentUser() user: AuthenticatedUser) {
+    return this.usersService.deletionBlockers(user.id);
+  }
+
+  @Patch('me/business-email-preference')
+  businessEmailPreference(@CurrentUser() user: AuthenticatedUser, @Body() dto: BusinessEmailPreferenceDto) {
+    return this.usersService.setBusinessEmailPreference(user.id, dto.enabled);
+  }
+
+  @Post('me/delete-account')
+  @Throttle({ default: { limit: 5, ttl: 900000 } })
+  deleteAccount(@CurrentUser() user: AuthenticatedUser, @Body() dto: DeleteAccountDto) {
+    return this.usersService.deleteAccount(user.id, user.sessionId, dto.currentPassword);
   }
 
   @Post('me/avatar')

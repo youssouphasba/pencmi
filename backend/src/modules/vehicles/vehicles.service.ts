@@ -1,3 +1,4 @@
+import { lockRequestAccounts } from '../../common/utils/request-account-lock';
 import {
   BadRequestException,
   Injectable,
@@ -346,6 +347,7 @@ export class VehiclesService {
         assertSameClientRequest(previous, fields);
         return { id: previous.id, status: previous.status };
       }
+      await lockRequestAccounts(tx, listing.ownerUserId, clientUserId);
       const request = await tx.vehicleRentalRequest.create({
         data: { ...fields, ...(id ? { id } : {}) },
       });
@@ -392,6 +394,7 @@ export class VehiclesService {
         assertSameClientRequest(previous, fields);
         return { id: previous.id, status: previous.status };
       }
+      await lockRequestAccounts(tx, listing.ownerUserId, clientUserId);
       const request = await tx.vehicleChauffeurRequest.create({
         data: { ...fields, ...(id ? { id } : {}) },
       });
