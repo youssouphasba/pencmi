@@ -13,7 +13,8 @@ const url = process.env.TEST_DATABASE_URL;
   const owner = `fa-owner-${run}`, client = `fa-client-${run}`, v1 = `fa-v1-${run}`, v2 = `fa-v2-${run}`;
   const trip = `fa-trip-${run}`;
   const property = `fa-property-${run}`, hotel = `fa-hotel-${run}`;
-  const vehicle = (id: string, status: 'active' | 'draft') => ({ id, ownerUserId: owner, status, slug: id, title: `Corolla ${run}`, vehicleMode: 'sale', city: 'Dakar', price: 1000,
+  const city = `Ville ${run}`;
+  const vehicle = (id: string, status: 'active' | 'draft') => ({ id, ownerUserId: owner, status, slug: id, title: `Corolla ${run}`, vehicleMode: 'sale', city, price: 1000,
     metadata: { publication: { identity: { brand: 'Toyota', year: 2020 }, info: { fuel: 'Diesel' } } } });
 
   beforeAll(async () => {
@@ -45,7 +46,7 @@ const url = process.env.TEST_DATABASE_URL;
   });
 
   it('matches JSON criteria in PostgreSQL and notifies once, after a restart too', async () => {
-    const alert = await alerts.create(client, { module: 'vehicles', name: 'Toyota', filters: { brand: 'toyota', minYear: 2018, fuel: 'Diesel', maxPrice: 2000, city: 'dakar' } });
+    const alert = await alerts.create(client, { module: 'vehicles', name: 'Toyota', filters: { brand: 'toyota', minYear: 2018, fuel: 'Diesel', maxPrice: 2000, city: city.toLowerCase() } });
     expect((await alerts.matches(client, alert.id, { page: 1, limit: 20 })).data.map((row: any) => row.listingId)).toContain(v1);
     await processor.runOnce();
     await db.vehicleListing.create({ data: vehicle(v2, 'active') });
@@ -56,11 +57,11 @@ const url = process.env.TEST_DATABASE_URL;
   });
 
   it('links the departure and price that actually match the saved criteria', async () => {
-    await db.tripListing.create({ data: { id: trip, slug: trip, ownerUserId: owner, status: 'active', title: 'Dakar Saint-Louis', departureCity: 'Dakar', arrivalCity: 'Saint-Louis', vehicleType: 'bus' } });
+    await db.tripListing.create({ data: { id: trip, slug: trip, ownerUserId: owner, status: 'active', title: 'Départ de recette', departureCity: city, arrivalCity: 'Saint-Louis', vehicleType: 'bus' } });
     const day = (offset: number) => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
     const first = day(5), second = day(10);
     await db.tripOccurrence.createMany({ data: [first, second].map((date, i) => ({ id: `${trip}-${i}`, tripId: trip, serviceDate: new Date(`${date}T00:00:00Z`), departureAt: new Date(`${date}T08:00:00Z`), totalCapacity: 10, offeredSeats: 10, remainingSeats: 10, pricePerSeat: i ? 2000 : 6000 })) });
-    const alert = await alerts.create(client, { module: 'trips', name: 'Départ précis', filters: { date: second, maxPrice: 3000 } });
+    const alert = await alerts.create(client, { module: 'trips', name: 'Départ précis', filters: { departureCity: city, date: second, maxPrice: 3000 } });
     const result = await alerts.matches(client, alert.id, { page: 1, limit: 20 });
     expect(result.data[0]).toMatchObject({ listingId: trip, price: 2000, url: expect.stringContaining(`occurrenceId=${trip}-1`) });
     await db.tripListing.update({ where: { id: trip }, data: { title: 'Départ mis à jour' } });
@@ -70,8 +71,8 @@ const url = process.env.TEST_DATABASE_URL;
 
   it('persists real-estate and hotel favorites, filters, pauses and private-listing protection', async () => {
     const cases = [
-      { module: 'real_estate' as const, id: property, delegate: db.realEstateListing, data: { id: property, slug: property, ownerUserId: owner, status: 'active' as const, title: 'Appartement', city: 'Dakar', price: 150000, metadata: { surface: 90, privateNote: 'secret' } }, filters: { city: 'Dakar', minSurface: 80 } },
-      { module: 'hotels' as const, id: hotel, delegate: db.hotelProperty, data: { id: hotel, slug: hotel, ownerUserId: owner, status: 'active' as const, name: 'Hôtel', propertyType: 'hotel', city: 'Dakar', contactSettings: { notificationEmail: 'private@example.test' } }, filters: { city: 'Dakar', propertyType: 'hotel' } },
+      { module: 'real_estate' as const, id: property, delegate: db.realEstateListing, data: { id: property, slug: property, ownerUserId: owner, status: 'active' as const, title: 'Appartement', city, price: 150000, metadata: { surface: 90, privateNote: 'secret' } }, filters: { city, minSurface: 80 } },
+      { module: 'hotels' as const, id: hotel, delegate: db.hotelProperty, data: { id: hotel, slug: hotel, ownerUserId: owner, status: 'active' as const, name: 'Hôtel', propertyType: 'hotel', city, contactSettings: { notificationEmail: 'private@example.test' } }, filters: { city, propertyType: 'hotel' } },
     ];
     for (const item of cases) {
       const alert = await alerts.create(client, { module: item.module, name: item.module, filters: item.filters });

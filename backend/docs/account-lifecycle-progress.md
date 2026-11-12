@@ -21,6 +21,12 @@
 - NestJS build, TypeScript, Prisma validation and database schema comparison passed.
 - Both additive migrations were applied only on loopback PostgreSQL `pencmi_step15_test`; no schema difference remains.
 
+## Production backup rehearsal
+
+- On 2026-11-12, a new encrypted PostgreSQL archive was exported from the verified Railway production database service. DPAPI readback and SHA-256 were checked before restoration into a new loopback-only PostgreSQL database with a different cluster identity.
+- Both migrations applied cleanly on the restored copy. The fingerprint of pre-existing data matched across 60 tables, excluding migration history and the new table and preference column. Prisma schema diff was empty.
+- The alert integration fixture uses unique search criteria so real listings present in the restored copy cannot invalidate assertions about fixture-only matches.
+
 ## Rollout
 
 - Before pushing to main, verify the production target, restore a current backup to an isolated cluster and apply both migrations there. Railway runs Prisma migrations before starting the new API.
