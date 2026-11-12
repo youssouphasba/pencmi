@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
@@ -33,5 +33,14 @@ export class ClientRequestsController {
     @Param() params: ClientRequestParamsDto,
   ) {
     return this.service.findOne(user.id, params.type, params.id);
+  }
+
+  @Post(':type/:id/cancel')
+  @HttpCode(200)
+  cancel(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param() params: ClientRequestParamsDto,
+  ) {
+    return this.service.cancel(user.id, params.type, params.id);
   }
 }

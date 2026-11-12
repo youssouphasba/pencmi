@@ -1,8 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, RequestStatus } from '@prisma/client';
+import { hotelDate, hotelToday } from '../hotels/hotel-inventory';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { getPagination } from '../../common/pagination/pagination.dto';
 import { listingUrl } from '../favorites/listing-cards';
 import { CLIENT_REQUEST_DESTINATIONS } from '../../common/constants/client-requests';
+import { queueHotelChannelEvent } from '../hotels/hotel-channel-events';
 import {
   CLIENT_REQUEST_TYPES,
   ClientRequestQueryDto,
@@ -19,6 +22,23 @@ const common = {
   clientEmail: true,
   message: true,
 } as const;
+/** Statuses a client may still withdraw from; a decided or finished request stays as it is. */
+export const CLIENT_CANCELLABLE_STATUSES: readonly RequestStatus[] = ['new', 'pending', 'requires_more_info', 'accepted'];
+const ownerPages: Record<ClientRequestType, string> = {
+  hotel: '/dashboard/hotels/reservations/',
+  visit: '/dashboard/immobilier/visites/',
+  rental: '/dashboard/voitures/contacts/',
+  chauffeur: '/dashboard/voitures/contacts/',
+  trip: '/dashboard/voyages/reservations/',
+};
+const cancelLabels: Record<ClientRequestType, string> = {
+  hotel: 'une demande de réservation',
+  visit: 'une demande de visite',
+  rental: 'une demande de location',
+  chauffeur: 'une demande avec chauffeur',
+  trip: 'une demande de places',
+};
+
 const listing = {
   id: true,
   title: true,
@@ -79,6 +99,87 @@ export class ClientRequestsService {
         ? `/compte/messages/?conversation=${encodeURIComponent(conversation.id)}`
         : null,
     };
+  }
+
+  /**
+   * Withdrawal by the client who made the request. Stock confirmed for an accepted request is
+   * given back in the same transaction, under the same locks as the advertiser's own decisions.
+   */
+  async cancel(userId: string, type: ClientRequestType, id: string) {
+    const owned = { id, clientUserId: userId };
+    await this.prisma.$transaction(async (tx) => {
+      const gone = () => new NotFoundException('Demande introuvable.');
+      const assertOpen = (status: RequestStatus) => {
+        if (status === 'cancelled') throw new ConflictException('Cette demande est déjà annulée.');
+        if (!CLIENT_CANCELLABLE_STATUSES.includes(status))
+          throw new ConflictException('Cette demande ne peut plus être annulée.');
+      };
+      let ownerUserId: string;
+      let request: { id: string; clientUserId: string | null; status: RequestStatus; updatedAt: Date };
+      if (type === 'hotel') {
+        const target = await tx.hotelReservationRequest.findFirst({ where: owned, select: { propertyId: true } });
+        if (!target) throw gone();
+        await tx.$queryRaw`SELECT "id" FROM "HotelProperty" WHERE "id" = ${target.propertyId} FOR UPDATE`;
+        await tx.$queryRaw`SELECT "id" FROM "HotelReservationRequest" WHERE "id" = ${id} FOR UPDATE`;
+        const row = await tx.hotelReservationRequest.findFirst({ where: owned, include: { property: { select: { ownerUserId: true, integration: true } } } });
+        if (!row) throw gone();
+        assertOpen(row.status);
+        if (row.status === 'accepted') {
+          if (row.checkIn && hotelDate(row.checkIn) <= hotelToday())
+            throw new ConflictException('Le séjour a commencé : contactez l’établissement pour toute modification.');
+          await tx.hotelStockAllocation.updateMany({ where: { requestId: id, releasedAt: null }, data: { releasedAt: new Date() } });
+          await queueHotelChannelEvent(tx, row.property.integration, id, 'cancel');
+        }
+        await tx.hotelReservationRequest.update({ where: { id }, data: { status: 'cancelled',
+          events: { create: { actorUserId: userId, fromStatus: row.status, toStatus: 'cancelled', note: 'Annulée par le client.' } } } });
+        ownerUserId = row.property.ownerUserId;
+        request = row;
+      } else if (type === 'trip') {
+        const target = await tx.tripSeatRequest.findFirst({ where: owned, select: { tripId: true } });
+        if (!target) throw gone();
+        await tx.$queryRaw`SELECT "id" FROM "TripListing" WHERE "id" = ${target.tripId} FOR UPDATE`;
+        const row = await tx.tripSeatRequest.findFirst({ where: owned, include: { trip: { select: { ownerUserId: true } }, occurrence: true } });
+        if (!row) throw gone();
+        if (row.occurrence) await tx.$queryRaw`SELECT "id" FROM "TripOccurrence" WHERE "id" = ${row.occurrence.id} FOR UPDATE`;
+        assertOpen(row.status);
+        let allocatedSeats = row.allocatedSeats;
+        if (row.status === 'accepted' && allocatedSeats) {
+          if (!row.occurrence || row.occurrence.departureAt <= new Date())
+            throw new ConflictException('Le départ est passé : cette demande ne peut plus être annulée.');
+          await tx.tripOccurrence.update({ where: { id: row.occurrence.id },
+            data: { confirmedSeats: { decrement: allocatedSeats }, remainingSeats: { increment: allocatedSeats } } });
+          allocatedSeats = 0;
+        }
+        await tx.tripSeatRequest.update({ where: { id }, data: { status: 'cancelled', allocatedSeats } });
+        ownerUserId = row.trip.ownerUserId;
+        request = row;
+      } else if (type === 'visit') {
+        await tx.$queryRaw`SELECT "id" FROM "RealEstateVisitRequest" WHERE "id" = ${id} FOR UPDATE`;
+        const row = await tx.realEstateVisitRequest.findFirst({ where: owned, include: { listing: { select: { ownerUserId: true } } } });
+        if (!row) throw gone();
+        assertOpen(row.status);
+        await tx.realEstateVisitRequest.update({ where: { id }, data: { status: 'cancelled' } });
+        ownerUserId = row.listing.ownerUserId;
+        request = row;
+      } else {
+        const table = (type === 'rental' ? tx.vehicleRentalRequest : tx.vehicleChauffeurRequest) as Prisma.VehicleRentalRequestDelegate;
+        const target = await table.findFirst({ where: owned, select: { listingId: true } });
+        if (!target) throw gone();
+        await tx.$queryRaw`SELECT "id" FROM "VehicleListing" WHERE "id" = ${target.listingId} FOR UPDATE`;
+        const row = await table.findFirst({ where: owned, include: { listing: { select: { ownerUserId: true } } } });
+        if (!row) throw gone();
+        assertOpen(row.status);
+        await table.update({ where: { id }, data: { status: 'cancelled' } });
+        ownerUserId = row.listing.ownerUserId;
+        request = row;
+      }
+      await tx.notification.create({ data: {
+        userId: ownerUserId, module: CLIENT_REQUEST_DESTINATIONS[type].module, type: 'request_cancelled_by_client',
+        title: 'Demande annulée par le client', message: `Un client a annulé ${cancelLabels[type]}.`,
+        targetUrl: ownerPages[type], metadata: { requestId: id, requestType: type, previousStatus: request.status },
+      } });
+    }, { maxWait: 10000, timeout: 30000 });
+    return this.findOne(userId, type, id);
   }
 
   private count(
@@ -242,10 +343,17 @@ export class ClientRequestsService {
                   quotedPricePerSeat: record.quotedPricePerSeat,
                   luggage: record.luggage,
                 };
+    const confirmed = row.status === 'accepted';
+    const canCancel =
+      CLIENT_CANCELLABLE_STATUSES.includes(row.status) &&
+      !(type === 'hotel' && confirmed && record.checkIn && hotelDate(record.checkIn) <= hotelToday()) &&
+      !(type === 'trip' && confirmed && record.allocatedSeats &&
+        (!record.occurrence || record.occurrence.departureAt <= new Date()));
     return {
       id: row.id,
       type,
       status: row.status,
+      canCancel,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
       listing: {

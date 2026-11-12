@@ -1,14 +1,18 @@
+import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   ArrayUnique,
   IsArray,
   IsDateString,
   IsIn,
+  IsInt,
   IsObject,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 import { MAX_LISTING_PHOTOS } from '../../files/listing-photo.constants';
@@ -25,6 +29,17 @@ export class RealEstateSearchDto extends PaginationDto {
   @IsOptional()
   @IsString()
   propertyType?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  maxPrice?: number;
+
+  @IsOptional()
+  @IsIn(['true'])
+  furnished?: 'true';
 }
 
 export class CreateRealEstateDto {

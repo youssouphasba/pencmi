@@ -15,8 +15,12 @@ import {
   HotelStayDto,
   UpdateHotelReservationStatusDto,
 } from './hotels.dto';
+import { queueHotelChannelEvent } from './hotel-channel-events';
 import {
   activeHotelAllocations,
+  hotelCanAutoConfirm,
+  hotelConfirmedExternally,
+  hotelSyncRoomInclude,
   HOTEL_RESERVATION_TRANSITIONS,
   HOTEL_STOCK_MESSAGES,
   hotelDate,
@@ -39,6 +43,7 @@ export const reservationRoomInclude = {
   availability: true,
   restrictions: true,
   stockAllocations: activeHotelAllocations,
+  ...hotelSyncRoomInclude,
 } as const;
 function completeAllocations(request: any): boolean {
   if (
@@ -265,6 +270,32 @@ export class HotelReservationsService {
             events: { create: { toStatus: 'new' } },
           },
         });
+        const accepted = await tx.hotelReservationRequest.findMany({
+          where: { propertyId, status: 'accepted' },
+          select: reservationIntegritySelect,
+        });
+        const autoConfirmed =
+          !hotelConfirmedExternally(property.integration) &&
+          !hotelHasUnreconciledReservations(accepted, data) &&
+          hotelCanAutoConfirm(property.integration, room, quote);
+        if (autoConfirmed) {
+          await this.allocate(tx, request.id, room.id, data, data.units);
+          await tx.hotelReservationRequest.update({
+            where: { id: request.id },
+            data: {
+              status: 'accepted',
+              events: {
+                create: {
+                  fromStatus: 'new',
+                  toStatus: 'accepted',
+                  note: 'Confirmée automatiquement : le stock synchronisé avec le logiciel de l’établissement couvre ce séjour.',
+                },
+              },
+            },
+          });
+          await queueHotelChannelEvent(tx, property.integration, request.id, 'commit');
+          await notifyClientRequestStatus(tx, 'hotel', request, 'accepted');
+        }
         await tx.contactEvent.create({
           data: {
             ownerUserId: property.ownerUserId,
@@ -275,10 +306,29 @@ export class HotelReservationsService {
             metadata: { requestId: request.id },
           },
         });
-        return this.receipt(request);
+        return this.receipt(autoConfirmed ? { ...request, status: 'accepted' } : request);
       },
       { maxWait: 10000, timeout: 30000 },
     );
+  }
+
+  private async allocate(
+    tx: Prisma.TransactionClient,
+    requestId: string,
+    roomId: string,
+    stay: { checkIn: string; checkOut: string },
+    units: number,
+  ) {
+    const nights = hotelStayNights(stay.checkIn, stay.checkOut);
+    await tx.hotelStockAllocation.createMany({
+      data: nights.map((day) => ({
+        id: randomUUID(),
+        requestId,
+        roomId,
+        date: new Date(`${day}T00:00:00Z`),
+        units,
+      })),
+    });
   }
 
   private receipt(request: any) {
@@ -501,7 +551,7 @@ export class HotelReservationsService {
             throw new ConflictException(
               'L’établissement et la catégorie doivent être actifs avant confirmation.',
             );
-          if (property.integration?.sourceOfTruth === 'external_system')
+          if (hotelConfirmedExternally(property.integration))
             throw new ConflictException(
               HOTEL_STOCK_MESSAGES.external_confirmation_required,
             );
@@ -527,20 +577,12 @@ export class HotelReservationsService {
             throw new ConflictException(
               HOTEL_STOCK_MESSAGES.legacy_stock_unreconciled,
             );
-          const nights = hotelStayNights(stay.checkIn, stay.checkOut);
           if (request.allocations.length)
             throw new ConflictException(
               'Cette demande possède déjà un historique d’allocations.',
             );
-          await tx.hotelStockAllocation.createMany({
-            data: nights.map((day) => ({
-              id: randomUUID(),
-              requestId: id,
-              roomId: room.id,
-              date: new Date(`${day}T00:00:00Z`),
-              units: request.units!,
-            })),
-          });
+          await this.allocate(tx, id, room.id, stay, request.units);
+          await queueHotelChannelEvent(tx, property.integration, id, 'commit');
         }
         if (
           status === 'completed' &&
@@ -553,10 +595,13 @@ export class HotelReservationsService {
           request.status === 'accepted' &&
           ['refused', 'cancelled'].includes(status)
         )
+        {
           await tx.hotelStockAllocation.updateMany({
             where: { requestId: id, releasedAt: null },
             data: { releasedAt: new Date() },
           });
+          await queueHotelChannelEvent(tx, property.integration, id, 'cancel');
+        }
         await tx.hotelReservationRequest.update({
           where: { id },
           data: {

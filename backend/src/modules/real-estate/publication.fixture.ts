@@ -12,6 +12,13 @@ export function publicationDatabase() {
         return row[key] !== value.not;
       if (value && typeof value === 'object' && 'in' in value)
         return value.in.includes(row[key]);
+      if (value && typeof value === 'object' && 'lte' in value)
+        return row[key] != null && row[key] <= value.lte;
+      if (value && typeof value === 'object' && 'path' in value)
+        return (
+          value.path.reduce((node: any, part: string) => node?.[part], row[key]) ===
+          value.equals
+        );
       return row[key] === value;
     });
   const model = (source: () => any[]) => ({

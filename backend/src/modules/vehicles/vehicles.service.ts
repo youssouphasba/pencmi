@@ -1,6 +1,7 @@
 import { lockRequestAccounts } from '../../common/utils/request-account-lock';
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -29,6 +30,9 @@ import {
   vehiclePublicationFromListing,
 } from './vehicle-publication.service';
 import { VEHICLE_DOCUMENT_LABELS } from './vehicle-publication.schema';
+
+export const RENTAL_BOOKED_MESSAGE =
+  'Ce véhicule est déjà réservé sur ces dates. Choisissez une autre période.';
 
 @Injectable()
 export class VehiclesService {
@@ -347,6 +351,8 @@ export class VehiclesService {
         assertSameClientRequest(previous, fields);
         return { id: previous.id, status: previous.status };
       }
+      if (fields.startDate && fields.endDate && await this.rentalBooked(tx, listingId, fields.startDate, fields.endDate))
+        throw new ConflictException(RENTAL_BOOKED_MESSAGE);
       await lockRequestAccounts(tx, listing.ownerUserId, clientUserId);
       const request = await tx.vehicleRentalRequest.create({
         data: { ...fields, ...(id ? { id } : {}) },
@@ -410,6 +416,30 @@ export class VehiclesService {
       });
       return { id: request.id, status: request.status };
     });
+  }
+
+  /**
+   * One listing is one vehicle. A period is [start, end): a return and a new pick-up may share a day.
+   * Call with the listing row locked.
+   */
+  private async rentalBooked(
+    tx: Prisma.TransactionClient,
+    listingId: string,
+    start: Date,
+    end: Date,
+    exceptId?: string,
+  ) {
+    const clash = await tx.vehicleRentalRequest.findFirst({
+      where: {
+        listingId,
+        status: 'accepted',
+        startDate: { lt: end },
+        endDate: { gt: start },
+        ...(exceptId ? { id: { not: exceptId } } : {}),
+      },
+      select: { id: true },
+    });
+    return Boolean(clash);
   }
 
   private async requestListing(
@@ -638,6 +668,18 @@ export class VehiclesService {
         throw new BadRequestException(
           'L’annonce doit être active et correspondre à la prestation demandée.',
         );
+      if (mode === 'rental' && status === 'accepted' && latest.status !== 'accepted') {
+        // The listing row is locked above: two acceptances of the same vehicle cannot interleave.
+        const rental = latest as { startDate: Date | null; endDate: Date | null };
+        if (!rental.startDate || !rental.endDate)
+          throw new ConflictException(
+            'Cette demande n’a pas de dates complètes : la disponibilité du véhicule ne peut pas être garantie. Invitez le client à refaire sa demande.',
+          );
+        if (await this.rentalBooked(tx, listing.id, rental.startDate, rental.endDate, id))
+          throw new ConflictException(
+            'Ce véhicule est déjà réservé sur ces dates par une autre demande acceptée.',
+          );
+      }
       const include = {
         listing: {
           select: {

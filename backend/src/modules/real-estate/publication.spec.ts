@@ -299,6 +299,45 @@ describe('Real estate publication API', () => {
     },
   );
 
+  it('filters budget and furnished listings before paginating public results', async () => {
+    const variant = (price: number | undefined, furnished: boolean) => {
+      const body = payload();
+      body.metadata.pricing = { ...body.metadata.pricing, price } as any;
+      body.metadata.features = { ...body.metadata.features, furnished } as any;
+      return create(body);
+    };
+    const cheapFurnished = await variant(100000, true);
+    const cheap = await variant(150000, false);
+    await variant(400000, true);
+    await variant(undefined, false);
+    db.listings().forEach((row) => (row.status = 'active'));
+    const search = async (query: string) =>
+      (
+        await request(app.getHttpServer())
+          .get(`/api/v1/immobilier?${query}`)
+          .expect(200)
+      ).body;
+
+    const budget = await search('maxPrice=150000');
+    expect(budget.data.map((row: any) => row.id).sort()).toEqual(
+      [cheapFurnished.id, cheap.id].sort(),
+    );
+    expect(budget.meta.total).toBe(2);
+    expect((await search('furnished=true')).meta.total).toBe(2);
+    const both = await search('maxPrice=150000&furnished=true');
+    expect(both.data.map((row: any) => row.id)).toEqual([cheapFurnished.id]);
+    expect(both.data[0].metadata.features.furnished).toBe(true);
+
+    const second = await search('maxPrice=150000&limit=1&page=2');
+    expect(second.data).toHaveLength(1);
+    expect(second.meta).toMatchObject({ page: 2, total: 2, totalPages: 2 });
+
+    for (const query of ['maxPrice=abc', 'maxPrice=0', 'furnished=yes'])
+      await request(app.getHttpServer())
+        .get(`/api/v1/immobilier?${query}`)
+        .expect(400);
+  });
+
   it.each(['draft', 'pending_review', 'deleted'])(
     'refuses public photos for a %s listing',
     async (status) => {

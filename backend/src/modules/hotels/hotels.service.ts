@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -18,7 +19,18 @@ import {
 } from './hotels.dto';
 import { hotelRoomsInclude, hotelSettings } from './hotel-publication.service';
 import { HotelReservationsService } from './hotel-reservations.service';
-import { hotelReservedOn, hotelDate } from './hotel-inventory';
+import {
+  hotelConfirmedExternally,
+  hotelExternallyBlockedOn,
+  hotelReservedOn,
+  hotelDate,
+  hasHotelPublicFilters,
+  hotelMatchesPublicFilters,
+  hotelSearchStay,
+  HotelStaySearch,
+  hotelStayNights,
+  MAX_HOTEL_SEARCH_PROPERTIES,
+} from './hotel-inventory';
 
 @Injectable()
 export class HotelsService {
@@ -43,42 +55,89 @@ export class HotelsService {
           }
         : {}),
     };
+    const include = {
+      integration: {
+        select: { sourceOfTruth: true, status: true, syncMode: true, lastSyncAt: true },
+      },
+      owner: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          city: true,
+          role: true,
+          professionalProfile: {
+            select: {
+              businessName: true,
+              professionalType: true,
+              city: true,
+              logoUrl: true,
+              whatsappNumber: true,
+              professionalPhone: true,
+              professionalEmail: true,
+              openingHours: true,
+              verified: true,
+              website: true,
+              description: true,
+            },
+          },
+        },
+      },
+      rooms: { include: hotelRoomsInclude },
+    } satisfies Prisma.HotelPropertyInclude;
+    const orderBy = [{ updatedAt: 'desc' as const }, { id: 'desc' as const }];
+
+    let search: HotelStaySearch | undefined;
+    if (query.checkIn || query.checkOut) {
+      if (!query.checkIn || !query.checkOut)
+        throw new BadRequestException(
+          'Indiquez la date d’arrivée et la date de départ.',
+        );
+      // Validates the dates once (order, length, not in the past).
+      hotelStayNights(query.checkIn, query.checkOut);
+      search = {
+        checkIn: query.checkIn,
+        checkOut: query.checkOut,
+        guests: query.guests ?? 1,
+        rooms: query.rooms ?? 1,
+      };
+    }
+    if (search || hasHotelPublicFilters(query)) {
+      // Availability depends on calendars, restrictions and allocations, and
+      // price, stars and amenities live in the publication settings. Both are
+      // evaluated on every matching property before paginating, so the total
+      // and the pages reflect the whole search, not only the first page.
+      const candidates = await this.prisma.hotelProperty.findMany({
+        where,
+        orderBy,
+        take: MAX_HOTEL_SEARCH_PROPERTIES,
+        include,
+      });
+      const matches = candidates
+        .map((property) => ({
+          item: this.publicProperty(property),
+          stay: search ? hotelSearchStay(property, search) : undefined,
+        }))
+        .filter(
+          (match) =>
+            (!search || match.stay) &&
+            hotelMatchesPublicFilters(match.item, query),
+        );
+      return {
+        data: matches
+          .slice(pagination.skip, pagination.skip + pagination.take)
+          .map(({ item, stay }) => (stay ? { ...item, stay } : item)),
+        meta: pagination.meta(matches.length),
+      };
+    }
+
     const [data, total] = await Promise.all([
       this.prisma.hotelProperty.findMany({
         where,
         skip: pagination.skip,
         take: pagination.take,
-        orderBy: { updatedAt: 'desc' },
-        include: {
-          integration: {
-            select: { sourceOfTruth: true, status: true, lastSyncAt: true },
-          },
-          owner: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              city: true,
-              role: true,
-              professionalProfile: {
-                select: {
-                  businessName: true,
-                  professionalType: true,
-                  city: true,
-                  logoUrl: true,
-                  whatsappNumber: true,
-                  professionalPhone: true,
-                  professionalEmail: true,
-                  openingHours: true,
-                  verified: true,
-                  website: true,
-                  description: true,
-                },
-              },
-            },
-          },
-          rooms: { include: hotelRoomsInclude },
-        },
+        orderBy,
+        include,
       }),
       this.prisma.hotelProperty.count({ where }),
     ]);
@@ -93,7 +152,7 @@ export class HotelsService {
       where: { id, status: ListingStatus.active, deletedAt: null },
       include: {
         integration: {
-          select: { sourceOfTruth: true, status: true, lastSyncAt: true },
+          select: { sourceOfTruth: true, status: true, syncMode: true, lastSyncAt: true },
         },
         rooms: { include: hotelRoomsInclude },
         owner: {
@@ -177,10 +236,11 @@ export class HotelsService {
             const restriction = room.restrictions.find(
               (item: any) => item.date.valueOf() === day.date.valueOf(),
             );
-            const external =
-              property.integration?.sourceOfTruth === 'external_system';
+            const external = hotelConfirmedExternally(property.integration);
             const remaining =
-              day.available - hotelReservedOn(room, hotelDate(day.date));
+              day.available -
+              hotelReservedOn(room, hotelDate(day.date), day, property.integration) -
+              hotelExternallyBlockedOn(room, hotelDate(day.date));
             const reliable =
               !external &&
               Number.isInteger(data.totalUnits) &&
@@ -276,7 +336,7 @@ export class HotelsService {
         orderBy: { updatedAt: 'desc' },
         include: {
           rooms: { include: hotelRoomsInclude },
-          integration: { select: { sourceOfTruth: true } },
+          integration: { select: { sourceOfTruth: true, status: true, syncMode: true } },
         },
       }),
       this.prisma.hotelProperty.count({ where }),
@@ -289,13 +349,15 @@ export class HotelsService {
           availability: room.availability.map((day) => ({
             ...day,
             allocatedUnits: hotelReservedOn(room, hotelDate(day.date)),
-            remainingUnits:
-              property.integration?.sourceOfTruth === 'external_system'
-                ? null
-                : Math.max(
-                    0,
-                    day.available - hotelReservedOn(room, hotelDate(day.date)),
-                  ),
+            externallyBlockedUnits: hotelExternallyBlockedOn(room, hotelDate(day.date)),
+            remainingUnits: hotelConfirmedExternally(property.integration)
+              ? null
+              : Math.max(
+                  0,
+                  day.available -
+                    hotelReservedOn(room, hotelDate(day.date), day, property.integration) -
+                    hotelExternallyBlockedOn(room, hotelDate(day.date)),
+                ),
           })),
         })),
       })),

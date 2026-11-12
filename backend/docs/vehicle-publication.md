@@ -136,3 +136,7 @@ Le test PostgreSQL existant a révélé une course dans l'upsert de création : 
 - `tests/vehicle-publication.browser.test.mjs`
 - `tests/vehicle-publication.test.mjs`
 - `voitures/vehicle-content.mjs`
+
+## Disponibilité des locations
+
+Une annonce de location représente un véhicule. Une période est `[début, fin)` : un retour et un nouveau départ peuvent partager la même journée. Sous le verrou de l'annonce, `POST /voitures/:id/rental-requests` répond 409 si la période croise une location déjà acceptée, et l'acceptation côté annonceur répond 409 dans le même cas ou si la demande n'a pas de dates complètes. Plusieurs demandes en attente peuvent coexister ; une seule peut être acceptée pour les mêmes jours. Annuler ou refuser une location acceptée libère la période. Aucun changement de schéma.

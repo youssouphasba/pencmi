@@ -20,6 +20,8 @@ import {
 import {
   activeHotelAllocations,
   assertHotelAllocatedInventory,
+  hotelConfirmedExternally,
+  hotelSyncRoomInclude,
 } from './hotel-inventory';
 
 const digest = (value: string) =>
@@ -29,6 +31,7 @@ export const hotelRoomsInclude = {
   availability: { orderBy: { date: 'asc' as const } },
   restrictions: true,
   stockAllocations: activeHotelAllocations,
+  ...hotelSyncRoomInclude,
 } satisfies Prisma.HotelRoomInclude;
 export function hotelSettings(value: unknown): Record<string, any> {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -111,8 +114,8 @@ export class HotelPublicationService {
     });
     if (!property) throw new NotFoundException('Hébergement introuvable.');
     if (
-      property.integration?.sourceOfTruth === 'external_system' &&
-      property.integration.fieldMappings.length
+      hotelConfirmedExternally(property.integration) &&
+      property.integration?.fieldMappings.length
     )
       throw new ConflictException(
         'Des champs sont pilotés par une intégration externe. Les modifications manuelles nécessitent une vérification de cette configuration.',
@@ -133,7 +136,7 @@ export class HotelPublicationService {
       where: { id, ownerUserId, deletedAt: null },
       include: {
         rooms: { include: hotelRoomsInclude },
-        integration: { select: { sourceOfTruth: true } },
+        integration: { select: { sourceOfTruth: true, status: true } },
       },
     });
     if (!property) throw new NotFoundException('Hébergement introuvable.');
@@ -179,7 +182,7 @@ export class HotelPublicationService {
       metadata: settings,
       rooms: property.rooms.map(hotelRoomDraft),
       photos,
-      externalInventory: integration?.sourceOfTruth === 'external_system',
+      externalInventory: hotelConfirmedExternally(integration),
     };
   }
 
@@ -230,14 +233,14 @@ export class HotelPublicationService {
   ) {
     const property = await this.lock(tx, ownerUserId, id);
     if (
-      property.integration?.sourceOfTruth === 'external_system' &&
+      hotelConfirmedExternally(property.integration) &&
       data.rooms !== undefined
     )
       throw new ConflictException(
         'Les chambres, tarifs et disponibilités sont gérés par le logiciel hôtelier.',
       );
     if (
-      property.integration?.sourceOfTruth === 'external_system' &&
+      hotelConfirmedExternally(property.integration) &&
       (['name', 'propertyType', 'city', 'region'] as const).some(
         (key) => data[key] !== undefined && data[key] !== (property[key] || ''),
       )

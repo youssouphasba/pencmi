@@ -85,8 +85,49 @@ export const hotelRequestSchema = hotelStaySchema
 export type HotelStay = z.infer<typeof hotelStaySchema>;
 export const activeHotelAllocations = {
   where: { releasedAt: null },
-  select: { date: true, units: true },
+  select: { date: true, units: true, channelAckedAt: true },
 } as const;
+/** What the stock of a room needs from the synchronisation with the hotel software. */
+export const hotelSyncRoomInclude = {
+  icalImports: { where: { active: true }, select: { lastSuccessAt: true } },
+  externalBlocks: { select: { date: true, units: true } },
+} as const;
+/** An iCal calendar older than this no longer opens nights by itself. */
+export const HOTEL_ICAL_FRESHNESS_MS = 3 * 3600_000;
+export type HotelSyncMode = 'none' | 'ical' | 'channel_manager';
+
+/** Only an active integration claiming the external software confirms outside Pencmi. */
+export function hotelConfirmedExternally(integration: any) {
+  return (
+    integration?.status === 'active' &&
+    integration.sourceOfTruth === 'external_system'
+  );
+}
+export function hotelSyncMode(integration: any): HotelSyncMode {
+  return integration?.status === 'active' &&
+    ['ical', 'channel_manager'].includes(integration.syncMode)
+    ? integration.syncMode
+    : 'none';
+}
+/** Every active calendar of the room was read successfully a short while ago. */
+export function hotelIcalFresh(room: any, now = new Date()) {
+  const imports = room.icalImports || [];
+  return (
+    imports.length > 0 &&
+    imports.every(
+      (entry: any) =>
+        entry.lastSuccessAt &&
+        now.valueOf() - new Date(entry.lastSuccessAt).valueOf() <
+          HOTEL_ICAL_FRESHNESS_MS,
+    )
+  );
+}
+/** Units occupied on that night in the hotel software, read from its calendars. */
+export function hotelExternallyBlockedOn(room: any, day: string): number {
+  return (room.externalBlocks || [])
+    .filter((block: any) => hotelDate(block.date) === day)
+    .reduce((sum: number, block: any) => sum + block.units, 0);
+}
 
 export function parseHotelInput<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -136,11 +177,30 @@ export function hotelStayNights(
     new Date(from + index * 86400000).toISOString().slice(0, 10),
   );
 }
-export function hotelReservedOn(room: any, day: string): number {
+/**
+ * Units Pencmi reserved on that night. With a channel manager, the availability it sent
+ * after acknowledging a reservation already deducts it: only the others are counted.
+ */
+export function hotelReservedOn(
+  room: any,
+  day: string,
+  dayRow?: any,
+  integration?: any,
+): number {
+  const sentAt =
+    hotelSyncMode(integration) === 'channel_manager' && dayRow?.updatedAt
+      ? new Date(dayRow.updatedAt).valueOf()
+      : null;
   return (room.stockAllocations || [])
     .filter(
       (allocation: any) =>
-        !allocation.releasedAt && hotelDate(allocation.date) === day,
+        !allocation.releasedAt &&
+        hotelDate(allocation.date) === day &&
+        !(
+          sentAt !== null &&
+          allocation.channelAckedAt &&
+          new Date(allocation.channelAckedAt).valueOf() <= sentAt
+        ),
     )
     .reduce((sum: number, allocation: any) => sum + allocation.units, 0);
 }
@@ -157,18 +217,26 @@ export function hotelStayQuote(
       'Le nombre de voyageurs dépasse la capacité des unités demandées.',
     );
   const metadata = room.metadata || {};
-  const external = integration?.sourceOfTruth === 'external_system';
+  const external = hotelConfirmedExternally(integration);
+  const mode = hotelSyncMode(integration);
+  // The channel manager sends the sellable stock itself: the declared total does not bound it.
+  const channel = mode === 'channel_manager';
+  // A fresh calendar lists every occupied night: the others are open on the whole stock.
+  const calendarOpen = mode === 'ical' && hotelIcalFresh(room);
   let reason: keyof typeof HOTEL_STOCK_MESSAGES = 'on_request';
   let unknown = false;
   let inventoryInvalid =
-    !Number.isInteger(metadata.totalUnits) || metadata.totalUnits < stay.units;
+    !channel &&
+    (!Number.isInteger(metadata.totalUnits) || metadata.totalUnits < stay.units);
   let remaining = Number.MAX_SAFE_INTEGER;
   let estimatedTotal = 0;
   let pricesKnown = true;
   for (const night of nights) {
-    const day = room.availability.find(
-      (entry: any) => hotelDate(entry.date) === night,
-    );
+    const day =
+      room.availability.find((entry: any) => hotelDate(entry.date) === night) ??
+      (calendarOpen && Number.isInteger(metadata.totalUnits)
+        ? { status: 'open', available: metadata.totalUnits, reliableUntil: null }
+        : undefined);
     const restriction = room.restrictions.find(
       (entry: any) => hotelDate(entry.date) === night,
     );
@@ -187,22 +255,27 @@ export function hotelStayQuote(
       !external &&
       (!Number.isInteger(day.available) ||
         day.available < 0 ||
-        day.available > metadata.totalUnits)
+        (!channel && day.available > metadata.totalUnits))
     ) {
       inventoryInvalid = true;
     } else if (!external) {
-      const stock = day.available - hotelReservedOn(room, night);
+      const stock =
+        day.available -
+        hotelReservedOn(room, night, day, integration) -
+        hotelExternallyBlockedOn(room, night);
       remaining = Math.min(remaining, stock);
       if (stock < stay.units) reason = 'stock_insufficient';
     }
     const rates = room.rates.filter(
       (rate: any) => hotelDate(rate.date) === night,
     );
-    const manual = rates.find((rate: any) => rate.ratePlan === 'manual');
+    // With a channel manager, the rates it sends replace the ones typed in Pencmi.
+    const plan = channel ? 'channel' : 'manual';
+    const manual = rates.find((rate: any) => rate.ratePlan === plan);
     const price =
       manual?.currency === 'FCFA'
         ? manual.price
-        : !rates.length
+        : !(channel ? rates.filter((rate: any) => rate.ratePlan === plan) : rates).length
           ? metadata.basePrice
           : undefined;
     if (!Number.isSafeInteger(price) || price < 0) pricesKnown = false;
@@ -239,6 +312,138 @@ export function hotelStayQuote(
     estimatedTotal: pricesKnown ? estimatedTotal : null,
     currency: 'FCFA' as const,
   };
+}
+
+/**
+ * A synchronised hotel can let Pencmi accept a request by itself when the stock read from
+ * its software covers the stay: the reservation then reaches that software on its own.
+ */
+export function hotelCanAutoConfirm(
+  integration: any,
+  room: any,
+  quote: { canConfirm: boolean },
+  now = new Date(),
+) {
+  const mode = hotelSyncMode(integration);
+  if (!integration?.autoConfirm || mode === 'none' || !quote.canConfirm)
+    return false;
+  return mode === 'channel_manager' || hotelIcalFresh(room, now);
+}
+
+export const MAX_HOTEL_STAY_UNITS = 10;
+export const MAX_HOTEL_SEARCH_PROPERTIES = 500;
+export type HotelStaySearch = {
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  rooms: number;
+};
+
+/**
+ * Best stay a property can offer for a search, or null when no active room
+ * can host it. A room whose calendar is not filled in is kept as
+ * "unconfirmed": the establishment still has to confirm it.
+ */
+export function hotelSearchStay(property: any, search: HotelStaySearch) {
+  const quotes = (property.rooms || [])
+    .filter((room: any) => room.status === 'active' && room.capacity > 0)
+    .map((room: any) => {
+      // Enough units of this category to host every guest.
+      const units = Math.max(
+        search.rooms,
+        Math.ceil(search.guests / room.capacity),
+      );
+      if (units > MAX_HOTEL_STAY_UNITS) return null;
+      return hotelStayQuote(
+        room,
+        {
+          roomId: room.id,
+          checkIn: search.checkIn,
+          checkOut: search.checkOut,
+          guests: search.guests,
+          units,
+        },
+        property.integration,
+      );
+    })
+    .filter((quote: any) => quote && quote.status !== 'unavailable');
+  if (!quotes.length) return null;
+  const rank = (quote: any) => (quote.status === 'on_request' ? 0 : 1);
+  const total = (quote: any) => quote.estimatedTotal ?? Number.MAX_SAFE_INTEGER;
+  return quotes.sort(
+    (a: any, b: any) => rank(a) - rank(b) || total(a) - total(b),
+  )[0];
+}
+
+export type HotelPublicFilters = {
+  query?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  stars?: number;
+  amenity?: string;
+};
+
+// Accents, case and punctuation are ignored: "Wi-Fi" matches "wifi".
+const hotelSearchText = (value: unknown) =>
+  String(value ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+export function hasHotelPublicFilters(filters: HotelPublicFilters) {
+  return Boolean(
+    hotelSearchText(filters.query) ||
+    filters.minPrice ||
+    filters.maxPrice ||
+    filters.stars ||
+    hotelSearchText(filters.amenity),
+  );
+}
+
+/**
+ * Filters applied to the public form of a property. Price, stars and
+ * amenities live in the publication settings, so they cannot be filtered in
+ * SQL. A property without a known price is kept by a maximum budget (its
+ * price is "to be confirmed") but not by a minimum one.
+ */
+export function hotelMatchesPublicFilters(
+  property: any,
+  filters: HotelPublicFilters,
+) {
+  const metadata = property.metadata || {};
+  const query = hotelSearchText(filters.query);
+  if (
+    query &&
+    !hotelSearchText(
+      [
+        property.name,
+        property.propertyType,
+        property.city,
+        property.region,
+        property.description,
+      ].join(' '),
+    ).includes(query)
+  )
+    return false;
+  const price = Number.isFinite(metadata.nightlyPrice)
+    ? metadata.nightlyPrice
+    : null;
+  if (filters.minPrice && (price === null || price < filters.minPrice))
+    return false;
+  if (filters.maxPrice && price !== null && price > filters.maxPrice)
+    return false;
+  if (filters.stars && !(Number(metadata.stars) >= filters.stars)) return false;
+  const amenity = hotelSearchText(filters.amenity).replace(/ /g, '');
+  if (
+    amenity &&
+    !(Array.isArray(metadata.amenities) ? metadata.amenities : []).some(
+      (item: unknown) => hotelSearchText(item).replace(/ /g, '') === amenity,
+    )
+  )
+    return false;
+  return true;
 }
 
 export async function assertHotelAllocatedInventory(

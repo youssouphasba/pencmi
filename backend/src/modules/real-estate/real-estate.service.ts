@@ -67,6 +67,13 @@ export class RealEstateService {
       deletedAt: null,
       transaction: query.transaction || undefined,
       propertyType: query.propertyType || undefined,
+      // Budget and furnished are filtered in SQL so that pagination and the
+      // total reflect the search; listings without a price never match a budget.
+      price: query.maxPrice ? { lte: query.maxPrice } : undefined,
+      metadata:
+        query.furnished === 'true'
+          ? { path: ['publication', 'features', 'furnished'], equals: true }
+          : undefined,
       ...(query.city
         ? {
             OR: [
@@ -81,7 +88,7 @@ export class RealEstateService {
         where,
         skip: pagination.skip,
         take: pagination.take,
-        orderBy: { updatedAt: 'desc' },
+        orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         include: {
           owner: {
             select: {

@@ -1,28 +1,60 @@
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsIn, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { PaginationDto } from '../../common/pagination/pagination.dto';
 
-const modules = ['real_estate', 'hotels', 'vehicles', 'trips', 'messages', 'users', 'system'] as const;
-const targetTypes = ['listing', 'user', 'advertiser', 'message', 'conversation', 'document', 'other'] as const;
-const reportStatuses = ['new', 'in_progress', 'correction_requested', 'resolved', 'rejected', 'archived'] as const;
+export const reportModules = ['real_estate', 'hotels', 'vehicles', 'trips', 'messages', 'users', 'system'] as const;
+export const reportTargets = ['listing', 'user', 'advertiser', 'message', 'conversation', 'other'] as const;
+export const reportStatuses = ['new', 'in_progress', 'correction_requested', 'resolved', 'rejected', 'archived'] as const;
+const trim = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
 
 export class CreateReportDto {
-  @IsIn(modules)
-  module: (typeof modules)[number];
+  @IsIn(reportModules)
+  module: (typeof reportModules)[number];
 
-  @IsIn(targetTypes)
-  targetType: (typeof targetTypes)[number];
+  @IsIn(reportTargets)
+  targetType: (typeof reportTargets)[number];
 
-  @IsString()
+  @Matches(/^[\w-]{1,128}$/)
   targetId: string;
 
-  @IsString()
+  @Matches(/^[a-z][a-z0-9_]{0,79}$/)
   reason: string;
 
   @IsOptional()
+  @Transform(trim)
   @IsString()
+  @MaxLength(2000)
   message?: string;
 }
 
-export class UpdateReportStatusDto {
+export class HideReportedMessageDto {
+  @Transform(trim)
+  @Matches(/\S/)
+  @MaxLength(1000)
+  note: string;
+}
+
+export class UpdateReportStatusDto extends HideReportedMessageDto {
   @IsIn(reportStatuses)
   status: (typeof reportStatuses)[number];
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(1000)
+  messageToAdvertiser?: string;
+}
+
+export class ReportListDto extends PaginationDto {
+  @IsOptional()
+  @IsIn(reportStatuses)
+  status?: (typeof reportStatuses)[number];
+
+  @IsOptional()
+  @IsIn(reportModules)
+  module?: (typeof reportModules)[number];
+
+  @IsOptional()
+  @IsIn(reportTargets)
+  targetType?: (typeof reportTargets)[number];
 }

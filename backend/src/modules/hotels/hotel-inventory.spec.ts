@@ -1,11 +1,15 @@
 import {
+  hasHotelPublicFilters,
+  hotelMatchesPublicFilters,
   hotelRequestSchema,
+  hotelSearchStay,
   hotelStayNights,
   hotelStayQuote,
   HOTEL_RESERVATION_TRANSITIONS,
   hotelToday,
 } from './hotel-inventory';
 import { hotelHasUnreconciledReservations } from './hotel-reservations.service';
+import { HotelsService } from './hotels.service';
 
 describe('Hotel stay and inventory rules', () => {
   const start = '2030-06-01';
@@ -31,6 +35,81 @@ describe('Hotel stay and inventory rules', () => {
       })),
       stockAllocations: [],
     }) as any;
+
+  describe('stay search across the rooms of a property', () => {
+    const search = { checkIn: start, checkOut: end, guests: 2, rooms: 1 };
+    const property = (...rooms: any[]) => ({
+      rooms: rooms.map((data, index) => ({
+        ...room(),
+        id: `room-${index}`,
+        status: 'active',
+        ...data,
+      })),
+    });
+
+    it('keeps the cheapest room with confirmed stock and ignores inactive rooms', () => {
+      const result = hotelSearchStay(
+        property(
+          { metadata: { totalUnits: 2, basePrice: 40000 } },
+          { metadata: { totalUnits: 2, basePrice: 20000 } },
+          { metadata: { totalUnits: 2, basePrice: 1000 }, status: 'draft' },
+        ),
+        search,
+      );
+      expect(result).toMatchObject({
+        roomId: 'room-1',
+        status: 'on_request',
+        nights: 2,
+        estimatedTotal: 40000,
+      });
+    });
+    it('books enough units for every guest and gives up beyond ten units', () => {
+      const big = property({
+        metadata: { totalUnits: 3, basePrice: 10000 },
+        availability: [start, '2030-06-02'].map((date) => ({
+          date,
+          available: 3,
+          status: 'open',
+        })),
+      });
+      expect(hotelSearchStay(big, { ...search, guests: 5 })).toMatchObject({
+        units: 3,
+        status: 'on_request',
+      });
+      expect(hotelSearchStay(big, { ...search, guests: 30 })).toBeNull();
+    });
+    it('excludes full, closed or stop-sell properties', () => {
+      const full = property({
+        stockAllocations: [{ date: start, units: 2 }],
+      });
+      const closed = property({
+        availability: [start, '2030-06-02'].map((date) => ({
+          date,
+          available: 2,
+          status: 'closed',
+        })),
+      });
+      const stopped = property({
+        restrictions: [{ date: start, stopSell: true }],
+      });
+      for (const data of [full, closed, stopped])
+        expect(hotelSearchStay(data, search)).toBeNull();
+      expect(hotelSearchStay(property(), { ...search, rooms: 3 })).toBeNull();
+    });
+    it('keeps a property without calendar as unconfirmed, after confirmed ones', () => {
+      const result = hotelSearchStay(
+        property({ availability: [] }, {}),
+        search,
+      );
+      expect(result).toMatchObject({ roomId: 'room-1', status: 'on_request' });
+      expect(
+        hotelSearchStay(property({ availability: [] }), search),
+      ).toMatchObject({
+        status: 'unconfirmed',
+        reason: 'availability_unknown',
+      });
+    });
+  });
 
   it('uses Dakar date and excludes the departure night', () => {
     expect(hotelToday(new Date('2030-06-01T23:59:00Z'))).toBe(start);
@@ -93,7 +172,7 @@ describe('Hotel stay and inventory rules', () => {
   });
   it('never confirms external stock locally', () => {
     expect(
-      hotelStayQuote(room(), stay, { sourceOfTruth: 'external_system' }),
+      hotelStayQuote(room(), stay, { status: 'active', sourceOfTruth: 'external_system' }),
     ).toMatchObject({
       canConfirm: false,
       remainingUnits: null,
@@ -190,5 +269,102 @@ describe('Hotel stay and inventory rules', () => {
       'cancelled',
       'completed',
     ]);
+  });
+
+  describe('public filters applied to the whole search', () => {
+    const hotel = (metadata: any, extra: any = {}) => ({
+      name: 'Résidence Téranga',
+      propertyType: 'residence',
+      city: 'Saint-Louis',
+      region: 'Saint-Louis',
+      description: 'Vue sur le fleuve',
+      metadata,
+      ...extra,
+    });
+
+    it('detects whether a filter was requested', () => {
+      expect(hasHotelPublicFilters({})).toBe(false);
+      expect(hasHotelPublicFilters({ query: '  ', amenity: '' })).toBe(false);
+      expect(hasHotelPublicFilters({ stars: 3 })).toBe(true);
+      expect(hasHotelPublicFilters({ query: 'saly' })).toBe(true);
+    });
+
+    it('matches text without accents or case and amenities without punctuation', () => {
+      const item = hotel({ amenities: ['Wi-Fi', 'Piscine'], stars: 3 });
+      expect(hotelMatchesPublicFilters(item, { query: 'teranga' })).toBe(true);
+      expect(hotelMatchesPublicFilters(item, { query: 'saint louis' })).toBe(
+        true,
+      );
+      expect(hotelMatchesPublicFilters(item, { query: 'dakar' })).toBe(false);
+      expect(hotelMatchesPublicFilters(item, { amenity: 'wifi' })).toBe(true);
+      expect(hotelMatchesPublicFilters(item, { amenity: 'Parking' })).toBe(
+        false,
+      );
+      expect(hotelMatchesPublicFilters(item, { stars: 3 })).toBe(true);
+      expect(hotelMatchesPublicFilters(item, { stars: 4 })).toBe(false);
+      expect(hotelMatchesPublicFilters(hotel({}), { stars: 1 })).toBe(false);
+    });
+
+    it('keeps an unknown price under a maximum budget but not above a minimum', () => {
+      const priced = hotel({ nightlyPrice: 30000 });
+      const unknown = hotel({ nightlyPrice: null });
+      expect(hotelMatchesPublicFilters(priced, { minPrice: 30000 })).toBe(true);
+      expect(hotelMatchesPublicFilters(priced, { minPrice: 30001 })).toBe(
+        false,
+      );
+      expect(hotelMatchesPublicFilters(priced, { maxPrice: 29999 })).toBe(
+        false,
+      );
+      expect(hotelMatchesPublicFilters(unknown, { maxPrice: 1000 })).toBe(true);
+      expect(hotelMatchesPublicFilters(unknown, { minPrice: 1000 })).toBe(
+        false,
+      );
+    });
+
+    it('filters every matching property before paginating', async () => {
+      const row = (index: number) => ({
+        id: `hotel-${index}`,
+        slug: `hotel-${index}`,
+        name: `Hôtel ${index}`,
+        propertyType: 'hotel',
+        city: 'Dakar',
+        status: 'active',
+        rooms: [],
+        // Only the properties of the "second page" have a pool.
+        contactSettings: {
+          nightlyPrice: 10000 + index,
+          amenities: index >= 20 ? ['Piscine'] : ['Parking'],
+        },
+      });
+      const findMany = jest
+        .fn()
+        .mockResolvedValue(Array.from({ length: 45 }, (_, i) => row(i)));
+      const count = jest.fn().mockResolvedValue(45);
+      const service = new HotelsService(
+        { hotelProperty: { findMany, count } } as any,
+        {} as any,
+      );
+
+      const filtered = await service.findPublic({
+        page: 2,
+        limit: 20,
+        amenity: 'piscine',
+      } as any);
+      expect(filtered.meta).toMatchObject({ total: 25, totalPages: 2 });
+      expect(filtered.data.map((item: any) => item.id)).toEqual([
+        'hotel-40',
+        'hotel-41',
+        'hotel-42',
+        'hotel-43',
+        'hotel-44',
+      ]);
+      expect(findMany.mock.calls[0][0].skip).toBeUndefined();
+      expect(count).not.toHaveBeenCalled();
+
+      // Without a filter the database paginates.
+      await service.findPublic({ page: 2, limit: 20 } as any);
+      expect(findMany.mock.calls[1][0]).toMatchObject({ skip: 20, take: 20 });
+      expect(count).toHaveBeenCalledTimes(1);
+    });
   });
 });

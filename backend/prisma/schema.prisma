@@ -377,6 +377,9 @@ model HotelRoom {
   restrictions HotelRestriction[]
   reservationRequests HotelReservationRequest[]
   stockAllocations HotelStockAllocation[]
+  icalExportToken String? @unique
+  icalImports HotelIcalImport[]
+  externalBlocks HotelExternalBlock[]
 
   @@index([propertyId, status])
 }
@@ -445,6 +448,7 @@ model HotelReservationRequest {
   updatedAt   DateTime      @updatedAt
   allocations HotelStockAllocation[]
   events      HotelReservationEvent[]
+  channelEvents HotelChannelEvent[]
 
   @@index([propertyId, status, createdAt])
   @@index([roomId, checkIn, checkOut])
@@ -461,6 +465,9 @@ model HotelStockAllocation {
   units Int
   createdAt DateTime @default(now())
   releasedAt DateTime?
+  // When the channel manager acknowledged the reservation: the availability it sends after
+  // that date already counts these units.
+  channelAckedAt DateTime?
 
   @@unique([requestId, date])
   @@index([roomId, date, releasedAt])
@@ -484,7 +491,13 @@ model HotelIntegration {
   propertyId String        @unique
   property   HotelProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   status     String        @default("inactive")
-  sourceOfTruth String     @default("external_system")
+  sourceOfTruth String     @default("pencmi")
+  // none | ical | channel_manager
+  syncMode   String        @default("none")
+  autoConfirm Boolean      @default(false)
+  hotelCode  String?       @unique
+  channelPartnerId String?
+  channelPartner HotelChannelPartner? @relation(fields: [channelPartnerId], references: [id], onDelete: SetNull)
   lastSyncAt DateTime?
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
@@ -494,6 +507,65 @@ model HotelIntegration {
   conflicts  HotelSyncConflict[]
   externalMappings HotelExternalMapping[]
   fieldMappings HotelFieldMapping[]
+  channelEvents HotelChannelEvent[]
+
+  @@index([channelPartnerId])
+}
+
+model HotelIcalImport {
+  id            String    @id @default(cuid())
+  roomId        String
+  room          HotelRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  url           String
+  unitsPerEvent Int       @default(1)
+  active        Boolean   @default(true)
+  lastAttemptAt DateTime?
+  lastSuccessAt DateTime?
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  blocks        HotelExternalBlock[]
+
+  @@index([roomId])
+  @@index([active, lastAttemptAt])
+}
+
+model HotelExternalBlock {
+  id       String          @id @default(cuid())
+  importId String
+  import   HotelIcalImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  roomId   String
+  room     HotelRoom       @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  date     DateTime
+  units    Int
+
+  @@unique([importId, date])
+  @@index([roomId, date])
+}
+
+model HotelChannelPartner {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  name       String
+  secretHash String
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  integrations HotelIntegration[]
+}
+
+model HotelChannelEvent {
+  id            String                  @id @default(cuid())
+  integrationId String
+  integration   HotelIntegration        @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  requestId     String
+  request       HotelReservationRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  // commit | cancel
+  kind          String
+  createdAt     DateTime                @default(now())
+  deliveredAt   DateTime?
+  ackedAt       DateTime?
+
+  @@unique([requestId, kind])
+  @@index([integrationId, ackedAt, createdAt])
 }
 
 model HotelApiKey {

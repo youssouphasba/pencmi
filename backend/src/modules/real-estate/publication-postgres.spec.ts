@@ -108,6 +108,52 @@ const testUrl = process.env.TEST_DATABASE_URL;
         await expect(
           service.update('another-user', id, { title: 'Forbidden' }),
         ).rejects.toThrow();
+
+        // Budget and furnished filters run in SQL against the stored listing.
+        const marker = `Recherche ${randomUUID()}`;
+        const stored = await prisma.realEstateListing.findUniqueOrThrow({
+          where: { id },
+        });
+        const publication = (stored.metadata as any).publication;
+        await prisma.realEstateListing.update({
+          where: { id },
+          data: {
+            status: 'active',
+            city: marker,
+            metadata: {
+              ...(stored.metadata as object),
+              publication: {
+                ...publication,
+                features: { ...publication.features, furnished: true },
+              },
+            },
+          },
+        });
+        const total = async (query: object) =>
+          (
+            await service.findPublic({
+              page: 1,
+              limit: 20,
+              city: marker,
+              ...query,
+            })
+          ).meta.total;
+        expect(await total({})).toBe(1);
+        expect(await total({ maxPrice: 250000, furnished: 'true' })).toBe(1);
+        expect(await total({ maxPrice: 249999 })).toBe(0);
+        await prisma.realEstateListing.update({
+          where: { id },
+          data: {
+            metadata: {
+              ...(stored.metadata as object),
+              publication: {
+                ...publication,
+                features: { ...publication.features, furnished: false },
+              },
+            },
+          },
+        });
+        expect(await total({ furnished: 'true' })).toBe(0);
       } finally {
         if (ownerUserId) {
           const assets = await prisma.fileAsset.findMany({

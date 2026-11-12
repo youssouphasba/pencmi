@@ -26,6 +26,58 @@ export class HotelSearchDto extends PaginationDto {
   @IsOptional()
   @IsString()
   propertyType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  query?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minPrice?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  maxPrice?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  stars?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  amenity?: string;
+
+  // Stay search: both dates are required together (checked in the service).
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  checkIn?: string;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  checkOut?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  guests?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  rooms?: number;
 }
 
 export class CreateHotelDto {

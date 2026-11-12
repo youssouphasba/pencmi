@@ -15,6 +15,7 @@ La modification d'une catégorie vérifie ses allocations à venir avant toute �
 ## API et validation
 
 - `POST /api/v1/hotels/:id/stay-quote` reçoit `roomId`, `checkIn`, `checkOut`, `guests`, `units`. Lecture cohérente `RepeatableRead`, sans création ni allocation.
+- `GET /api/v1/hotels` accepte `city`, `propertyType`, `query`, `minPrice`, `maxPrice`, `stars`, `amenity`, ainsi que le séjour `checkIn`, `checkOut`, `guests`, `rooms` (les deux dates ensemble). Avec un séjour, les établissements complets, fermés ou en arrêt de vente sont exclus et chaque résultat porte `stay` (`on_request` ou `unconfirmed`, nuits, chambres, total estimé). Prix, étoiles, équipements et disponibilité sont évalués sur l'ensemble de la recherche (500 établissements au plus) avant la pagination : `meta.total` reflète donc la recherche entière.
 - `POST /api/v1/hotels/:id/reservation-requests` reçoit ces champs, un UUID `requestId`, `clientName` et au moins `clientPhone` ou `clientEmail` utilisable, plus `message` facultatif.
 - `GET /api/v1/dashboard/hotels/reservations` est réservé au propriétaire authentifié disposant de `manage_hotels`, avec pagination.
 - `PATCH /api/v1/dashboard/hotels/reservations/:id/status` accepte `status` et une `note` facultative ; contrôle du propriétaire dans la transaction.
@@ -39,7 +40,7 @@ Une répétition du même état n'ajoute ni événement ni allocation. Le dashbo
 
 ## Sources externes et limites
 
-Si `sourceOfTruth=external_system`, une confirmation locale est interdite, même si l'intégration est inactive ou un stock positif existe. Aucune disponibilité externe n'est décrémentée ; aucune confirmation PMS n'est fabriquée. Les clés, mappings et journaux restent inchangés. Les demandes restent à confirmer dans le logiciel externe ; aucun nouveau connecteur de synchronisation n'est livré.
+Si une intégration **active** a `sourceOfTruth=external_system`, une confirmation locale est interdite, même avec un stock positif. Depuis la migration `20261112002000_hotel_sync`, une intégration inactive ne bloque plus rien : l'ouverture de la page d'intégration en créait une qui bloquait les confirmations. Activer une synchronisation iCal ou channel manager remet `sourceOfTruth` à `pencmi`. La synchronisation est décrite dans `hotel-sync.md`.
 
 Pas de paiement, remboursement, préautorisation, réservation instantanée, verrou temporaire client ou nouveau moteur de notifications. « Demander des informations » conserve un état de suivi ; cette étape n'envoie pas d'email automatique. Le formulaire conserve ses données après échec réseau et réutilise son UUID ; il ne conserve pas les coordonnées en stockage navigateur. Les données ne sont pas promises après fermeture/rechargement du formulaire. Une nouvelle demande après réception nécessite l'action explicite correspondante.
 
