@@ -9,6 +9,7 @@ const templates = {
   message: ['Un nouveau message sur Péncmi', 'Vous avez reçu un nouveau message.'],
   request_status: ['Votre demande a été mise à jour', 'Consultez le nouveau statut de votre demande.'],
   listing_decision: ['Une décision concerne votre annonce', 'Consultez la décision dans votre espace annonceur.'],
+  verification_decision: ['Votre vérification a été mise à jour', 'Consultez la décision dans votre espace de vérification.'],
 } as const;
 
 export async function queueBusinessEmail(tx: Prisma.TransactionClient, type: keyof typeof templates, eventId: string, userId: string, path: string) {

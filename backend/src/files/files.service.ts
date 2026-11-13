@@ -167,6 +167,83 @@ export class FilesService {
     }
   }
 
+  /** A verification document: PDF kept as sent, images re-encoded (which drops their metadata, GPS included). */
+  async prepareVerificationDocument(file: UploadedImage): Promise<UploadedImage> {
+    assertUploadStorage(this.config);
+    if (!file?.buffer?.length || file.buffer.length > MAX_PHOTO_BYTES)
+      throw new BadRequestException('Chaque document doit faire 5 Mo maximum.');
+    if (file.buffer.subarray(0, 5).toString('latin1') === '%PDF-') {
+      if (!file.buffer.subarray(-1024).toString('latin1').includes('%%EOF'))
+        throw new BadRequestException('Document PDF incomplet ou invalide.');
+      return { buffer: file.buffer, size: file.buffer.length, mimetype: 'application/pdf', originalname: 'document.pdf' };
+    }
+    try {
+      return await this.prepareListingPhoto(file);
+    } catch {
+      throw new BadRequestException('Document invalide. Formats acceptés : PDF, JPEG, PNG et WebP.');
+    }
+  }
+
+  /** Private file, readable only by its owner and, through the verification service, by an admin. */
+  async storeVerificationDocument(
+    tx: Prisma.TransactionClient,
+    ownerUserId: string,
+    requestId: string,
+    id: string,
+    file: UploadedImage,
+  ) {
+    const extension = file.mimetype === 'application/pdf' ? 'pdf' : file.mimetype.split('/')[1];
+    const storageKey = `verification/${ownerUserId}/${requestId}/${id}.${extension}`;
+    try {
+      await this.persistBinary(storageKey, file);
+      return await tx.fileAsset.create({
+        data: {
+          id,
+          ownerUserId,
+          module: PencmiModule.users,
+          visibility: FileVisibility.private,
+          mimeType: file.mimetype,
+          sizeBytes: file.size,
+          storageKey,
+          metadata: { scope: 'verification' },
+          usages: { create: { targetType: TargetType.document, targetId: requestId } },
+        },
+      });
+    } catch (error) {
+      await this.deleteBinary({ storageKey } as FileAsset).catch(() =>
+        this.logger.warn('Nettoyage d’un document de vérification à reprendre.'),
+      );
+      throw error;
+    }
+  }
+
+  async readVerificationDocument(id: string) {
+    const asset = await this.prisma.fileAsset.findFirst({
+      where: { id, deletedAt: null, module: PencmiModule.users, storageKey: { startsWith: 'verification/' } },
+    });
+    if (!asset) throw new NotFoundException('Document introuvable ou déjà supprimé.');
+    return { asset, buffer: await this.readBinary(asset) };
+  }
+
+  /** Deletes the binaries once a decision is taken: identity documents are not kept longer than needed. */
+  async purgeVerificationDocuments(ids: string[]) {
+    let failed = 0;
+    for (const id of ids) {
+      const asset = await this.prisma.fileAsset.findFirst({
+        where: { id, module: PencmiModule.users, storageKey: { startsWith: 'verification/' } },
+      });
+      if (!asset || asset.sizeBytes === 0) continue;
+      try {
+        await this.deleteBinary(asset);
+        await this.prisma.fileAsset.update({ where: { id }, data: { deletedAt: asset.deletedAt ?? new Date(), sizeBytes: 0 } });
+      } catch {
+        failed += 1;
+        this.logger.warn(`Suppression d’un document de vérification à reprendre : ${id}`);
+      }
+    }
+    return failed;
+  }
+
   createUploadPlaceholder(ownerUserId: string) {
     assertUploadStorage(this.config);
     return this.prisma.fileAsset.create({

@@ -31,6 +31,7 @@ import { StatisticsModule } from './modules/statistics/statistics.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { VerificationModule } from './modules/verification/verification.module';
 import { AuditModule } from './audit/audit.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from './auth/guards/permissions.guard';
@@ -70,6 +71,7 @@ import { PermissionsGuard } from './auth/guards/permissions.guard';
     TrackingModule,
     BillingModule,
     AdminModule,
+    VerificationModule,
     AuditModule,
   ],
   providers: [

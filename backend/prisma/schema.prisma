@@ -168,6 +168,8 @@ model User {
   updatedAt                DateTime              @updatedAt
   deletedAt                DateTime?
   professionalProfile      ProfessionalProfile?
+  verificationRequests     VerificationRequest[] @relation("VerificationRequests")
+  verificationReviews      VerificationRequest[] @relation("VerificationReviews")
   sessions                 UserSession[]
   refreshTokens            RefreshToken[]
   auditLogs                AuditLog[]            @relation("ActorAuditLogs")
@@ -925,14 +927,21 @@ model ModerationDecision {
 }
 
 model VerificationRequest {
-  id        String        @id @default(cuid())
-  userId    String
-  type      String
-  status    RequestStatus @default(new)
-  reason    String?
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  documents VerificationDocument[]
+  id               String        @id @default(cuid())
+  userId           String
+  user             User          @relation("VerificationRequests", fields: [userId], references: [id], onDelete: Cascade)
+  type             String
+  status           RequestStatus @default(new)
+  reason           String?
+  reviewedByUserId String?
+  reviewedBy       User?         @relation("VerificationReviews", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  reviewedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  documents        VerificationDocument[]
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
 }
 
 model VerificationDocument {
@@ -942,6 +951,8 @@ model VerificationDocument {
   fileId                String
   documentType          String
   createdAt             DateTime            @default(now())
+
+  @@index([verificationRequestId])
 }
 
 model SupportCategory {
