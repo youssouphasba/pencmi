@@ -5,6 +5,8 @@ export const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
+  // json in production by default: one JSON object per log line.
+  LOG_FORMAT: z.enum(["json", "text"]).optional(),
   PORT: z.coerce.number().int().positive().default(4000),
   API_PREFIX: z.string().default("api/v1"),
   DATABASE_URL: z.string().min(1),

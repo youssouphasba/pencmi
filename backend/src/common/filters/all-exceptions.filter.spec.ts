@@ -18,9 +18,9 @@ describe('server error logging', () => {
     expect(response.status).toHaveBeenCalledWith(500);
     expect(response.setHeader).toHaveBeenCalledWith('x-request-id', 'rw-123');
     expect(response.json.mock.calls[0][0].error).toMatchObject({ code: 'INTERNAL_ERROR', requestId: 'rw-123' });
-    const line = JSON.parse(log.mock.calls[0][0] as string);
+    const line = log.mock.calls[0][0] as any;
     expect(line).toMatchObject({ requestId: 'rw-123', method: 'POST', status: 500, error: { name: 'Error', code: 'P2028' } });
-    expect(log.mock.calls[0][0]).not.toContain('client@example.test');
+    expect(JSON.stringify(line)).not.toContain('client@example.test');
   });
 
   it('does not log client errors and generates an id when none is valid', () => {

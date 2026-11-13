@@ -1,4 +1,4 @@
-import { ValidationPipe, VersioningType } from "@nestjs/common";
+import { ConsoleLogger, ValidationPipe, VersioningType } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
@@ -14,6 +14,11 @@ async function bootstrap() {
     bodyParser: false,
   });
   const config = app.get(ConfigService);
+  const json =
+    (config.get<string>("LOG_FORMAT") ??
+      (config.get<string>("NODE_ENV") === "production" ? "json" : "text")) ===
+    "json";
+  app.useLogger(new ConsoleLogger({ json, colors: !json }));
   const apiPrefix = config.getOrThrow<string>("API_PREFIX");
   configureHttpSecurity(app, config);
   app.setGlobalPrefix(apiPrefix);

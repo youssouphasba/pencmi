@@ -38,15 +38,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const header = request.headers['x-request-id'] ?? request.headers['x-railway-request-id'];
     const requestId = typeof header === 'string' && REQUEST_ID.test(header) ? header : randomUUID();
     if (status >= 500) {
-      this.logger.error(
-        JSON.stringify({
-          requestId,
-          method: request.method,
-          path: request.path,
-          status,
-          error: describeServerError(exception),
-        }),
-      );
+      this.logger.error({
+        requestId,
+        method: request.method,
+        path: request.path,
+        status,
+        error: describeServerError(exception),
+      });
     }
     if (!response.headersSent) response.setHeader('x-request-id', requestId);
 

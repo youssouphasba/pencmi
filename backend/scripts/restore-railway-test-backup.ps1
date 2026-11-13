@@ -48,8 +48,11 @@ try {
   $env:BACKUP_SHA256 = $hash
   $encoded | node (Join-Path $PSScriptRoot 'test-backup-transport.cjs')
   if ($LASTEXITCODE -ne 0) { throw 'Transport de sauvegarde refusé.' }
-  $remote = 'bash -o pipefail -c "psql --no-psqlrc --tuples-only --no-align --dbname=' + $DatabaseName + ' --command=\"SELECT encode(payload, ''base64'') FROM pencmi_backup_transport.archive\" | base64 --decode | pg_restore --clean --if-exists --no-owner --no-acl --exit-on-error --dbname=' + $DatabaseName + ' && echo RESTORE_OK"'
-  $output = & $RailwayExecutable ssh --project $ProjectId --environment $EnvironmentId --service $ServiceId -- $remote
+  # railway ssh runs the joined arguments through a remote shell, and Windows PowerShell
+  # drops embedded double quotes: send the script base64-encoded, with no quote to keep.
+  $script = 'set -o pipefail; psql --no-psqlrc --tuples-only --no-align --dbname=' + $DatabaseName + ' --command="SELECT encode(payload, ''base64'') FROM pencmi_backup_transport.archive" | base64 --decode | pg_restore --clean --if-exists --no-owner --no-acl --exit-on-error --dbname=' + $DatabaseName + ' && echo RESTORE_OK'
+  $packed = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+  $output = & $RailwayExecutable ssh --project $ProjectId --environment $EnvironmentId --service $ServiceId -- echo $packed '|' base64 -d '|' bash
   if ($LASTEXITCODE -ne 0 -or !(($output -join "`n").Contains('RESTORE_OK'))) {
     throw 'Restauration non confirmée ; inspecter la base isolée, sans toucher à la production.'
   }
