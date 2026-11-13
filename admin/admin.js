@@ -571,6 +571,18 @@ async function renderAdmin() {
     }
     return;
   }
+  if (page === 'statistics') {
+    root.innerHTML = AdminLayout('<section id="admin-statistics" aria-label="Statistiques"></section>', page, 'Statistiques globales', 'Activité de la plateforme sur la période choisie.');
+    bindAdmin();
+    const target = root.querySelector('#admin-statistics');
+    try {
+      const { mountAdminStatistics } = await import('./statistics.mjs');
+      mountAdminStatistics(target);
+    } catch {
+      target.textContent = 'Impossible de charger cette page.';
+    }
+    return;
+  }
   if (page === 'users') {
     root.innerHTML = AdminLayout('<section id="admin-users" aria-label="Comptes"></section>', page, 'Utilisateurs', 'Comptes présents sur la plateforme.');
     bindAdmin();

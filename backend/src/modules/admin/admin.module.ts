@@ -6,10 +6,11 @@ import { AdminListingsController } from './admin-listings.controller';
 import { AdminListingsService } from './admin-listings.service';
 import { AdminUsersController } from './admin-users.controller';
 import { AdminUsersService } from './admin-users.service';
+import { AdminStatisticsController, AdminStatisticsService } from './admin-statistics';
 
 @Module({
   imports: [FilesModule],
-  controllers: [AdminController, AdminListingsController, AdminUsersController],
-  providers: [AdminService, AdminListingsService, AdminUsersService],
+  controllers: [AdminController, AdminListingsController, AdminUsersController, AdminStatisticsController],
+  providers: [AdminService, AdminListingsService, AdminUsersService, AdminStatisticsService],
 })
 export class AdminModule {}
