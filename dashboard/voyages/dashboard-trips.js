@@ -3,6 +3,7 @@ const tripDashboardRoutes = {
   listings: "/dashboard/voyages/trajets",
   messages: "/dashboard/voyages/messages",
   reservations: "/dashboard/voyages/reservations",
+  boarding: "/dashboard/voyages/embarquement",
   contacts: "/dashboard/voyages/contacts",
   statistics: "/dashboard/voyages/statistiques",
   contactSettings: "/dashboard/voyages/contact-settings",
@@ -103,6 +104,7 @@ function tripDashboardRouteHref(path) {
     [tripDashboardRoutes.listings]: `${prefix}trajets/`,
     [tripDashboardRoutes.messages]: `${prefix}messages/`,
     [tripDashboardRoutes.reservations]: `${prefix}reservations/`,
+    [tripDashboardRoutes.boarding]: `${prefix}embarquement/`,
     [tripDashboardRoutes.contacts]: `${prefix}contacts/`,
     [tripDashboardRoutes.statistics]: `${prefix}statistiques/`,
     [tripDashboardRoutes.contactSettings]: `${prefix}contact-settings/`,
@@ -124,6 +126,7 @@ function TripsDashboardSidebar(currentPage) {
     ["Trajets", tripDashboardRoutes.listings, "listings", listingCount],
     ["Messages", tripDashboardRoutes.messages, "messages"],
     ["Demandes de place", tripDashboardRoutes.reservations, "reservations", reservationCount],
+    ["Embarquement", tripDashboardRoutes.boarding, "boarding"],
     ["Contacts", tripDashboardRoutes.contacts, "contacts", String(tripDashboardData.contacts.length)],
     ["Statistiques", tripDashboardRoutes.statistics, "statistics"],
     ["Moyens de contact", tripDashboardRoutes.contactSettings, "contactSettings"],
@@ -195,6 +198,10 @@ function TripMessagesPage() {
   return TripsDashboardLayout(`${DashboardHeader('Messages voyages','Vos conversations liées aux trajets.')}<div id="pencmi-inbox"></div>`, 'messages');
 }
 
+function TripBoardingPage() {
+  return TripsDashboardLayout(`${DashboardHeader("Embarquement", "Liste des passagers d’un départ et contrôle des billets.")}<div id="pencmi-boarding"></div>`, "boarding");
+}
+
 function TripReservationsPage() {
   return TripsDashboardLayout(`
     ${DashboardHeader("Demandes de place", "Gérez les demandes de réservation reçues sur vos trajets.")}
@@ -258,6 +265,7 @@ function renderDashboard() {
     listings: TripListingsDashboardPage,
     messages: TripMessagesPage,
     reservations: TripReservationsPage,
+    boarding: TripBoardingPage,
     contacts: TripContactsPage,
     statistics: TripStatisticsPage,
     contactSettings: TripContactSettingsPage
@@ -316,6 +324,8 @@ function mountTripMessaging() {
   if (contacts) void import("../../messaging/contacts-panel.mjs").then(({ mountContacts }) => mountContacts(contacts, { module: "trips", messagesHref: tripDashboardRouteHref(tripDashboardRoutes.messages) }));
   const stats = document.querySelector("#pencmi-stats");
   if (stats) void import("../stats-panel.mjs").then(({ mountStats }) => mountStats(stats, { module: "trips" }));
+  const boarding = document.querySelector("#pencmi-boarding");
+  if (boarding) void import("./boarding.mjs").then(({ mountBoarding }) => mountBoarding(boarding, { trips: tripDashboardData.trips }));
 }
 
 void loadTripDashboardData();

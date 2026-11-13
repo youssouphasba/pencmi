@@ -756,6 +756,11 @@ model TripSeatRequest {
   luggage   Boolean?
   message   String?
   status    RequestStatus @default(new)
+  /** Given when the seats are confirmed; checked at boarding. */
+  ticketCode String?      @unique
+  /** null until boarding: boarded | no_show */
+  boardingStatus String?
+  boardedAt DateTime?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 

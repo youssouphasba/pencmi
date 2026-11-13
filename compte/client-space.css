@@ -13,6 +13,10 @@
 .cr-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px 20px; }
 .cr-facts dt { color: var(--muted, #62758b); font-size: 14px; }
 .cr-facts dd { margin: 4px 0 0; }
+.cr-ticket { margin: 14px 0; padding: 14px 16px; border: 2px dashed var(--blue, #1d4f91); border-radius: 12px; background: #f7faff; }
+.cr-ticket h3 { margin: 0 0 6px; }
+.cr-ticket-code { margin: 4px 0; font: 700 1.6rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; overflow-wrap: anywhere; }
+@media print { body * { visibility: hidden; } .cr-ticket, .cr-ticket * { visibility: visible; } .cr-ticket { position: absolute; inset: 0 auto auto 0; } .cr-ticket button { display: none; } }
 #pencmi-client-requests { display: grid; gap: 16px; min-width: 0; }
 .cr-request .client-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 125px), 1fr)); }
 .client-shortcuts.cr-shortcuts { grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); }

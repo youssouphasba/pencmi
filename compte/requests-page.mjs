@@ -139,6 +139,25 @@ function cancelPanel(request, onCancelled) {
   return panel;
 }
 
+const boardingLabels = { boarded: 'Embarqué', no_show: 'Absent au départ' };
+
+/** Confirmed seats come with a ticket code that the carrier checks at boarding. */
+function ticketView(request, full) {
+  const ticket = request.details?.ticket;
+  if (request.type !== 'trip' || !ticket?.code) return null;
+  const code = `${ticket.code.slice(0, 5)}-${ticket.code.slice(5)}`;
+  return el('section', { class: 'cr-ticket', 'aria-label': 'Billet' },
+    el('h3', { text: 'Votre billet' }),
+    el('p', { class: 'cr-ticket-code', text: code }),
+    el('p', { text: [
+      request.details.departureCity && request.details.arrivalCity ? `${request.details.departureCity} → ${request.details.arrivalCity}` : null,
+      request.details.departureAt ? `départ ${formatDateTime(request.details.departureAt)}` : null,
+      request.details.allocatedSeats ? `${request.details.allocatedSeats} place(s)` : null,
+    ].filter(Boolean).join(' · ') }),
+    ticket.boardingStatus ? el('p', { class: 'client-status-badge', text: boardingLabels[ticket.boardingStatus] || ticket.boardingStatus }) : el('p', { class: 'pm-muted', text: 'Présentez ce code au transporteur à l’embarquement.' }),
+    full ? el('button', { class: 'btn btn-light', type: 'button', text: 'Imprimer le billet', onClick: () => window.print() }) : null);
+}
+
 function card(request, full, onCancelled) {
   return el(
     'article',
@@ -157,6 +176,7 @@ function card(request, full, onCancelled) {
       text: `Envoyée le ${formatDateTime(request.createdAt)}`,
     }),
     facts(request),
+    ticketView(request, full),
     full
       ? el(
           'section',

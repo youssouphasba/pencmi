@@ -80,3 +80,11 @@ Un correctif frontend complémentaire restitue le véritable message d'erreur de
 | prisma 6.19.3 et @prisma/config 6.19.3 | élevée | Prisma 7.10.1, majeure | Dépendance transitive deepmerge-ts ; migration Prisma majeure à préparer séparément |
 
 Les quatre correctifs non majeurs sont disponibles mais n'ont pas été installés ni validés dans ce lot. L'exposition dépend des chemins utilisés et de la configuration du proxy ; les alertes ne prouvent pas une exploitation mais restent des risques ouverts. Ne pas lancer `npm audit fix --force` en production.
+
+## Billets et embarquement
+
+À l'acceptation d'une demande de places, un code de billet de 10 caractères est attribué (`TripSeatRequest.ticketCode`, unique, alphabet sans 0/O ni 1/I). Les places confirmées avant cette fonctionnalité reçoivent un code par la migration `20261113006000_trip_tickets`. Le client voit son billet (code, trajet, départ, places, statut d'embarquement) dans son espace et peut l'imprimer ; un billet annulé n'est plus affiché.
+
+Le transporteur ouvre `/dashboard/voyages/embarquement`, choisit le trajet et le départ, puis :
+- `GET /dashboard/voyages/:id/occurrences/:occurrenceId/manifest` : passagers confirmés, places, bagages, code, statut ; totaux embarqués et absents.
+- `POST /dashboard/voyages/:id/occurrences/:occurrenceId/boarding` `{ ticketCode | requestId, status: boarded | no_show | pending }` : contrôle par code (espaces, tirets et casse ignorés) ou depuis la liste. Refusé pour un billet d'un autre départ, annulé ou déjà utilisé, pour un départ annulé, et hors de la fenêtre d'embarquement (24 h avant le départ à 12 h après). Chaque action est journalisée (`trip.boarding.*`).

@@ -1,6 +1,7 @@
 import { notifyClientRequestStatus } from '../../common/utils/client-request-notification';
 import { lockRequestAccounts } from '../../common/utils/request-account-lock';
 import { CLIENT_REQUEST_TRANSACTION } from '../../common/utils/client-request-retry';
+import { newTicketCode } from './trip-boarding';
 import {
   BadRequestException,
   ConflictException,
@@ -343,7 +344,11 @@ export class TripOccurrencesService {
         throw new ConflictException("Le départ n’a pas encore eu lieu.");
       const updated = await tx.tripSeatRequest.update({
         where: { id },
-        data: { status: dto.status, allocatedSeats: allocated },
+        data: {
+          status: dto.status,
+          allocatedSeats: allocated,
+          ...(dto.status === "accepted" && !request.ticketCode ? { ticketCode: newTicketCode() } : {}),
+        },
         include: { trip: true, occurrence: true },
       });
       await notifyClientRequestStatus(tx, 'trip', request, dto.status);

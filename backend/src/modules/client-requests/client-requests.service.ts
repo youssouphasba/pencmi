@@ -285,6 +285,8 @@ export class ClientRequestsService {
             allocatedSeats: true,
             quotedPricePerSeat: true,
             luggage: true,
+            ticketCode: true,
+            boardingStatus: true,
           },
         });
     }
@@ -342,6 +344,11 @@ export class ClientRequestsService {
                   allocatedSeats: record.allocatedSeats,
                   quotedPricePerSeat: record.quotedPricePerSeat,
                   luggage: record.luggage,
+                  // The ticket only exists for confirmed seats: a cancelled one is no longer valid.
+                  ticket:
+                    ['accepted', 'completed'].includes(row.status) && record.ticketCode
+                      ? { code: record.ticketCode, boardingStatus: record.boardingStatus ?? null }
+                      : null,
                 };
     const confirmed = row.status === 'accepted';
     const canCancel =
