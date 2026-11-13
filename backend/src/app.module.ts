@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AssistantModule } from './modules/assistant/assistant.module';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
@@ -45,6 +46,7 @@ import { PermissionsGuard } from './auth/guards/permissions.guard';
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
     HealthModule,
+    AssistantModule,
     AuthModule,
     UsersModule,
     ProfessionalProfilesModule,
