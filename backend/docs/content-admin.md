@@ -12,3 +12,10 @@ API publique : `GET /api/v1/content/pages/:slug` (null si non publiée), `GET /a
 API admin (`manage_content`) : `GET /admin/content/pages`, `GET|PUT /admin/content/pages/:slug`, `GET /admin/content/pages/:slug/versions/:id`, `GET|POST /admin/content/faq`, `PATCH|DELETE /admin/content/faq/:id`.
 
 Avant l'ouverture : compléter les mentions légales (raison sociale, adresse, NINEA/RCCM, responsable de publication) depuis l'admin ; le texte par défaut l'annonce par un avertissement.
+
+## SEO et GEO
+
+- `/admin/seo/pages` : pour chaque page publique, remplacer le titre (10 à 70 caractères) et la description (50 à 170), ou retirer la page des moteurs de recherche. `seo/seo.js` applique le réglage après le texte intégré ; supprimer le réglage rétablit ce dernier. API : `GET /api/v1/seo/meta?path=` (public, chemins publics seulement), `GET|PUT /api/v1/admin/seo/meta`, `DELETE /api/v1/admin/seo/meta/:id` (`manage_content`, journalisé).
+- Correction du 13 novembre 2026 : les entrées SEO intégrées n'avaient pas de chemin, et le script remplaçait l'URL canonique de chaque page publique par celle de l'accueil. Chaque page garde désormais sa propre URL canonique.
+- GEO : `llms.txt`, `ai.txt` et `about-pencmi.txt` sont des fichiers publiés avec le site ; l'admin GEO les affiche et renvoie vers la FAQ et les pages SEO, qui sont les contenus modifiables.
+- Les redirections 301 dépendent de l'hébergement du site public ; elles seront configurées avec le domaine.

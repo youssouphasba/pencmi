@@ -271,12 +271,8 @@ Sitemap: https://www.pencmi.com/sitemap.xml`,
   senegalRegions: ["Dakar", "Diourbel", "Fatick", "Kaffrine", "Kaolack", "Kédougou", "Kolda", "Louga", "Matam", "Saint-Louis", "Sédhiou", "Tambacounda", "Thiès", "Ziguinchor"],
   adminCards: [
     ["Pages SEO", "/admin/seo/pages"],
-    ["Templates SEO", "/admin/seo/templates"],
-    ["Localisations", "/admin/seo/localisations"],
     ["Sitemaps", "/admin/seo/sitemaps"],
-    ["Redirections", "/admin/seo/redirects"],
-    ["Robots.txt", "/admin/seo/robots"],
-    ["Schema.org", "/admin/seo/schema"]
+    ["Robots.txt", "/admin/seo/robots"]
   ],
   routeLabels: {
     "/": "Accueil",
@@ -579,7 +575,9 @@ function resolveSeoMeta(path = getCurrentSeoPath()) {
       schemaType: "WebPage"
     };
   }
-  return editableSeoDefaults.publicMeta[path] || {
+  // The built-in entries carry no path: without it the canonical URL pointed to the home page.
+  if (editableSeoDefaults.publicMeta[path]) return { ...editableSeoDefaults.publicMeta[path], path };
+  return {
     id: `public-${normalizeSlug(path)}`,
     module: "home",
     pageType: "category",
@@ -687,12 +685,16 @@ function AdminSeoLayout(content, currentPage = "dashboard", title = "SEO Péncmi
 }
 
 function AdminSeoDashboard() {
-  const cards = editableSeoDefaults.adminCards.map(([label, href]) => `<article class="seo-preview-card"><h2>${seoEscape(label)}</h2><p>Structure prête, aucune donnée réelle chargée.</p><a class="ds-button ds-button-outline" href="${adminSeoRouteHref(href)}">Gérer</a></article>`).join("");
-  return AdminSeoLayout(`<section class="seo-admin-grid">${cards}</section>${SeoAuditIssueList(detectSeoIssues())}`, "dashboard", "Audit SEO", "Suivez les pages indexables, noindex, titres, descriptions, canonical, sitemaps et schema.");
+  const cards = [
+    ["Pages SEO", "Remplacer le titre et la description d’une page publique, ou la retirer des moteurs de recherche.", "/admin/seo/pages"],
+    ["Sitemaps", "Fichiers sitemap publiés avec le site.", "/admin/seo/sitemaps"],
+    ["Robots.txt", "Règles d’indexation : les espaces privés ne sont jamais indexés.", "/admin/seo/robots"],
+  ].map(([label, text, href]) => `<article class="seo-preview-card"><h2>${seoEscape(label)}</h2><p>${seoEscape(text)}</p><a class="ds-button ds-button-outline" href="${adminSeoRouteHref(href)}">Ouvrir</a></article>`).join("");
+  return AdminSeoLayout(`<section class="seo-admin-grid">${cards}</section>${SeoAuditIssueList(detectSeoIssues())}`, "dashboard", "SEO", "Titres, descriptions, indexation et fichiers publiés.");
 }
 
 function AdminSeoPagesPage() {
-  return AdminSeoLayout(SeoAuditIssueList(detectSeoIssues(Object.values(editableSeoDefaults.publicMeta))), "pages", "Pages SEO", "Gérez les titres, descriptions, H1, canonical et indexation des pages publiques.");
+  return AdminSeoLayout(SeoAuditIssueList(detectSeoIssues(Object.values(editableSeoDefaults.publicMeta))), "pages", "Pages SEO", "Remplacez le titre et la description des pages publiques, ou retirez-en une des moteurs de recherche.");
 }
 
 function AdminSeoTemplatesPage() {
@@ -710,7 +712,7 @@ function AdminSeoLocationsPage() {
 
 function AdminSeoSitemapsPage() {
   const entries = buildSitemapEntries();
-  return AdminSeoLayout(`<section class="seo-link-panel"><h2>Sitemaps prévus</h2><div class="seo-link-grid">${["/sitemap.xml", "/sitemaps/pages.xml", "/sitemaps/immobilier.xml", "/sitemaps/hotels.xml", "/sitemaps/voitures.xml", "/sitemaps/voyages.xml", "/sitemaps/localisations.xml", "/sitemaps/aide.xml", "/sitemaps/annonces.xml"].map((href) => `<a href="${href}">${href}</a>`).join("")}</div></section><section class="seo-preview-card"><h2>Entrées réelles actuelles</h2><p>${entries.length}</p></section>`, "sitemaps", "Sitemaps", "Préparez la génération future sans créer de fausses URLs.");
+  return AdminSeoLayout(`<section class="seo-link-panel"><h2>Sitemaps publiés</h2><div class="seo-link-grid">${["/sitemap.xml", "/sitemaps/pages.xml", "/sitemaps/immobilier.xml", "/sitemaps/hotels.xml", "/sitemaps/voitures.xml", "/sitemaps/voyages.xml", "/sitemaps/localisations.xml", "/sitemaps/aide.xml", "/sitemaps/annonces.xml"].map((href) => `<a href="${href}">${href}</a>`).join("")}</div></section><section class="seo-preview-card"><h2>Entrées réelles actuelles</h2><p>${entries.length}</p></section>`, "sitemaps", "Sitemaps", "Fichiers publiés avec le site.");
 }
 
 function AdminSeoRedirectsPage() {
@@ -718,7 +720,7 @@ function AdminSeoRedirectsPage() {
 }
 
 function AdminSeoRobotsPage() {
-  return AdminSeoLayout(`<section class="seo-preview-card"><h2>robots.txt prévu</h2><pre>${seoEscape(editableSeoDefaults.robotsText)}</pre></section>`, "robots", "Robots.txt", "Prévisualisez les règles d’indexation publiques et privées.");
+  return AdminSeoLayout(`<section class="seo-preview-card"><h2>robots.txt</h2><pre>${seoEscape(editableSeoDefaults.robotsText)}</pre></section>`, "robots", "Robots.txt", "Prévisualisez les règles d’indexation publiques et privées.");
 }
 
 function AdminSeoSchemaPage() {
@@ -732,21 +734,51 @@ function renderSeoAdminPage() {
   const pages = {
     dashboard: AdminSeoDashboard,
     pages: AdminSeoPagesPage,
-    templates: AdminSeoTemplatesPage,
-    templateEditor: AdminSeoTemplateEditor,
-    localisations: AdminSeoLocationsPage,
+    templates: AdminSeoDashboard,
+    templateEditor: AdminSeoDashboard,
+    localisations: AdminSeoDashboard,
     sitemaps: AdminSeoSitemapsPage,
-    redirects: AdminSeoRedirectsPage,
+    redirects: AdminSeoDashboard,
     robots: AdminSeoRobotsPage,
-    schema: AdminSeoSchemaPage
+    schema: AdminSeoDashboard
   };
   root.innerHTML = (pages[page] || AdminSeoDashboard)();
+  if (page === "pages") {
+    const target = document.createElement("section");
+    root.querySelector("main")?.append(target);
+    void import("./seo-admin.mjs").then(({ mountSeoOverrides }) => mountSeoOverrides(target, editableSeoDefaults.publicMeta));
+  }
+}
+
+function seoApiBaseUrl() {
+  const configured = window.PencmiConfig?.apiBaseUrl || window.PencmiRuntimeConfig?.apiBaseUrl || window.PencmiApiBaseUrl;
+  if (configured) return String(configured).replace(/\/+$/, "");
+  if (window.location.protocol === "file:" || /^(localhost|127\.|192\.168\.|10\.)/.test(window.location.hostname)) return "";
+  return `${window.location.origin}/api/v1`;
+}
+
+/** An admin can replace the title and description of a public page, or remove it from search engines. */
+async function applySeoOverride(meta) {
+  const base = seoApiBaseUrl();
+  // Built-in entries do not all carry their path.
+  const path = meta.path || getCurrentSeoPath();
+  if (!base || isPrivateSeoPath(path) || !/^\/[a-z0-9\-/]{0,200}$/.test(path)) return;
+  try {
+    const response = await fetch(`${base}/seo/meta?path=${encodeURIComponent(path)}`);
+    if (!response.ok) return;
+    const override = (await response.json())?.data;
+    if (!override?.title || !override?.description) return;
+    applySeoHead({ ...meta, title: override.title, description: override.description, indexing: override.noindex ? "noindex" : meta.indexing });
+  } catch {
+    // The built-in title stays.
+  }
 }
 
 function applySeoForCurrentPage() {
   if (typeof document === "undefined") return;
   const meta = resolveSeoMeta();
   applySeoHead(meta);
+  void applySeoOverride(meta);
 }
 
 document.addEventListener("DOMContentLoaded", () => {

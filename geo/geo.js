@@ -84,12 +84,8 @@ const editableGeoDefaults = {
     ["Sécurité annonces Sénégal", "/guide/securite-annonces-senegal", "security"]
   ],
   adminCards: [
-    ["Questions GEO", "/admin/geo/questions"],
-    ["Réponses GEO", "/admin/geo/answers"],
-    ["Entités", "/admin/geo/entities"],
-    ["Templates", "/admin/geo/templates"],
-    ["Fichiers IA", "/admin/geo/files"],
-    ["Audit GEO", "/admin/geo/audit"]
+    ["Vue d’ensemble", "/admin/geo"],
+    ["Fichiers IA", "/admin/geo/files"]
   ],
   publicFiles: [
     "/llms.txt",
@@ -312,8 +308,12 @@ function AdminGeoLayout(content, currentPage = "dashboard", title = "GEO Péncmi
 }
 
 function AdminGeoDashboard() {
-  const cards = editableGeoDefaults.adminCards.map(([label, href]) => `<article class="geo-admin-card"><h2>${geoEscape(label)}</h2><p>0 élément réel chargé. Structure prête pour l’administration.</p><a class="ds-button ds-button-outline" href="${adminGeoRouteHref(href)}">Gérer</a></article>`).join("");
-  return AdminGeoLayout(`<section class="geo-admin-grid">${cards}</section>${GeoAuditIssueList()}`, "dashboard", "Vue d’ensemble GEO", "Suivez questions, entités, guides, fichiers IA et contenus à compléter.");
+  const cards = [
+    ["Fichiers pour les moteurs IA", "llms.txt, ai.txt et about-pencmi.txt sont publiés à la racine du site. Ils décrivent Péncmi, ses quatre univers et ses pages importantes, sans aucune donnée privée.", "/admin/geo/files", "Voir les fichiers"],
+    ["Questions fréquentes", "Les questions et réponses du centre d’aide servent aussi aux assistants IA. Elles se modifient dans l’administration des contenus.", "/admin/content/faq", "Gérer la FAQ"],
+    ["Pages et descriptions", "Titres et descriptions des pages publiques, repris par les moteurs de recherche et les assistants IA.", "/admin/seo/pages", "Gérer les pages SEO"],
+  ].map(([title, text, href, action]) => `<article class="geo-admin-card"><h2>${geoEscape(title)}</h2><p>${geoEscape(text)}</p><a class="ds-button ds-button-outline" href="${adminGeoRouteHref(href)}">${geoEscape(action)}</a></article>`).join("");
+  return AdminGeoLayout(`<section class="geo-admin-grid">${cards}</section>`, "dashboard", "Vue d’ensemble GEO", "Ce que les moteurs IA lisent de Péncmi, et où le modifier.");
 }
 
 function AdminGeoQuestionsPage() {
@@ -341,12 +341,8 @@ function AdminGeoTemplateEditor() {
 }
 
 function AdminGeoFilesPage() {
-  const files = [
-    GeoPublicFilePreview({ path: "/llms.txt", content: buildLlmsTxt() }),
-    GeoPublicFilePreview({ path: "/ai.txt", content: buildAiTxt() }),
-    GeoPublicFilePreview({ path: "/data/platform-summary.json", content: buildPlatformSummaryJson() })
-  ].join("");
-  return AdminGeoLayout(files, "files", "Fichiers IA", "Prévisualisez les fichiers publics utiles aux moteurs IA.");
+  const files = ["/llms.txt", "/ai.txt", "/about-pencmi.txt"].map((path) => `<article class="geo-admin-card"><h2>${geoEscape(path)}</h2><pre data-geo-file="${geoEscape(path)}">Chargement…</pre><a class="ds-button ds-button-outline" href="${geoEscape(path)}" target="_blank" rel="noopener">Ouvrir</a></article>`).join("");
+  return AdminGeoLayout(`<p>Ces fichiers sont publiés avec le site. Pour les modifier, mettez à jour le fichier correspondant à la racine du dépôt et redéployez le site.</p>${files}`, "files", "Fichiers IA", "Contenu actuellement publié.");
 }
 
 function AdminGeoAuditPage() {
@@ -359,14 +355,18 @@ function renderGeoAdminPage() {
   const page = document.body.dataset.geoAdminPage || "dashboard";
   const pages = {
     dashboard: AdminGeoDashboard,
-    questions: AdminGeoQuestionsPage,
-    answers: AdminGeoQuestionsPage,
-    entities: AdminGeoEntitiesPage,
-    templates: AdminGeoTemplatesPage,
+    questions: AdminGeoDashboard,
+    answers: AdminGeoDashboard,
+    entities: AdminGeoDashboard,
+    templates: AdminGeoDashboard,
     files: AdminGeoFilesPage,
-    audit: AdminGeoAuditPage
+    audit: AdminGeoDashboard
   };
   root.innerHTML = (pages[page] || AdminGeoDashboard)();
+  root.querySelectorAll("[data-geo-file]").forEach((pre) => {
+    const path = pre.getAttribute("data-geo-file");
+    fetch(adminGeoRouteHref(path)).then((response) => (response.ok ? response.text() : Promise.reject())).then((text) => { pre.textContent = text; }).catch(() => { pre.textContent = "Fichier introuvable sur ce site."; });
+  });
 }
 
 function renderGeoGuide() {
