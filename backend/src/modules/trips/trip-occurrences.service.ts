@@ -1,5 +1,6 @@
 import { notifyClientRequestStatus } from '../../common/utils/client-request-notification';
 import { lockRequestAccounts } from '../../common/utils/request-account-lock';
+import { CLIENT_REQUEST_TRANSACTION } from '../../common/utils/client-request-retry';
 import {
   BadRequestException,
   ConflictException,
@@ -240,7 +241,7 @@ export class TripOccurrencesService {
         status: request.status,
         occurrenceId: occurrence.id,
       };
-    });
+    }, CLIENT_REQUEST_TRANSACTION);
   }
   async updateRequest(
     ownerUserId: string,

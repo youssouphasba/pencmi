@@ -21,7 +21,7 @@ import {
   PaginationDto,
 } from '../../common/pagination/pagination.dto';
 import { PrismaService } from '../../database/prisma/prisma.service';
-import { clientRequestId, assertSameClientRequest } from '../../common/utils/client-request-retry';
+import { clientRequestId, assertSameClientRequest, CLIENT_REQUEST_TRANSACTION } from '../../common/utils/client-request-retry';
 import { notifyClientRequestStatus } from '../../common/utils/client-request-notification';
 import {
   CreateRealEstateDto,
@@ -241,7 +241,7 @@ export class RealEstateService {
         },
       });
       return request;
-    });
+    }, CLIENT_REQUEST_TRANSACTION);
   }
 
   async findMine(ownerUserId: string, dto: PaginationDto) {
