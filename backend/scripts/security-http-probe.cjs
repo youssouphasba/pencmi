@@ -35,15 +35,7 @@ async function main() {
     await check(path, 200);
   for (const path of ["/admin/users", "/dashboard/voyages/statistics"])
     await check(path, 401);
-  const partner = await fetch(
-    target.origin + "/api/hotel-partner/v1/property/nonexistent",
-    { signal: AbortSignal.timeout(15000) },
-  );
-  assert.equal(partner.status, 401);
-  results.push({
-    path: "/api/hotel-partner/v1/property/nonexistent",
-    status: 401,
-  });
+  await check("/channel-manager/hotels/nonexistent/rooms", 401);
   const allowed = await check("/health", 200, {
     headers: { Origin: "https://frontend.example.test" },
   });

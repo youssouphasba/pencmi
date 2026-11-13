@@ -8,7 +8,6 @@ if (new URLSearchParams(location.search).get('category') === 'hotel') {
     const requestId = api.publicationOperationId();
     let draft = emptyHotelDraft();
     let photos = [];
-    let external = false;
     let busy = false;
     let step = Math.max(0, Math.min(12, Math.trunc(Number(params.get('step'))) || 0));
     let message = '';
@@ -42,12 +41,12 @@ if (new URLSearchParams(location.search).get('category') === 'hotel') {
         case 0: return `<div class="option-grid">${Object.entries(catalog.types).map(([code, label]) => `<label class="choice-card"><input type="radio" name="hotelType" data-hotel-field="propertyType" value="${code}"${draft.propertyType === code ? ' checked' : ''}><span>${label}</span></label>`).join('')}</div>${errorAt('propertyType')}`;
         case 1: return `<div class="form-grid">${field('name', 'Nom de l’établissement')}${field('metadata.general.stars', 'Classement déclaré (0 à 5 étoiles)', 'number', 'min="0" max="5"')}${field('metadata.general.totalRooms', 'Nombre total de chambres déclaré', 'number', 'min="0"')}${field('metadata.general.checkInTime', 'Heure d’arrivée', 'time')}${field('metadata.general.checkOutTime', 'Heure de départ', 'time')}${textarea('description', 'Description')}</div>`;
         case 2: return `<div class="form-grid">${select('region', 'Région', Object.fromEntries((window.SENEGAL_LOCATIONS || []).map(item => [item.region, item.region])))}${field('city', 'Ville')}${field('metadata.location.district', 'Quartier')}${field('address', 'Adresse privée ou indication')}${check('metadata.location.approximate', 'Localisation approximative')}${check('metadata.location.hideExactAddress', 'Masquer l’adresse exacte')}</div>`;
-        case 3: return `${external ? '<p>Les chambres sont gérées par votre logiciel hôtelier.</p>' : ''}<fieldset${external ? ' disabled' : ''}>${errorAt('rooms')}${editorRooms()}<button class="btn btn-light" type="button" data-add-room>Ajouter une catégorie</button></fieldset>`;
-        case 4: return `<fieldset${external ? ' disabled' : ''}>${draft.rooms.map((room, i) => room.remove ? '' : periods(room, i, false)).join('') || '<p>Ajoutez une catégorie de chambres avant de définir ses tarifs.</p>'}</fieldset>`;
+        case 3: return `<fieldset>${errorAt('rooms')}${editorRooms()}<button class="btn btn-light" type="button" data-add-room>Ajouter une catégorie</button></fieldset>`;
+        case 4: return `<fieldset>${draft.rooms.map((room, i) => room.remove ? '' : periods(room, i, false)).join('') || '<p>Ajoutez une catégorie de chambres avant de définir ses tarifs.</p>'}</fieldset>`;
         case 5: return `<div class="photo-dropzone"><label class="form-field"><span>Photos JPEG, PNG ou WebP — 5 Mo maximum, 30 photos par établissement</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple data-hotel-photos></label><label class="form-field"><span>Photos de</span><select data-photo-room><option value="">L’établissement</option>${draft.rooms.filter(room => room.id && !room.remove).map(room => `<option value="${esc(room.id)}">${esc(room.name)}</option>`).join('')}</select></label><p>Quota total : 150 Mo par annonceur.</p></div><div class="hotel-photo-grid">${photos.map((photo, i) => `<figure><img ${objectUrls.get(photo.id) || !photo.managed ? `src="${esc(objectUrls.get(photo.id) || photo.url)}"` : ''} alt="Photo ${i + 1}" data-photo-preview="${esc(photo.id)}"><figcaption>${i === 0 ? 'Photo principale' : `Photo ${i + 1}`}</figcaption><div class="hotel-photo-actions"><button type="button" class="btn btn-ghost" aria-label="Déplacer avant" data-move-photo="${i}:-1"${i === 0 ? ' disabled' : ''}>←</button><button type="button" class="btn btn-ghost" aria-label="Déplacer après" data-move-photo="${i}:1"${i === photos.length - 1 ? ' disabled' : ''}>→</button><button type="button" class="btn btn-ghost" data-delete-photo="${esc(photo.id)}">Supprimer</button></div></figure>`).join('')}</div>`;
         case 6: return choices('metadata.amenities', catalog.amenities);
         case 7: return `${choices('metadata.conditions.options', catalog.conditions)}${textarea('metadata.conditions.additionalFees', 'Frais supplémentaires éventuels')}`;
-        case 8: return `<p>Les dates non renseignées restent à confirmer. Fuseau horaire : Sénégal (Africa/Dakar).</p><fieldset${external ? ' disabled' : ''}>${draft.rooms.map((room, i) => room.remove ? '' : periods(room, i, true)).join('') || '<p>Ajoutez une catégorie de chambres avant de renseigner ses disponibilités.</p>'}</fieldset>`;
+        case 8: return `<p>Les dates non renseignées restent à confirmer. Fuseau horaire : Sénégal (Africa/Dakar).</p><fieldset>${draft.rooms.map((room, i) => room.remove ? '' : periods(room, i, true)).join('') || '<p>Ajoutez une catégorie de chambres avant de renseigner ses disponibilités.</p>'}</fieldset>`;
         case 9: return `<div class="option-grid"><label class="choice-card"><input type="radio" checked name="management"><span>Manuel</span></label><label class="choice-card"><input type="radio" disabled name="management"><span>Semi-automatique — indisponible</span></label><label class="choice-card"><input type="radio" disabled name="management"><span>Automatique — indisponible</span></label></div>${check('metadata.management.showRemainingRoomsToClients', 'Afficher les quantités renseignées aux clients')}<p>Les demandes doivent être confirmées par l’établissement. Aucun stock n’est bloqué à l’envoi d’une demande.</p>`;
         case 10: return `${Object.entries(catalog.contacts).map(([key, label]) => check(`metadata.contactPreferences.${key}`, label)).join('')}<div class="form-grid">${field('metadata.contactPreferences.whatsappNumber', 'Numéro WhatsApp', 'tel')}${field('metadata.contactPreferences.phoneNumber', 'Téléphone', 'tel')}${field('metadata.contactPreferences.contactEmail', 'Email de contact', 'email')}${field('metadata.contactPreferences.notificationEmail', 'Email de notification', 'email')}</div>${errorAt('metadata.contactPreferences')}`;
         case 11: return `<div class="preview-box"><h3>${esc(draft.name || 'Nom non renseigné')}</h3><p>${esc(catalog.types[draft.propertyType])} · ${esc(draft.city)}</p><p>${esc(draft.description)}</p>${draft.rooms.filter(room => !room.remove).map(room => `<p>${esc(room.name)} · ${esc(room.capacity)} personnes · ${room.basePrice !== undefined ? `${esc(room.basePrice)} FCFA / nuit` : 'Tarif non renseigné'}</p>`).join('')}<p>${photos.length} photo(s)</p></div>`;
@@ -78,11 +77,11 @@ if (new URLSearchParams(location.search).get('category') === 'hotel') {
       });
     }
     function accept(property) {
-      id = property.id; draft = hotelFromServer(property); photos = property.photos || []; external = property.externalInventory; status = property.status; saved = true;
+      id = property.id; draft = hotelFromServer(property); photos = property.photos || []; status = property.status; saved = true;
       const url = new URL(location.href); url.searchParams.set('id', id); history.replaceState(null, '', url);
     }
     async function save() {
-      const payload = hotelPayload(draft, external);
+      const payload = hotelPayload(draft);
       const property = await api.publicationRequest(id ? `/dashboard/hotels/${encodeURIComponent(id)}` : '/dashboard/hotels', { method: id ? 'PATCH' : 'POST', body: id ? payload : { ...payload, requestId } });
       accept(property); return property;
     }

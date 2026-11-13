@@ -40,7 +40,7 @@ Une répétition du même état n'ajoute ni événement ni allocation. Le dashbo
 
 ## Sources externes et limites
 
-Si une intégration **active** a `sourceOfTruth=external_system`, une confirmation locale est interdite, même avec un stock positif. Depuis la migration `20261112002000_hotel_sync`, une intégration inactive ne bloque plus rien : l'ouverture de la page d'intégration en créait une qui bloquait les confirmations. Activer une synchronisation iCal ou channel manager remet `sourceOfTruth` à `pencmi`. La synchronisation est décrite dans `hotel-sync.md`.
+Toutes les confirmations passent par Péncmi : par l'hôtelier, ou automatiquement quand le stock synchronisé le permet (voir `hotel-sync.md`). L'ancien mode `sourceOfTruth=external_system`, qui interdisait toute confirmation, a été retiré avec l'API partenaire par établissement (`hotel-partner-security.md`).
 
 Pas de paiement, remboursement, préautorisation, réservation instantanée, verrou temporaire client ou nouveau moteur de notifications. « Demander des informations » conserve un état de suivi ; cette étape n'envoie pas d'email automatique. Le formulaire conserve ses données après échec réseau et réutilise son UUID ; il ne conserve pas les coordonnées en stockage navigateur. Les données ne sont pas promises après fermeture/rechargement du formulaire. Une nouvelle demande après réception nécessite l'action explicite correspondante.
 

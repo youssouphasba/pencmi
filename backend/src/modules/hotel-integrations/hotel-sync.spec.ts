@@ -1,6 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { queueHotelChannelEvent } from '../hotels/hotel-channel-events';
-import { hotelCanAutoConfirm, hotelConfirmedExternally, hotelStayQuote } from '../hotels/hotel-inventory';
+import { hotelCanAutoConfirm, hotelStayQuote } from '../hotels/hotel-inventory';
 import { hashChannelSecret, HotelChannelGuard } from './hotel-channel.guard';
 import {
   buildIcal,
@@ -101,8 +101,8 @@ describe('stock of a synchronised hotel', () => {
       rates: [], restrictions: [], availability: [], stockAllocations: [],
       icalImports: [], externalBlocks: [], ...extra,
     }) as any;
-  const ical = { status: 'active', syncMode: 'ical', sourceOfTruth: 'pencmi', autoConfirm: true };
-  const channel = { id: 'i', status: 'active', syncMode: 'channel_manager', sourceOfTruth: 'pencmi', autoConfirm: true };
+  const ical = { status: 'active', syncMode: 'ical', autoConfirm: true };
+  const channel = { id: 'i', status: 'active', syncMode: 'channel_manager', autoConfirm: true };
 
   it('opens the whole stock on a fresh calendar, minus the nights it blocks', () => {
     const fresh = room({
@@ -138,11 +138,6 @@ describe('stock of a synchronised hotel', () => {
       channel,
     );
     expect(before.remainingUnits).toBe(4);
-  });
-
-  it('keeps Pencmi in charge of inactive integrations', () => {
-    expect(hotelConfirmedExternally({ status: 'inactive', sourceOfTruth: 'external_system' })).toBe(false);
-    expect(hotelConfirmedExternally({ status: 'active', sourceOfTruth: 'external_system' })).toBe(true);
   });
 });
 

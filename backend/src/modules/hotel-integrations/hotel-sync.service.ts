@@ -11,6 +11,7 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { queueHotelChannelEvent } from '../hotels/hotel-channel-events';
 import {
   HOTEL_ICAL_FRESHNESS_MS,
+  MAX_HOTEL_STAY_NIGHTS,
   hotelDate,
   hotelSyncMode,
   hotelToday,
@@ -61,12 +62,22 @@ const inventoryItemSchema = z
     closed: z.boolean().optional(),
     price: z.number().int().min(0).max(100_000_000).optional(),
     currency: z.enum(['FCFA', 'XOF']).optional(),
+    stopSell: z.boolean().optional(),
+    // null lifts the restriction.
+    minStay: z.number().int().min(1).max(MAX_HOTEL_STAY_NIGHTS).nullable().optional(),
+    maxStay: z.number().int().min(1).max(MAX_HOTEL_STAY_NIGHTS).nullable().optional(),
   })
   .strict()
   .refine((item) => item.end >= item.start, { message: 'La fin précède le début.', path: ['end'] })
-  .refine((item) => item.available !== undefined || item.closed !== undefined || item.price !== undefined, {
-    message: 'Indiquez au moins available, closed ou price.',
-  });
+  .refine((item) => !item.minStay || !item.maxStay || item.minStay <= item.maxStay, {
+    message: 'Le séjour minimum dépasse le séjour maximum.',
+    path: ['maxStay'],
+  })
+  .refine(
+    (item) =>
+      [item.available, item.closed, item.price, item.stopSell, item.minStay, item.maxStay].some((value) => value !== undefined),
+    { message: 'Indiquez au moins available, closed, price, stopSell, minStay ou maxStay.' },
+  );
 const inventorySchema = z.object({ items: z.array(inventoryItemSchema).min(1).max(200) }).strict();
 const ackSchema = z.object({ eventIds: z.array(z.string().min(1).max(64)).min(1).max(CHANNEL_EVENTS_PAGE) }).strict();
 
@@ -181,7 +192,7 @@ export class HotelSyncService {
             channelPartnerId: partnerId,
             hotelCode,
             // Synchronisation keeps the confirmation on Pencmi: the hotel software is told afterwards.
-            ...(input.mode !== 'none' ? { status: 'active', sourceOfTruth: 'pencmi' } : {}),
+            ...(input.mode !== 'none' ? { status: 'active' } : {}),
           },
         });
         const entering =
@@ -457,6 +468,18 @@ export class HotelSyncService {
               where: { ...where, ratePlan: HOTEL_CHANNEL_RATE_PLAN },
               data: { price: item.price, currency: 'FCFA' },
             });
+          }
+          const restriction = {
+            ...(item.stopSell !== undefined ? { stopSell: item.stopSell } : {}),
+            ...(item.minStay !== undefined ? { minStay: item.minStay } : {}),
+            ...(item.maxStay !== undefined ? { maxStay: item.maxStay } : {}),
+          };
+          if (Object.keys(restriction).length) {
+            await tx.hotelRestriction.createMany({
+              data: range.map((date) => ({ roomId: item.roomCode, date: utcDay(date) })),
+              skipDuplicates: true,
+            });
+            await tx.hotelRestriction.updateMany({ where, data: restriction });
           }
         }
         await tx.hotelIntegration.update({ where: { id: integration.id }, data: { lastSyncAt: new Date() } });

@@ -119,6 +119,17 @@ test('admin creates a channel manager partner and sees its secret once', { skip:
     await page.addInitScript(base => { localStorage.setItem('pencmi_api_base_url', base); localStorage.setItem('pencmi_access_token', 'admin-token'); }, `${origin}/api/v1`);
     await page.route('**/api/v1/admin/hotel-channel-partners**', async route => {
       const req = route.request();
+      const path = new URL(req.url()).pathname;
+      if (path.endsWith('/webhook') && req.method() === 'PUT') {
+        Object.assign(partners[0], { webhookUrl: req.postDataJSON().url, webhookDeliveries: { waiting: 0, failed: 0 } });
+        return route.fulfill({ json: { success: true, data: { ...partners[0], webhookSecret: `whsec_${'e'.repeat(64)}` } } });
+      }
+      if (path.endsWith('/webhook/test')) {
+        partners[0].webhookDeliveries.waiting = 1;
+        return route.fulfill({ status: 201, json: { success: true, data: { id: 'd1', type: 'ping', status: 'pending' } } });
+      }
+      if (path.endsWith('/webhook/deliveries'))
+        return route.fulfill({ json: { success: true, data: [{ id: 'd1', type: 'ping', status: 'failed', attempts: 7, lastError: 'Réponse HTTP 500.', createdAt: '2030-06-01T10:00:00Z' }] } });
       if (req.method() === 'POST') {
         const body = req.postDataJSON();
         const partner = { id: 'p1', ...body, active: true, hotels: 0 };
@@ -135,6 +146,18 @@ test('admin creates a channel manager partner and sees its secret once', { skip:
     await page.waitForSelector('[role="alert"] input');
     assert.equal(await page.locator('[role="alert"] input').inputValue(), `pcmcm_${'f'.repeat(64)}`);
     assert.match(await page.locator('.hotel-sync-table').textContent(), /Acme Channel/);
+    await page.fill('form[data-action="webhook"] [name=url]', 'https://hooks.acme.example/pencmi');
+    await page.click('form[data-action="webhook"] button[type=submit]');
+    await page.waitForSelector('[role="alert"] input[aria-label="Secret de signature"]');
+    assert.equal(await page.locator('[role="alert"] input').inputValue(), `whsec_${'e'.repeat(64)}`);
+    assert.equal(await page.locator('[data-webhook-summary]').textContent(), 'hooks.acme.example');
+    await page.click('button[data-action="test-webhook"]');
+    await page.waitForFunction(() => document.querySelector('[data-webhook-summary]')?.textContent.includes('1 en attente'));
+    await page.click('button[data-action="deliveries"]');
+    await page.waitForSelector('[data-deliveries] table');
+    assert.match(await page.locator('[data-deliveries]').textContent(), /Échec définitif.*Réponse HTTP 500/s);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert.ok(overflow <= 1, `horizontal overflow ${overflow}px`);
     assert.deepEqual(errors, []);
   } finally {
     await browser?.close();

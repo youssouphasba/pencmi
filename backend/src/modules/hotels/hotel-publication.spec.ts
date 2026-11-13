@@ -173,7 +173,6 @@ describe('Hotel publication validation and public boundaries', () => {
           },
         },
       },
-      integration: { sourceOfTruth: 'external_system', status: 'inactive' },
       rooms: [
         {
           id: 'r',

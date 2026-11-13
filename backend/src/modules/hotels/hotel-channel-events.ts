@@ -26,9 +26,21 @@ export async function queueHotelChannelEvent(
     });
     if (withdrawn.count) return;
   }
-  await tx.hotelChannelEvent.upsert({
+  const event = await tx.hotelChannelEvent.upsert({
     where: { requestId_kind: { requestId, kind } },
     create: { integrationId: integration.id, requestId, kind },
     update: {},
   });
+  // Announced by webhook when the partner registered one: sent by the worker, after commit.
+  const partner = integration.channelPartnerId
+    ? await tx.hotelChannelPartner.findFirst({
+        where: { id: integration.channelPartnerId, active: true, webhookUrl: { not: null } },
+        select: { id: true },
+      })
+    : null;
+  if (partner)
+    await tx.hotelChannelWebhookDelivery.createMany({
+      data: [{ partnerId: partner.id, channelEventId: event.id, type: `reservation.${kind}`, hotelCode: integration.hotelCode ?? null }],
+      skipDuplicates: true,
+    });
 }

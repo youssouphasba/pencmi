@@ -12,9 +12,9 @@ export const escapeHotel = value => String(value ?? '').replace(/[&<>"']/g, char
 export function emptyHotelDraft() {
   return { name: '', city: '', region: '', address: '', description: '', metadata: { general: {}, location: { hideExactAddress: true }, amenities: [], conditions: { options: [] }, management: { mode: 'manual', showRemainingRoomsToClients: false }, contactPreferences: {} }, rooms: [] };
 }
-export function hotelPayload(draft, externalInventory = false) {
+export function hotelPayload(draft) {
   const { name, propertyType, city, region, address, description, metadata, rooms } = draft;
-  return { name, propertyType: propertyType || undefined, city, region, address, description, metadata, ...(externalInventory ? {} : { rooms }) };
+  return { name, propertyType: propertyType || undefined, city, region, address, description, metadata, rooms };
 }
 export function hotelFromServer(property) {
   const empty = emptyHotelDraft();

@@ -44,7 +44,7 @@ Seuls les établissements actifs et non supprimés sont retournés. La réponse 
 
 Une date absente reste non confirmée. Les périodes fermées, complètes, en maintenance ou en stop-sell sont indiquées. Une donnée externe n'est exploitable que si l'intégration est active et sa fiabilité date est encore valide. L'interface parle de demande de réservation, jamais de confirmation automatique.
 
-Les modifications verrouillent l'établissement et son intégration. Si `sourceOfTruth=external_system`, les chambres, prix, stocks et restrictions ne peuvent pas être modifiés manuellement, même pour une intégration inactive. Les champs principaux actuellement synchronisables (nom, type, ville, région) ne peuvent pas être écrasés. Tout mapping de champs externes additionnel bloque conservativement les écritures manuelles de publication jusqu'à vérification de sa configuration. Les mappings de chambres ne sont jamais supprimés par ce parcours. Clés API, journaux et guard `X-API-Key` restent inchangés.
+Les modifications verrouillent l'établissement et son intégration. Depuis le retrait de l'API partenaire par établissement (`hotel-partner-security.md`), aucun réglage externe ne bloque plus la publication manuelle.
 
 ## Limites assumées
 

@@ -1,17 +1,10 @@
 import { ConfigService } from '@nestjs/config';
-import { ExecutionContext } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaClient } from '@prisma/client';
-import { randomBytes, randomUUID, createHash } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from './prisma/prisma.service';
-import { HotelPartnerGuard } from '../modules/hotel-integrations/hotel-partner.guard';
-import {
-  HOTEL_PARTNER_PERMISSION,
-  HotelPartnerRequest,
-} from '../modules/hotel-integrations/hotel-partner-auth';
 import { AdvertiserReviewsService } from '../modules/advertiser-reviews/advertiser-reviews.service';
 import { AuditService } from '../audit/audit.service';
 import { PaginationDto } from '../common/pagination/pagination.dto';
@@ -112,64 +105,6 @@ const url = process.env.TEST_DATABASE_URL;
         });
       }
     }, 60000);
-
-    it('authenticates a scoped hotel API key and refuses it once disabled', async () => {
-      const property = await prisma.hotelProperty.findFirstOrThrow({
-        where: { deletedAt: null, integration: { is: null } },
-      });
-      const integration = await prisma.hotelIntegration.create({
-        data: { propertyId: property.id, status: 'active' },
-      });
-      const raw = `pencmi_${randomBytes(32).toString('hex')}`;
-      try {
-        const key = await prisma.hotelApiKey.create({
-          data: {
-            integrationId: integration.id,
-            name: 'Isolated migration test',
-            keyHash: createHash('sha256').update(raw).digest('hex'),
-            permissions: ['hotel.property.read'],
-          },
-        });
-        expect(key.active).toBe(true);
-        const handler = () => undefined;
-        Reflect.defineMetadata(
-          HOTEL_PARTNER_PERMISSION,
-          'hotel.property.read',
-          handler,
-        );
-        const request = {
-          headers: { 'x-api-key': raw },
-        } as unknown as HotelPartnerRequest;
-        const context = {
-          getHandler: () => handler,
-          switchToHttp: () => ({ getRequest: () => request }),
-        } as unknown as ExecutionContext;
-        const guard = new HotelPartnerGuard(
-          prisma as PrismaService,
-          new Reflector(),
-        );
-        expect(await guard.canActivate(context)).toBe(true);
-        expect(request.hotelPartner?.propertyId === property.id).toBe(true);
-        expect(
-          Boolean(
-            (
-              await prisma.hotelApiKey.findUniqueOrThrow({
-                where: { id: key.id },
-              })
-            ).lastUsedAt,
-          ),
-        ).toBe(true);
-        await prisma.hotelApiKey.update({
-          where: { id: key.id },
-          data: { active: false },
-        });
-        await expect(guard.canActivate(context)).rejects.toMatchObject({
-          status: 401,
-        });
-      } finally {
-        await prisma.hotelIntegration.delete({ where: { id: integration.id } });
-      }
-    }, 30000);
 
     it('persists advertiser reviews and exposes only published reviews', async () => {
       const advertiser = await prisma.user.findFirstOrThrow({

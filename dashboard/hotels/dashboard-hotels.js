@@ -8,7 +8,7 @@ const hotelDashboardRoutes = {
   statistics: "/dashboard/hotels/statistiques",
   contactSettings: "/dashboard/hotels/contact-settings",
   emailSettings: "/dashboard/hotels/email-settings",
-  integration: "/dashboard/hotels/integration",
+  integration: "/dashboard/hotels/integration/sync-settings",
   publish: "/publier?category=hotel"
 };
 

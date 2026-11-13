@@ -39,6 +39,7 @@ export const envSchema = z.object({
   EMAIL_VERIFICATION_ENABLED: z.enum(['true', 'false']).default('false'),
   BUSINESS_EMAILS_ENABLED: z.enum(['true', 'false']).default('false'),
   HOTEL_SYNC_PROCESSOR_ENABLED: z.enum(['true', 'false']).default('false'),
+  HOTEL_WEBHOOK_ENCRYPTION_KEY: z.preprocess(value => value === '' ? undefined : value, z.string().regex(/^[a-fA-F0-9]{64}$/).optional()),
   EMAIL_QUEUE_ENCRYPTION_KEY: z.preprocess(value => value === '' ? undefined : value, z.string().regex(/^[a-fA-F0-9]{64}$/).optional()),
   EMAIL_FROM: z.string().optional(),
   STORAGE_DRIVER: z.enum(["local", "s3", "r2"]).default("local"),

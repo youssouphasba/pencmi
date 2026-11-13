@@ -19,7 +19,6 @@ import { queueHotelChannelEvent } from './hotel-channel-events';
 import {
   activeHotelAllocations,
   hotelCanAutoConfirm,
-  hotelConfirmedExternally,
   hotelSyncRoomInclude,
   HOTEL_RESERVATION_TRANSITIONS,
   HOTEL_STOCK_MESSAGES,
@@ -275,7 +274,6 @@ export class HotelReservationsService {
           select: reservationIntegritySelect,
         });
         const autoConfirmed =
-          !hotelConfirmedExternally(property.integration) &&
           !hotelHasUnreconciledReservations(accepted, data) &&
           hotelCanAutoConfirm(property.integration, room, quote);
         if (autoConfirmed) {
@@ -550,10 +548,6 @@ export class HotelReservationsService {
           if (property.status !== 'active' || request.room.status !== 'active')
             throw new ConflictException(
               'L’établissement et la catégorie doivent être actifs avant confirmation.',
-            );
-          if (hotelConfirmedExternally(property.integration))
-            throw new ConflictException(
-              HOTEL_STOCK_MESSAGES.external_confirmation_required,
             );
           await tx.$queryRaw`SELECT "id" FROM "HotelRoom" WHERE "id" = ${request.roomId} FOR UPDATE`;
           const room = await tx.hotelRoom.findUniqueOrThrow({

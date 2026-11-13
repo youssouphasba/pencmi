@@ -26,6 +26,12 @@ const requiredArtifacts = {
     ...['HotelIntegration_hotelCode_key', 'HotelRoom_icalExportToken_key', 'HotelExternalBlock_importId_date_key', 'HotelChannelEvent_requestId_kind_key'].map(name => ['index', name]),
     ...['HotelIntegration_channelPartnerId_fkey', 'HotelExternalBlock_importId_fkey', 'HotelChannelEvent_requestId_fkey'].map(name => ['constraint', name]),
   ],
+  '20261113001000_hotel_channel_webhooks': [
+    ['table', 'HotelChannelWebhookDelivery'],
+    ...['HotelChannelPartner.webhookUrl', 'HotelChannelPartner.webhookSecret'].map(name => ['column', name]),
+    ...['HotelChannelWebhookDelivery_channelEventId_key', 'HotelChannelWebhookDelivery_status_nextAttemptAt_idx'].map(name => ['index', name]),
+    ...['HotelChannelWebhookDelivery_partnerId_fkey', 'HotelChannelWebhookDelivery_channelEventId_fkey'].map(name => ['constraint', name]),
+  ],
   '20261028010000_refresh_token_rotation': [
     ['column', 'RefreshToken.consumedAt'],
     ['column', 'RefreshToken.parentTokenId'],

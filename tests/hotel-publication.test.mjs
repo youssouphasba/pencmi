@@ -8,11 +8,10 @@ test('hotel wizard retains thirteen steps and only manual management', () => {
   assert.equal(hotelCatalog.steps.length, 13);
   assert.equal(emptyHotelDraft().metadata.management.mode, 'manual');
 });
-test('publication payload excludes server fields and external inventory', () => {
+test('publication payload excludes server fields', () => {
   const draft = { ...emptyHotelDraft(), ownerUserId: 'injected', status: 'active', rooms: [{ id: 'room' }] };
   assert.equal(hotelPayload(draft).ownerUserId, undefined);
   assert.equal(hotelPayload(draft).status, undefined);
-  assert.equal(hotelPayload(draft, true).rooms, undefined);
 });
 test('persisted hotel data and stable rooms rehydrate', () => {
   const room = { id: 'room', name: 'Double', calendar: [{ start: '2026-11-01', available: 0, status: 'maintenance' }] };

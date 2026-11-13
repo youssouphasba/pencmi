@@ -237,13 +237,37 @@ export async function mountHotelSync(root) {
 
 // ------------------------------------------------------------------ Admin page
 
+const DELIVERY_STATUS = {
+  pending: 'En attente', sending: 'En cours', retrying: 'Nouvel essai prévu', sent: 'Envoyé', failed: 'Échec définitif', skipped: 'Annulé',
+};
+
+export function webhookSummary(partner) {
+  if (!partner.webhookUrl) return 'Aucun webhook';
+  const counts = partner.webhookDeliveries || {};
+  const parts = [];
+  if (counts.waiting) parts.push(`${counts.waiting} en attente`);
+  if (counts.failed) parts.push(`${counts.failed} en échec`);
+  let host = partner.webhookUrl;
+  try { host = new URL(partner.webhookUrl).host; } catch { /* shown as is */ }
+  return parts.length ? `${host} · ${parts.join(', ')}` : host;
+}
+
+function deliveryTable(partner, deliveries) {
+  const rows = deliveries.map((item) => `<tr><td>${escape(new Date(item.createdAt).toLocaleString('fr-FR'))}</td><td><code>${escape(item.type)}</code>${item.hotelCode ? ` ${escape(item.hotelCode)}` : ''}</td>
+    <td>${escape(DELIVERY_STATUS[item.status] || item.status)}</td><td>${escape(item.attempts)}</td><td>${escape(item.lastError || (item.lastStatus ? `HTTP ${item.lastStatus}` : ''))}</td></tr>`).join('');
+  return `<section class="admin-hotel-integration-card" data-deliveries><h2>Webhooks envoyés à ${escape(partner.name)}</h2>
+    ${deliveries.length ? `<table class="hotel-sync-table"><thead><tr><th>Créé</th><th>Événement</th><th>Statut</th><th>Essais</th><th>Dernière réponse</th></tr></thead><tbody>${rows}</tbody></table>` : '<p>Aucun envoi pour l’instant.</p>'}</section>`;
+}
+
 export async function mountChannelPartners(root) {
   let secretNotice = '';
   let message = '';
+  let log = '';
   const render = (partners) => {
     root.innerHTML = `${secretNotice}${message ? `<div class="hotel-integration-notice" role="status">${escape(message)}</div>` : ''}
       <form class="admin-hotel-integration-card" data-action="create">
-        <h2>Ajouter un channel manager partenaire</h2>
+        <h2>Ajouter un partenaire</h2>
+        <p class="hotel-sync-hint">Channel manager ou éditeur de logiciel hôtelier : tous utilisent la même API partenaire.</p>
         <div class="hotel-integration-form-grid">
           <label class="hotel-integration-field"><span>Code (identifiant technique)</span><input name="code" required pattern="[a-z0-9][a-z0-9-]{1,30}" placeholder="siteminder"></label>
           <label class="hotel-integration-field"><span>Nom affiché aux hôteliers</span><input name="name" required minlength="2" maxlength="80" placeholder="SiteMinder"></label>
@@ -251,19 +275,30 @@ export async function mountChannelPartners(root) {
         <button class="btn btn-primary" type="submit">Créer et générer le secret</button>
       </form>
       <section class="admin-hotel-integration-card"><h2>Partenaires</h2>
-        ${partners.length ? `<table class="hotel-sync-table"><thead><tr><th>Nom</th><th>Code</th><th>Hôtels connectés</th><th>Statut</th><th>Actions</th></tr></thead><tbody>
+        ${partners.length ? `<table class="hotel-sync-table"><thead><tr><th>Nom</th><th>Code</th><th>Hôtels connectés</th><th>Statut</th><th>Webhook</th><th>Actions</th></tr></thead><tbody>
           ${partners.map((partner) => `<tr><td>${escape(partner.name)}</td><td><code>${escape(partner.code)}</code></td><td>${escape(partner.hotels)}</td><td>${partner.active ? 'Actif' : 'Désactivé'}</td>
+            <td><span data-webhook-summary>${escape(webhookSummary(partner))}</span>
+              <form class="hotel-sync-copy" data-action="webhook" data-id="${escape(partner.id)}"><input name="url" type="url" required placeholder="https://…" aria-label="Adresse du webhook de ${escape(partner.name)}" value="${escape(partner.webhookUrl || '')}"><button class="btn btn-light" type="submit">${partner.webhookUrl ? 'Remplacer' : 'Enregistrer'}</button></form>
+              ${partner.webhookUrl ? `<button type="button" class="btn btn-ghost" data-action="test-webhook" data-id="${escape(partner.id)}">Tester</button>
+              <button type="button" class="btn btn-ghost" data-action="remove-webhook" data-id="${escape(partner.id)}">Retirer</button>` : ''}
+              <button type="button" class="btn btn-ghost" data-action="deliveries" data-id="${escape(partner.id)}">Journal</button></td>
             <td><button type="button" class="btn btn-ghost" data-action="rotate" data-id="${escape(partner.id)}">Nouveau secret</button>
             <button type="button" class="btn btn-ghost" data-action="toggle" data-id="${escape(partner.id)}" data-active="${partner.active}">${partner.active ? 'Désactiver' : 'Réactiver'}</button></td></tr>`).join('')}
-        </tbody></table>` : '<p>Aucun channel manager partenaire pour l’instant.</p>'}
-      </section>`;
+        </tbody></table>` : '<p>Aucun partenaire pour l’instant.</p>'}
+      </section>${log}`;
   };
   const showSecret = (partner) => {
     secretNotice = `<div class="hotel-integration-notice" role="alert"><strong>Secret de ${escape(partner.name)}, affiché une seule fois.</strong>
       Transmettez-le par un canal sûr avec le code <code>${escape(partner.code)}</code> (en-têtes <code>X-Channel-Partner</code> et <code>X-Channel-Secret</code>).
       <input type="text" readonly value="${escape(partner.secret)}" aria-label="Secret"></div>`;
   };
-  const load = async () => render(await publicationRequest('/admin/hotel-channel-partners'));
+  const showWebhookSecret = (partner) => {
+    secretNotice = `<div class="hotel-integration-notice" role="alert"><strong>Secret de signature des webhooks de ${escape(partner.name)}, affiché une seule fois.</strong>
+      Il permet au partenaire de vérifier l’en-tête <code>X-Pencmi-Signature</code>. L’ancien secret ne signe plus rien.
+      <input type="text" readonly value="${escape(partner.webhookSecret)}" aria-label="Secret de signature"></div>`;
+  };
+  let partners = [];
+  const load = async () => { partners = await publicationRequest('/admin/hotel-channel-partners'); render(partners); };
   const act = async (action) => {
     try {
       await action();
@@ -274,8 +309,17 @@ export async function mountChannelPartners(root) {
   };
   root.addEventListener('submit', (event) => {
     event.preventDefault();
-    const data = new FormData(event.target);
+    const form = event.target;
+    const data = new FormData(form);
     message = '';
+    secretNotice = '';
+    if (form.dataset.action === 'webhook') {
+      const id = encodeURIComponent(form.dataset.id);
+      act(async () => showWebhookSecret(await publicationRequest(`/admin/hotel-channel-partners/${id}/webhook`, {
+        method: 'PUT', body: { url: String(data.get('url')).trim() },
+      })));
+      return;
+    }
     act(async () => showSecret(await publicationRequest('/admin/hotel-channel-partners', {
       method: 'POST', body: { code: String(data.get('code')).trim(), name: String(data.get('name')).trim() },
     })));
@@ -286,13 +330,26 @@ export async function mountChannelPartners(root) {
     message = '';
     secretNotice = '';
     const id = encodeURIComponent(button.dataset.id);
-    if (button.dataset.action === 'rotate' && window.confirm('L’ancien secret cessera immédiatement de fonctionner. Continuer ?'))
+    const action = button.dataset.action;
+    if (action === 'rotate' && window.confirm('L’ancien secret cessera immédiatement de fonctionner. Continuer ?'))
       act(async () => showSecret(await publicationRequest(`/admin/hotel-channel-partners/${id}/secret`, { method: 'POST' })));
-    if (button.dataset.action === 'toggle') {
+    if (action === 'toggle') {
       const active = button.dataset.active !== 'true';
       if (!active && !window.confirm('Les hôtels reliés à ce partenaire ne seront plus synchronisés. Continuer ?')) return;
       act(() => publicationRequest(`/admin/hotel-channel-partners/${id}`, { method: 'PATCH', body: { active } }));
     }
+    if (action === 'test-webhook')
+      act(async () => {
+        await publicationRequest(`/admin/hotel-channel-partners/${id}/webhook/test`, { method: 'POST' });
+        message = 'Notification de test mise en file. Elle part dans les secondes qui suivent : consultez le journal.';
+      });
+    if (action === 'remove-webhook' && window.confirm('Le partenaire ne sera plus prévenu des réservations ; il devra les lire lui-même. Continuer ?'))
+      act(() => publicationRequest(`/admin/hotel-channel-partners/${id}/webhook`, { method: 'DELETE' }));
+    if (action === 'deliveries')
+      act(async () => {
+        const partner = partners.find((item) => item.id === button.dataset.id) || { name: '' };
+        log = deliveryTable(partner, await publicationRequest(`/admin/hotel-channel-partners/${id}/webhook/deliveries`));
+      });
   });
   await load().catch((error) => { message = error.message; render([]); });
 }

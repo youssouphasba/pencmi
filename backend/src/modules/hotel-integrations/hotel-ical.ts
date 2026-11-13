@@ -45,28 +45,36 @@ export function isPublicAddress(address: string) {
 
 /** Only plain web links to a public host are read. */
 export function parseIcalUrl(value: string): URL {
+  return parsePublicUrl(String(value).trim().replace(/^webcals?:\/\//i, 'https://'), 'du calendrier');
+}
+
+/**
+ * A link Pencmi itself calls (calendar, webhook): a public host on a standard web port,
+ * without credentials. `label` completes the messages: "Le lien du calendrier…".
+ */
+export function parsePublicUrl(value: string, label: string, httpsOnly = false): URL {
   let url: URL;
   try {
-    url = new URL(String(value).trim().replace(/^webcals?:\/\//i, 'https://'));
+    url = new URL(String(value).trim());
   } catch {
-    throw new HotelIcalError('Lien de calendrier invalide.');
+    throw new HotelIcalError(`Le lien ${label} est invalide.`);
   }
-  if (!['https:', 'http:'].includes(url.protocol))
-    throw new HotelIcalError('Le lien du calendrier doit commencer par https://.');
+  if (!(httpsOnly ? ['https:'] : ['https:', 'http:']).includes(url.protocol))
+    throw new HotelIcalError(`Le lien ${label} doit commencer par https://.`);
   if (url.username || url.password)
-    throw new HotelIcalError('Le lien du calendrier ne doit pas contenir d’identifiants.');
+    throw new HotelIcalError(`Le lien ${label} ne doit pas contenir d’identifiants.`);
   if (url.port && !['80', '443'].includes(url.port))
-    throw new HotelIcalError('Le lien du calendrier doit utiliser un port web standard.');
+    throw new HotelIcalError(`Le lien ${label} doit utiliser un port web standard.`);
   const host = url.hostname.replace(/^\[|\]$/g, '');
   if (isIP(host) ? !isPublicAddress(host) : !host.includes('.') || /\.(local|internal|localhost)$/i.test(host) || host === 'localhost')
-    throw new HotelIcalError('Le lien du calendrier doit pointer vers un site public.');
-  if (url.toString().length > 2000) throw new HotelIcalError('Lien de calendrier trop long.');
+    throw new HotelIcalError(`Le lien ${label} doit pointer vers un site public.`);
+  if (url.toString().length > 2000) throw new HotelIcalError(`Le lien ${label} est trop long.`);
   return url;
 }
 
 // Checked at connection time, so a name cannot resolve to a public address first and a
 // private one when the request is sent.
-function safeLookup(
+export function safeLookup(
   hostname: string,
   options: any,
   callback: (error: NodeJS.ErrnoException | null, address: string | LookupAddress[], family?: number) => void,

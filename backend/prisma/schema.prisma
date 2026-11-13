@@ -549,7 +549,36 @@ model HotelChannelPartner {
   secretHash String
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
+  // Notified at each reservation event. The signing secret is encrypted (AES-256-GCM,
+  // HOTEL_WEBHOOK_ENCRYPTION_KEY): Pencmi needs it to sign.
+  webhookUrl    String?
+  webhookSecret String?
   integrations HotelIntegration[]
+  webhookDeliveries HotelChannelWebhookDelivery[]
+}
+
+model HotelChannelWebhookDelivery {
+  id             String              @id @default(cuid())
+  partnerId      String
+  partner        HotelChannelPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  // One notification per reservation event. Withdrawn with it when the event disappears.
+  channelEventId String?             @unique
+  channelEvent   HotelChannelEvent?  @relation(fields: [channelEventId], references: [id], onDelete: Cascade)
+  // reservation.commit | reservation.cancel | ping
+  type           String
+  hotelCode      String?
+  // pending | sending | retrying | sent | failed
+  status         String              @default("pending")
+  attempts       Int                 @default(0)
+  nextAttemptAt  DateTime            @default(now())
+  lockedUntil    DateTime?
+  lastStatus     Int?
+  lastError      String?
+  createdAt      DateTime            @default(now())
+  sentAt         DateTime?
+
+  @@index([status, nextAttemptAt])
+  @@index([partnerId, createdAt])
 }
 
 model HotelChannelEvent {
@@ -563,6 +592,7 @@ model HotelChannelEvent {
   createdAt     DateTime                @default(now())
   deliveredAt   DateTime?
   ackedAt       DateTime?
+  webhookDelivery HotelChannelWebhookDelivery?
 
   @@unique([requestId, kind])
   @@index([integrationId, ackedAt, createdAt])

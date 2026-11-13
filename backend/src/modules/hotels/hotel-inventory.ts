@@ -44,8 +44,6 @@ export const HOTEL_STOCK_MESSAGES = {
   stop_sell: 'Les demandes sont suspendues sur cette période.',
   stay_restriction: 'Ce séjour ne respecte pas les durées autorisées.',
   calendar_closed: 'Cette période est fermée, complète ou en maintenance.',
-  external_confirmation_required:
-    'La confirmation doit être effectuée dans le logiciel hôtelier ; elle n’est pas disponible sur Péncmi.',
   room_inventory_incomplete:
     'Le stock de cette catégorie doit être renseigné avant confirmation.',
   legacy_request:
@@ -96,13 +94,6 @@ export const hotelSyncRoomInclude = {
 export const HOTEL_ICAL_FRESHNESS_MS = 3 * 3600_000;
 export type HotelSyncMode = 'none' | 'ical' | 'channel_manager';
 
-/** Only an active integration claiming the external software confirms outside Pencmi. */
-export function hotelConfirmedExternally(integration: any) {
-  return (
-    integration?.status === 'active' &&
-    integration.sourceOfTruth === 'external_system'
-  );
-}
 export function hotelSyncMode(integration: any): HotelSyncMode {
   return integration?.status === 'active' &&
     ['ical', 'channel_manager'].includes(integration.syncMode)
@@ -217,7 +208,6 @@ export function hotelStayQuote(
       'Le nombre de voyageurs dépasse la capacité des unités demandées.',
     );
   const metadata = room.metadata || {};
-  const external = hotelConfirmedExternally(integration);
   const mode = hotelSyncMode(integration);
   // The channel manager sends the sellable stock itself: the declared total does not bound it.
   const channel = mode === 'channel_manager';
@@ -252,13 +242,12 @@ export function hotelStayQuote(
     else if (day.status !== 'open' || day.available === 0)
       reason = 'calendar_closed';
     else if (
-      !external &&
       (!Number.isInteger(day.available) ||
         day.available < 0 ||
         (!channel && day.available > metadata.totalUnits))
     ) {
       inventoryInvalid = true;
-    } else if (!external) {
+    } else {
       const stock =
         day.available -
         hotelReservedOn(room, night, day, integration) -
@@ -283,8 +272,7 @@ export function hotelStayQuote(
   }
   const unavailable = reason !== 'on_request';
   if (!unavailable) {
-    if (external) reason = 'external_confirmation_required';
-    else if (inventoryInvalid) reason = 'room_inventory_incomplete';
+    if (inventoryInvalid) reason = 'room_inventory_incomplete';
     else if (unknown) reason = 'availability_unknown';
   }
   return {
@@ -303,7 +291,6 @@ export function hotelStayQuote(
     message: HOTEL_STOCK_MESSAGES[reason],
     canConfirm: reason === 'on_request',
     remainingUnits:
-      !external &&
       !unknown &&
       !inventoryInvalid &&
       remaining !== Number.MAX_SAFE_INTEGER

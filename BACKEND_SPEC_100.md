@@ -107,7 +107,6 @@ Toutes les routes applicatives doivent être versionnées :
 
 ```txt
 /api/v1/...
-/api/hotel-partner/v1/...
 ```
 
 Aucune route métier durable ne doit être créée hors versionnement, sauf fichiers publics comme :
@@ -209,11 +208,10 @@ Le backend ne doit pas être livré en un seul bloc non vérifiable.
 - prix ;
 - disponibilités ;
 - demandes de réservation ;
-- intégration directe logiciel hôtelier ;
-- API partenaire ;
-- webhooks ;
-- conflits ;
-- logs de synchronisation.
+- synchronisation par calendrier iCal ;
+- API partenaire (channel managers et éditeurs de logiciels hôteliers) ;
+- webhooks signés ;
+- journal des envois.
 
 ### Phase 5 : immobilier, voitures, voyages
 
@@ -298,8 +296,8 @@ Règle stricte : un utilisateur ne peut accéder qu’à ses propres données, s
 Règles obligatoires :
 
 - un annonceur ne lit jamais les données d’un autre annonceur ;
-- un hôtel ne lit jamais les chambres, prix, disponibilités, clés API ou webhooks d’un autre hôtel ;
-- une clé API hôtel est liée à un hôtel ou groupe d’établissements autorisé ;
+- un hôtel ne lit jamais les chambres, prix, disponibilités ou réglages de synchronisation d’un autre hôtel ;
+- un partenaire de synchronisation ne sert que les hôtels qui l’ont choisi ;
 - un client ne lit que ses favoris, demandes, messages, notifications et signalements ;
 - l’admin peut traverser les tenants seulement via routes admin auditées ;
 - chaque requête sensible doit vérifier l’owner côté backend, pas seulement côté frontend.
@@ -387,13 +385,11 @@ Actions transactionnelles obligatoires :
 ### Intégration logiciel hôtelier
 
 - hotel_integrations
-- hotel_api_keys
-- hotel_webhooks
-- hotel_webhook_deliveries
-- hotel_sync_logs
-- hotel_sync_conflicts
-- hotel_external_mappings
-- hotel_field_mappings
+- hotel_ical_imports
+- hotel_external_blocks
+- hotel_channel_partners
+- hotel_channel_events
+- hotel_channel_webhook_deliveries
 
 ### Immobilier
 
@@ -617,17 +613,17 @@ Le modèle par défaut est une demande de réservation confirmée ensuite par l�
 
 ## 17. Intégration logiciel hôtelier
 
-Le logiciel interne hôtelier est la source de vérité principale pour :
+Révisée le 13 novembre 2026. Détail technique : `backend/docs/hotel-sync.md`.
 
-- prix ;
-- disponibilités ;
-- restrictions ;
-- stock de chambres ;
-- statuts de chambres ;
-- fermetures ;
-- stop sell.
+Un hôtel équipé d’un logiciel n’a pas à mettre Péncmi à jour à la main. Il choisit l’un de ces modes :
 
-En cas de conflit, le logiciel interne gagne par défaut.
+- `none` : saisie dans Péncmi ;
+- `ical` : Péncmi relit un calendrier par chambre et publie le sien ;
+- `channel_manager` : un partenaire envoie disponibilités, prix et restrictions, et reçoit les réservations.
+
+Une seule API d’intégration existe : l’API partenaire. Elle sert aux channel managers comme aux éditeurs de logiciels hôteliers (PMS). Un éditeur ne développe une connexion directe que pour les grandes plateformes ; pour les autres, il passe par un channel manager. Une API par établissement, avec une clé par hôtel, ferait doublon et n’est pas prévue.
+
+Le logiciel de l’hôtel fait foi pour les disponibilités, prix, fermetures et restrictions qu’il envoie. Les demandes restent confirmées dans Péncmi, par l’hôtelier ou automatiquement quand le stock synchronisé le permet ; la réservation repart alors vers le logiciel.
 
 Si la synchronisation est ancienne, échouée ou non fiable, Péncmi affiche :
 
@@ -637,46 +633,30 @@ Disponibilité à confirmer
 
 Ne jamais afficher une disponibilité comme certaine si la donnée n’est pas fiable.
 
-Endpoints partenaires :
+Endpoints partenaires, base `/api/v1/channel-manager/hotels/:hotelCode` :
 
 ```txt
-PUT /api/hotel-partner/v1/property/:externalPropertyId
-GET /api/hotel-partner/v1/property/:externalPropertyId
-PUT /api/hotel-partner/v1/property/:externalPropertyId/rooms/:externalRoomId
-GET /api/hotel-partner/v1/property/:externalPropertyId/rooms
-PATCH /api/hotel-partner/v1/property/:externalPropertyId/rooms/:externalRoomId/status
-POST /api/hotel-partner/v1/rates
-POST /api/hotel-partner/v1/rates/bulk
-POST /api/hotel-partner/v1/availability
-POST /api/hotel-partner/v1/availability/bulk
-POST /api/hotel-partner/v1/restrictions
-POST /api/hotel-partner/v1/restrictions/bulk
-GET /api/hotel-partner/v1/reservation-requests
-PATCH /api/hotel-partner/v1/reservation-requests/:requestId/status
-GET /api/hotel-partner/v1/messages
-POST /api/hotel-partner/v1/messages/:conversationId/reply
-GET /api/hotel-partner/v1/events
-POST /api/hotel-partner/v1/events/:eventId/acknowledge
+GET  /rooms
+POST /inventory            disponibilités, fermetures, prix, stop sell, séjour minimum et maximum
+GET  /reservations         réservations et annulations non acquittées
+POST /reservations/ack
 ```
 
-Clés API hôtel :
+Identifiants partenaire :
 
-- clé complète visible une seule fois ;
-- clé stockée hashée ;
-- clé masquée ensuite ;
-- permissions strictes ;
-- révocation ;
-- rotation ;
-- logs d’usage ;
+- un code et un secret par partenaire, valables pour tous les hôtels qui l’ont choisi ;
+- secret visible une seule fois, stocké haché ;
+- régénération et désactivation par un admin, auditées ;
 - rate limiting ;
-- audit.
+- un hôtel n’est servi qu’au partenaire qu’il a sélectionné.
 
-Webhooks hôtels sortants :
+Webhooks sortants vers le partenaire :
 
-- signature HMAC ;
+- notification de chaque réservation et annulation, sans donnée client ;
+- signature HMAC, secret conservé chiffré ;
 - retry automatique ;
-- logs de livraison ;
-- statut pending, sent, failed, retrying ;
+- journal des envois ;
+- statut pending, sending, retrying, sent, failed, skipped ;
 - envoi via worker ;
 - idempotence ;
 - contrôleurs non bloquants.
@@ -833,7 +813,7 @@ Actions sensibles :
 - supprimer contenu ;
 - modifier contenu légal ;
 - suspendre utilisateur ;
-- révoquer clé API ;
+- régénérer ou désactiver un partenaire de synchronisation ;
 - modifier permissions ;
 - valider vérification ;
 - refuser vérification ;

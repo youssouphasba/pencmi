@@ -170,15 +170,6 @@ describe('Hotel stay and inventory rules', () => {
     data.availability[0].reliableUntil = new Date(0);
     expect(hotelStayQuote(data, stay).canConfirm).toBe(false);
   });
-  it('never confirms external stock locally', () => {
-    expect(
-      hotelStayQuote(room(), stay, { status: 'active', sourceOfTruth: 'external_system' }),
-    ).toMatchObject({
-      canConfirm: false,
-      remainingUnits: null,
-      reason: 'external_confirmation_required',
-    });
-  });
   it('rejects injected fields, nonpositive units and blank names', () => {
     const input = {
       ...stay,

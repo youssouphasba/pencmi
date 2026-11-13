@@ -20,7 +20,6 @@ import {
 import {
   activeHotelAllocations,
   assertHotelAllocatedInventory,
-  hotelConfirmedExternally,
   hotelSyncRoomInclude,
 } from './hotel-inventory';
 
@@ -108,18 +107,10 @@ export class HotelPublicationService {
     const property = await tx.hotelProperty.findFirst({
       where: { id, ownerUserId, deletedAt: null },
       include: {
-        integration: { include: { fieldMappings: true } },
         rooms: { include: hotelRoomsInclude },
       },
     });
     if (!property) throw new NotFoundException('Hébergement introuvable.');
-    if (
-      hotelConfirmedExternally(property.integration) &&
-      property.integration?.fieldMappings.length
-    )
-      throw new ConflictException(
-        'Des champs sont pilotés par une intégration externe. Les modifications manuelles nécessitent une vérification de cette configuration.',
-      );
     if (
       !['draft', 'refused', 'active', 'pending_review'].includes(
         property.status,
@@ -136,11 +127,10 @@ export class HotelPublicationService {
       where: { id, ownerUserId, deletedAt: null },
       include: {
         rooms: { include: hotelRoomsInclude },
-        integration: { select: { sourceOfTruth: true, status: true } },
       },
     });
     if (!property) throw new NotFoundException('Hébergement introuvable.');
-    const { integration, ...data } = property;
+    const data = property;
     const assets = await this.prisma.fileAsset.findMany({
       where: {
         ownerUserId,
@@ -182,7 +172,6 @@ export class HotelPublicationService {
       metadata: settings,
       rooms: property.rooms.map(hotelRoomDraft),
       photos,
-      externalInventory: hotelConfirmedExternally(integration),
     };
   }
 
@@ -232,22 +221,6 @@ export class HotelPublicationService {
     data: HotelPublication,
   ) {
     const property = await this.lock(tx, ownerUserId, id);
-    if (
-      hotelConfirmedExternally(property.integration) &&
-      data.rooms !== undefined
-    )
-      throw new ConflictException(
-        'Les chambres, tarifs et disponibilités sont gérés par le logiciel hôtelier.',
-      );
-    if (
-      hotelConfirmedExternally(property.integration) &&
-      (['name', 'propertyType', 'city', 'region'] as const).some(
-        (key) => data[key] !== undefined && data[key] !== (property[key] || ''),
-      )
-    )
-      throw new ConflictException(
-        'Les informations synchronisées doivent être modifiées dans le logiciel hôtelier.',
-      );
     const settings = hotelSettings(property.contactSettings);
     const publication = {
       ...hotelSettings(settings.publication),
@@ -268,13 +241,6 @@ export class HotelPublicationService {
       if (input.id && !existing)
         throw new NotFoundException('Chambre introuvable.');
       if (existing) await assertHotelAllocatedInventory(tx, existing, input);
-      const mapping = await tx.hotelExternalMapping.findFirst({
-        where: { internalId: roomId },
-      });
-      if (mapping)
-        throw new ConflictException(
-          'Cette chambre est liée à une intégration externe.',
-        );
       if (input.remove) {
         const dependentPhoto = await tx.fileAsset.findFirst({
           where: {

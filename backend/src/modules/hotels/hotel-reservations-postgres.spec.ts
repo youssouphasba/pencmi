@@ -314,18 +314,6 @@ const url = process.env.TEST_DATABASE_URL;
           service.create(property.id, payload('stop')),
         ).rejects.toThrow();
         await db.hotelRestriction.deleteMany({ where: { roomId: room.id } });
-        await db.hotelIntegration.create({
-          data: { propertyId: property.id, sourceOfTruth: 'external_system' },
-        });
-        const external = await service.create(property.id, payload('external'));
-        await expect(
-          service.update(owner.id, external.id, { status: 'accepted' }),
-        ).rejects.toThrow();
-        expect(
-          await db.hotelStockAllocation.count({
-            where: { requestId: external.id },
-          }),
-        ).toBe(0);
         const legacy = await db.hotelReservationRequest.create({
           data: {
             propertyId: property.id,

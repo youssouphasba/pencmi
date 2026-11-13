@@ -20,7 +20,6 @@ import {
 import { hotelRoomsInclude, hotelSettings } from './hotel-publication.service';
 import { HotelReservationsService } from './hotel-reservations.service';
 import {
-  hotelConfirmedExternally,
   hotelExternallyBlockedOn,
   hotelReservedOn,
   hotelDate,
@@ -29,6 +28,7 @@ import {
   hotelSearchStay,
   HotelStaySearch,
   hotelStayNights,
+  hotelSyncMode,
   MAX_HOTEL_SEARCH_PROPERTIES,
 } from './hotel-inventory';
 
@@ -57,7 +57,7 @@ export class HotelsService {
     };
     const include = {
       integration: {
-        select: { sourceOfTruth: true, status: true, syncMode: true, lastSyncAt: true },
+        select: { status: true, syncMode: true, lastSyncAt: true },
       },
       owner: {
         select: {
@@ -152,7 +152,7 @@ export class HotelsService {
       where: { id, status: ListingStatus.active, deletedAt: null },
       include: {
         integration: {
-          select: { sourceOfTruth: true, status: true, syncMode: true, lastSyncAt: true },
+          select: { status: true, syncMode: true, lastSyncAt: true },
         },
         rooms: { include: hotelRoomsInclude },
         owner: {
@@ -236,15 +236,16 @@ export class HotelsService {
             const restriction = room.restrictions.find(
               (item: any) => item.date.valueOf() === day.date.valueOf(),
             );
-            const external = hotelConfirmedExternally(property.integration);
+            // The channel manager sends the sellable stock: the declared total does not bound it.
+            const channel = hotelSyncMode(property.integration) === 'channel_manager';
             const remaining =
               day.available -
               hotelReservedOn(room, hotelDate(day.date), day, property.integration) -
               hotelExternallyBlockedOn(room, hotelDate(day.date));
             const reliable =
-              !external &&
-              Number.isInteger(data.totalUnits) &&
-              day.available <= data.totalUnits &&
+              (channel ||
+                (Number.isInteger(data.totalUnits) &&
+                  day.available <= data.totalUnits)) &&
               remaining >= 0 &&
               (!day.reliableUntil || day.reliableUntil > new Date());
             return {
@@ -336,7 +337,7 @@ export class HotelsService {
         orderBy: { updatedAt: 'desc' },
         include: {
           rooms: { include: hotelRoomsInclude },
-          integration: { select: { sourceOfTruth: true, status: true, syncMode: true } },
+          integration: { select: { status: true, syncMode: true } },
         },
       }),
       this.prisma.hotelProperty.count({ where }),
@@ -350,14 +351,12 @@ export class HotelsService {
             ...day,
             allocatedUnits: hotelReservedOn(room, hotelDate(day.date)),
             externallyBlockedUnits: hotelExternallyBlockedOn(room, hotelDate(day.date)),
-            remainingUnits: hotelConfirmedExternally(property.integration)
-              ? null
-              : Math.max(
-                  0,
-                  day.available -
-                    hotelReservedOn(room, hotelDate(day.date), day, property.integration) -
-                    hotelExternallyBlockedOn(room, hotelDate(day.date)),
-                ),
+            remainingUnits: Math.max(
+              0,
+              day.available -
+                hotelReservedOn(room, hotelDate(day.date), day, property.integration) -
+                hotelExternallyBlockedOn(room, hotelDate(day.date)),
+            ),
           })),
         })),
       })),

@@ -1,4 +1,4 @@
-import { RequestMethod, ValidationPipe, VersioningType } from "@nestjs/common";
+import { ValidationPipe, VersioningType } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
@@ -16,9 +16,7 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const apiPrefix = config.getOrThrow<string>("API_PREFIX");
   configureHttpSecurity(app, config);
-  app.setGlobalPrefix(apiPrefix, {
-    exclude: [{ path: "api/hotel-partner/v1/(.*)", method: RequestMethod.ALL }],
-  });
+  app.setGlobalPrefix(apiPrefix);
   app.enableVersioning({ type: VersioningType.URI });
   app.useGlobalPipes(
     new ValidationPipe({
@@ -35,10 +33,6 @@ async function bootstrap() {
     .setDescription("API backend Péncmi")
     .setVersion("1.0")
     .addBearerAuth()
-    .addApiKey(
-      { type: "apiKey", in: "header", name: "X-API-Key" },
-      "hotel-partner-key",
-    )
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup(`${apiPrefix}/docs`, app, document);

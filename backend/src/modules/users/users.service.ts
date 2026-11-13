@@ -75,7 +75,6 @@ export class UsersService {
       const now = new Date();
       const owned = { ownerUserId: id, deletedAt: null };
       const withdrawn = { status: 'deleted' as const, deletedAt: now };
-      await tx.hotelApiKey.updateMany({ where: { integration: { property: { ownerUserId: id } }, revokedAt: null }, data: { active: false, revokedAt: now } });
       await tx.hotelIntegration.updateMany({ where: { property: { ownerUserId: id } }, data: { status: 'inactive' } });
       await tx.realEstateListing.updateMany({ where: owned, data: withdrawn });
       await tx.hotelProperty.updateMany({ where: owned, data: withdrawn });

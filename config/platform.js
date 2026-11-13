@@ -133,15 +133,7 @@ const PencmiPrivateRoutes = [
   "/dashboard/immobilier",
   "/dashboard/hotels",
   "/dashboard/hotels/integration",
-  "/dashboard/hotels/integration/setup",
-  "/dashboard/hotels/integration/api",
-  "/dashboard/hotels/integration/webhooks",
   "/dashboard/hotels/integration/sync-settings",
-  "/dashboard/hotels/integration/mapping",
-  "/dashboard/hotels/integration/logs",
-  "/dashboard/hotels/integration/errors",
-  "/dashboard/hotels/integration/test",
-  "/dashboard/hotels/integration/security",
   "/dashboard/voitures",
   "/dashboard/voyages",
   "/dashboard/billing"
@@ -166,13 +158,7 @@ const PencmiAdminRoutes = [
   "/admin/monetization",
   "/admin/support",
   "/admin/hotel-integrations",
-  "/admin/hotel-integrations/partners",
-  "/admin/hotel-integrations/api-keys",
-  "/admin/hotel-integrations/webhooks",
-  "/admin/hotel-integrations/logs",
-  "/admin/hotel-integrations/errors",
-  "/admin/hotel-integrations/audit",
-  "/admin/hotel-integrations/settings"
+  "/admin/hotel-integrations/partners"
 ];
 
 const PencmiLabels = {

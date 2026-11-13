@@ -242,15 +242,6 @@ const url = process.env.TEST_DATABASE_URL;
             rooms: [{ ...double, remove: true }],
           }),
         ).rejects.toThrow();
-        await prisma.hotelIntegration.create({
-          data: { propertyId: id, sourceOfTruth: 'external_system' },
-        });
-        await expect(
-          service.update(owner.id, id, { rooms: saved.rooms }),
-        ).rejects.toThrow();
-        await expect(
-          service.update(owner.id, id, { name: 'Overwrite' }),
-        ).rejects.toThrow();
         const unchanged = await prisma.hotelRoomRate.count({
           where: { roomId: double.id },
         });
