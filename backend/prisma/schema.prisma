@@ -491,7 +491,6 @@ model HotelIntegration {
   propertyId String        @unique
   property   HotelProperty @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   status     String        @default("inactive")
-  sourceOfTruth String     @default("pencmi")
   // none | ical | channel_manager
   syncMode   String        @default("none")
   autoConfirm Boolean      @default(false)
@@ -501,12 +500,6 @@ model HotelIntegration {
   lastSyncAt DateTime?
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
-  apiKeys    HotelApiKey[]
-  webhooks   HotelWebhook[]
-  syncLogs   HotelSyncLog[]
-  conflicts  HotelSyncConflict[]
-  externalMappings HotelExternalMapping[]
-  fieldMappings HotelFieldMapping[]
   channelEvents HotelChannelEvent[]
 
   @@index([channelPartnerId])
@@ -598,95 +591,12 @@ model HotelChannelEvent {
   @@index([integrationId, ackedAt, createdAt])
 }
 
-model HotelApiKey {
-  id            String           @id @default(cuid())
-  integrationId String
-  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  name          String
-  keyHash       String           @unique
-  active        Boolean          @default(true)
-  permissions   String[]
-  revokedAt     DateTime?
-  lastUsedAt    DateTime?
-  createdAt     DateTime         @default(now())
 
-  @@index([integrationId, revokedAt])
-}
 
-model HotelWebhook {
-  id            String           @id @default(cuid())
-  integrationId String
-  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  url           String
-  secretHash    String
-  events        String[]
-  active        Boolean          @default(true)
-  createdAt     DateTime         @default(now())
-  deliveries    HotelWebhookDelivery[]
-}
 
-model HotelWebhookDelivery {
-  id          String       @id @default(cuid())
-  webhookId   String
-  webhook     HotelWebhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
-  eventId     String       @unique
-  eventType   String
-  payload     Json
-  status      String       @default("pending")
-  attempts    Int          @default(0)
-  lastError   String?
-  createdAt   DateTime     @default(now())
-  sentAt      DateTime?
-}
 
-model HotelSyncLog {
-  id            String           @id @default(cuid())
-  integrationId String
-  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  direction     String
-  entityType    String
-  status        String
-  metadata      Json?
-  createdAt     DateTime         @default(now())
 
-  @@index([integrationId, createdAt])
-}
 
-model HotelSyncConflict {
-  id            String           @id @default(cuid())
-  integrationId String
-  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  entityType    String
-  entityId      String
-  status        String           @default("open")
-  localValue    Json?
-  externalValue Json?
-  createdAt     DateTime         @default(now())
-  resolvedAt    DateTime?
-}
-
-model HotelExternalMapping {
-  id            String           @id @default(cuid())
-  integrationId String
-  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  entityType    String
-  internalId    String
-  externalId    String
-
-  @@unique([integrationId, entityType, externalId])
-  @@index([entityType, internalId])
-}
-
-model HotelFieldMapping {
-  id            String           @id @default(cuid())
-  integrationId String
-  integration   HotelIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
-  externalField String
-  internalField String
-  transform     Json?
-
-  @@unique([integrationId, externalField, internalField])
-}
 
 model RealEstateListing {
   id          String        @id @default(cuid())

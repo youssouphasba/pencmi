@@ -166,7 +166,7 @@ Codes de sortie : `0` synchronisé ; `2` migrations en attente ou dérive ; `3` 
 
 L’audit a confirmé l’historique et les absences directement sur la base vérifiée. Les 8 tests automatisés du nouvel outil sont réussis, dont la vérification des requêtes strictement en lecture seule et de l’absence de secrets dans les erreurs. Suite backend : 220 tests réussis, 2 tests PostgreSQL optionnels ignorés faute de base dédiée ; parcours navigateur immobilier inclus. Build NestJS réussi avec mémoire bornée et contrôle TypeScript. Ces tests ne remplacent pas les contrôles fonctionnels après une migration réelle.
 
-Le script `scripts/backup-railway-postgres.ps1` a été exécuté avec succès pour l’export chiffré ci-dessus. Il requiert PowerShell 7 avec DPAPI Windows et un exécutable Railway authentifié explicitement indiqué. Il ne restaure ni n’applique aucune migration.
+Le script `scripts/backup-railway-postgres.ps1` a été exécuté avec succès pour l’export chiffré ci-dessus. Il fonctionne avec Windows PowerShell 5.1 ou PowerShell 7 et DPAPI Windows et un exécutable Railway authentifié explicitement indiqué. Il ne restaure ni n’applique aucune migration.
 
 Aucun compte créé, aucune session révoquée, aucune clé générée, aucun avis ni brouillon inséré pendant ce diagnostic. Aucune des trois migrations en attente n’a été appliquée ou marquée comme appliquée.
 

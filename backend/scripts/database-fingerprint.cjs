@@ -4,7 +4,6 @@ const { createHash } = require('node:crypto');
 const quote = (value) => '"' + value.replace(/"/g, '""') + '"';
 const addedColumns = {
   TripSeatRequest: ['occurrenceId', 'allocatedSeats', 'quotedPricePerSeat'],
-  HotelApiKey: ['active'],
   RefreshToken: ['consumedAt', 'parentTokenId'],
   HotelRoom: ['metadata'],
   HotelRoomAvailability: ['status'],

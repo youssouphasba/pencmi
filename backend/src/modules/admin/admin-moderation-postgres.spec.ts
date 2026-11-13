@@ -535,7 +535,7 @@ const dateAhead = (days: number) => new Date(Date.now() + days * 86400000);
       await decide(universe, randomUUID(), "active").expect(404);
     });
 
-    it("keeps allocations, calendar, rates, partner keys and requests unchanged across hotel decisions", async () => {
+    it("keeps allocations, calendar, rates, sync settings and requests unchanged across hotel decisions", async () => {
       const universe = universes[1];
       const { id, owner } = await create(universe);
       await decide(universe, id, "active").expect(200);
@@ -570,15 +570,7 @@ const dateAhead = (days: number) => new Date(Date.now() + days * 86400000);
         where: { requestId },
       });
       const integration = await db.hotelIntegration.create({
-        data: { propertyId: id, sourceOfTruth: "external_system" },
-      });
-      const key = await db.hotelApiKey.create({
-        data: {
-          integrationId: integration.id,
-          name: randomUUID(),
-          keyHash: createTestSecret(),
-          permissions: [],
-        },
+        data: { propertyId: id, status: "active", syncMode: "ical" },
       });
       await decide(universe, id, "suspended", randomUUID()).expect(200);
       await decide(universe, id, "active").expect(200);
@@ -599,21 +591,8 @@ const dateAhead = (days: number) => new Date(Date.now() + days * 86400000);
         }),
       ).toEqual(allocation);
       expect(
-        await db.hotelApiKey.findUnique({ where: { id: key.id } }),
-      ).toEqual(key);
-      expect(
         await db.hotelIntegration.findUnique({ where: { id: integration.id } }),
       ).toEqual(integration);
-      expect(
-        JSON.stringify(
-          (
-            await http()
-              .get(detailUrl(universe, id))
-              .set(auth(admin))
-              .expect(200)
-          ).body,
-        ),
-      ).not.toContain(key.keyHash);
     });
 
     it("paginates the cross-universe queue on the server and scopes unpublished photo previews", async () => {

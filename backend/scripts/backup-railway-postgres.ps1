@@ -1,4 +1,4 @@
-param(
+﻿param(
   [Parameter(Mandatory = $true)][string]$ProjectId,
   [Parameter(Mandatory = $true)][string]$EnvironmentId,
   [Parameter(Mandatory = $true)][string]$ServiceId,
@@ -6,6 +6,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Works on Windows PowerShell 5.1 as well as PowerShell 7.
+Add-Type -AssemblyName System.Security
+function Get-Sha256Hex([byte[]]$bytes) {
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try { return ([BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-', '') } finally { $sha.Dispose() }
+}
 foreach ($id in @($ProjectId, $EnvironmentId, $ServiceId)) {
   if ($id -notmatch '^[0-9a-fA-F-]{36}$') { throw 'Identifiant Railway invalide.' }
 }
@@ -16,9 +22,17 @@ if (!(Test-Path -LiteralPath $RailwayExecutable -PathType Leaf)) {
 $archive = $null
 $encrypted = $null
 try {
-  $remote = 'bash -o pipefail -c "pg_dump --format=custom --no-owner | base64 -w 0"'
-  $encoded = & $RailwayExecutable ssh --project $ProjectId --environment $EnvironmentId --service $ServiceId -- $remote
-  if ($LASTEXITCODE -ne 0) { throw 'Export PostgreSQL refusé ou interrompu.' }
+  # railway ssh drops the quotes of a shell command line: run plain commands only.
+  $target = @('ssh', '--project', $ProjectId, '--environment', $EnvironmentId, '--service', $ServiceId, '--')
+  $remoteFile = '/tmp/pencmi-backup-' + [Guid]::NewGuid().ToString('N') + '.dump'
+  try {
+    & $RailwayExecutable @target pg_dump --format=custom --no-owner "--file=$remoteFile" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Export PostgreSQL refusé ou interrompu.' }
+    $encoded = & $RailwayExecutable @target base64 -w 0 $remoteFile
+    if ($LASTEXITCODE -ne 0) { throw 'Lecture de l''export PostgreSQL interrompue.' }
+  } finally {
+    & $RailwayExecutable @target rm -f $remoteFile | Out-Null
+  }
   $archive = [Convert]::FromBase64String(($encoded -join '').Trim())
   if ($archive.Length -lt 5 -or [Text.Encoding]::ASCII.GetString($archive, 0, 5) -ne 'PGDMP') {
     throw 'Archive PostgreSQL invalide.'
@@ -36,8 +50,8 @@ try {
     [System.IO.File]::ReadAllBytes($file), $null, [Security.Cryptography.DataProtectionScope]::CurrentUser
   )
   try {
-    $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($archive))
-    if ([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($recovered)) -ne $hash) {
+    $hash = (Get-Sha256Hex $archive)
+    if ((Get-Sha256Hex $recovered) -ne $hash) {
       throw 'Échec de vérification de la sauvegarde chiffrée.'
     }
   } finally {

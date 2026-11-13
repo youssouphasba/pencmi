@@ -1,4 +1,4 @@
-param(
+﻿param(
   [Parameter(Mandatory = $true)][string]$ProjectId,
   [Parameter(Mandatory = $true)][string]$EnvironmentId,
   [Parameter(Mandatory = $true)][string]$ServiceId,
@@ -11,6 +11,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Works on Windows PowerShell 5.1 as well as PowerShell 7.
+Add-Type -AssemblyName System.Security
+function Get-Sha256Hex([byte[]]$bytes) {
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try { return ([BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-', '') } finally { $sha.Dispose() }
+}
 if ($EnvironmentId -eq $ProductionEnvironmentId -or $ServiceId -eq $ProductionServiceId) {
   throw 'La restauration en production est interdite par cet outil.'
 }
@@ -31,7 +37,7 @@ try {
   $archive = [Security.Cryptography.ProtectedData]::Unprotect(
     [IO.File]::ReadAllBytes($ArchivePath), $null, [Security.Cryptography.DataProtectionScope]::CurrentUser
   )
-  $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($archive))
+  $hash = (Get-Sha256Hex $archive)
   if ($hash -ne $ExpectedSha256) { throw 'Empreinte de sauvegarde incorrecte.' }
   $encoded = [Convert]::ToBase64String($archive)
   node (Join-Path $PSScriptRoot 'test-backup-transport.cjs') --probe-server

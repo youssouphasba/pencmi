@@ -19,7 +19,6 @@ const requiredArtifacts = {
     ...['AdvertiserReview_pkey', 'AdvertiserReview_advertiserUserId_fkey', 'AdvertiserReview_reviewerUserId_fkey'].map(name => ['constraint', name]),
     ...['AdvertiserReview_advertiserUserId_status_createdAt_idx', 'AdvertiserReview_reviewerUserId_createdAt_idx', 'AdvertiserReview_module_targetType_targetId_idx'].map(name => ['index', name]),
   ],
-  '20261028000000_hotel_api_key_active': [['column', 'HotelApiKey.active']],
   '20261112002000_hotel_sync': [
     ...['HotelIcalImport', 'HotelExternalBlock', 'HotelChannelPartner', 'HotelChannelEvent'].map(name => ['table', name]),
     ...['HotelIntegration.syncMode', 'HotelIntegration.autoConfirm', 'HotelIntegration.hotelCode', 'HotelIntegration.channelPartnerId', 'HotelRoom.icalExportToken', 'HotelStockAllocation.channelAckedAt'].map(name => ['column', name]),
@@ -127,8 +126,7 @@ async function auditDatabase(prisma) {
       history: history.map(({ checksum, ...row }) => row),
       ...inspection,
       expectedColumns: columns.filter(row =>
-        (row.table_name === 'RefreshToken' && ['consumedAt', 'parentTokenId'].includes(row.column_name)) ||
-        (row.table_name === 'HotelApiKey' && row.column_name === 'active')),
+        row.table_name === 'RefreshToken' && ['consumedAt', 'parentTokenId'].includes(row.column_name)),
       invalidIndexes,
     };
   }, { timeout: 30000 });
