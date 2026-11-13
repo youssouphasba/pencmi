@@ -273,6 +273,7 @@ function AdminSidebar(currentPage = "overview") {
         ["Emails", adminRoutes.emailLogs, "emailLogs", adminState.overview?.failedEmails],
         ["Contenus", adminRoutes.content, "content", 0],
         ["SEO", adminRoutes.seo, "seo", 0],
+        ["Guindi (assistant IA)", "/assistant", "assistant"],
         ["GEO", adminRoutes.geo, "geo", 0],
         ["Monétisation", adminRoutes.monetization, "monetization", 0],
         ["Support", "/admin/support", "support", 0],

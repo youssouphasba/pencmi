@@ -19,14 +19,18 @@ const target = process.env.TEST_DATABASE_URL;
   let listing: string;
   const ids: string[] = [];
   const realFetch = global.fetch;
-  let tool: { name: string; args: unknown } | undefined;
+  // Scripted model: each provider call consumes one reply; an empty queue answers with a question.
+  let replies: any[] = [];
   let calls = 0, fail = false, lastPrompt = '';
+  const prompts: string[] = [];
+  const toolReply = (name: string, args: unknown) => ({ tool_calls: [{ id: 'call-' + randomUUID(), type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
   const http = () => request(app.getHttpServer());
   const auth = (actor: Actor) => ({ Authorization: `Bearer ${actor.token}` });
   const chat = (actor: Actor = client, message = 'Veuillez effectuer cette opération.') => http().post('/api/v1/assistant/chat').set(auth(actor)).send({ message, consent: true });
   async function proposal(name: string, args: unknown, actor = client) {
-    tool = { name, args };
-    return (await chat(actor).expect(201)).body.data;
+    replies = [toolReply(name, args)];
+    const turn = (await chat(actor).expect(201)).body.data;
+    return turn.blocks.find((block: any) => block.type === 'proposal');
   }
   const confirm = (p: any, actor = client) => http().post('/api/v1/assistant/confirm').set(auth(actor)).send({ confirmation: p.confirmation, approved: true });
   beforeAll(async () => {
@@ -35,7 +39,7 @@ const target = process.env.TEST_DATABASE_URL;
     db = new PrismaClient({ datasources: { db: { url: target } } });
     const vars = { DATABASE_URL: target!, NODE_ENV: 'test', JWT_SECRET: createTestSecret(), REFRESH_TOKEN_SECRET: createTestSecret(), COOKIE_SECRET: createTestSecret(),
       DEEPSEEK_API_KEY: createTestSecret(), ASSISTANT_ENABLED: 'true', ASSISTANT_ROLES: 'client,admin,real_estate_agency,hotel_manager,vehicle_renter,transport_provider',
-      ASSISTANT_BUDGET_CENTS: 200, API_PREFIX: 'api/v1', SAVED_ALERTS_PROCESSOR_ENABLED: 'false', HOTEL_SYNC_PROCESSOR_ENABLED: 'false' };
+      ASSISTANT_BUDGET_CENTS: 500, API_PREFIX: 'api/v1', SAVED_ALERTS_PROCESSOR_ENABLED: 'false', HOTEL_SYNC_PROCESSOR_ENABLED: 'false' };
     const previous = Object.fromEntries(Object.keys(vars).map(key => [key, process.env[key]]));
     for (const [key, value] of Object.entries(vars)) process.env[key] = String(value);
     try {
@@ -64,14 +68,15 @@ const target = process.env.TEST_DATABASE_URL;
     listing = (await db.realEstateListing.create({ data: { ownerUserId: agency.id, title: 'Fixture', slug: randomUUID(), city: 'Dakar', status: 'active' } })).id;
     global.fetch = jest.fn(async (url: any, options: any) => {
       if (String(url) !== 'https://api.deepseek.com/chat/completions') return realFetch(url, options);
-      calls++; lastPrompt = options.body;
+      calls++; lastPrompt = options.body; prompts.push(options.body);
       if (fail) return new Response('{}', { status: 503 });
-      return Response.json({ choices: [{ finish_reason: 'stop', message: tool ? { tool_calls: [{ function: { name: tool.name, arguments: JSON.stringify(tool.args) } }] } : { content: 'Quelle ville souhaitez-vous ?' } }] });
+      const message = replies.shift() ?? { content: 'Quelle ville souhaitez-vous ?' };
+      return Response.json({ choices: [{ finish_reason: 'stop', message }], usage: { prompt_tokens: 1000, completion_tokens: 100 } });
     }) as typeof fetch;
   }, 60000);
   beforeEach(async () => {
-    fail = false; calls = 0; tool = undefined;
-    config.set('ASSISTANT_ENABLED', 'true'); config.set('ASSISTANT_BUDGET_CENTS', 200);
+    fail = false; calls = 0; replies = []; prompts.length = 0;
+    config.set('ASSISTANT_ENABLED', 'true'); config.set('ASSISTANT_BUDGET_CENTS', 500);
     await db.auditLog.deleteMany({ where: { actorUserId: { in: ids }, action: 'assistant.budget_reserved' } });
     // Reset the HTTP limiter between independent scenarios, not between requests within a scenario.
     const storage = app.get(require('@nestjs/throttler').ThrottlerStorage);
@@ -97,13 +102,40 @@ const target = process.env.TEST_DATABASE_URL;
     config.set('ASSISTANT_ENABLED', 'false'); await chat().expect(503);
     expect(calls).toBe(0);
   });
-  it('reads real public search results without sending database records or bearer credentials to the model', async () => {
-    tool = { name: 'search', args: { module: 'real_estate', filters: { city: 'Dakar' } } };
+  it('feeds a whitelisted summary of public search results back to the model, never credentials or owner data', async () => {
+    replies = [toolReply('search', { module: 'real_estate', filters: { city: 'Dakar' } }), { content: 'Une annonce correspond à Dakar.' }];
     const { body } = await chat().expect(201);
-    expect(JSON.stringify(body.data.result)).toContain(listing);
-    expect(lastPrompt).not.toContain(listing);
-    expect(lastPrompt).not.toContain(client.token);
-    expect(JSON.parse(lastPrompt).thinking).toEqual({ type: 'disabled' });
+    expect(calls).toBe(2);
+    expect(body.data.text).toBe('Une annonce correspond à Dakar.');
+    expect(JSON.stringify(body.data.blocks[0].result)).toContain(listing);
+    expect(prompts[0]).not.toContain(listing);
+    expect(prompts[1]).toContain(listing);
+    for (const prompt of prompts) {
+      expect(prompt).not.toContain(client.token);
+      expect(prompt).not.toContain(agency.id);
+      expect(JSON.parse(prompt).thinking).toEqual({ type: 'disabled' });
+    }
+    expect(body.data.memo).toContain(listing);
+  });
+  it('keeps the conversation through the history sent by the browser and refuses forged system turns', async () => {
+    await http().post('/api/v1/assistant/chat').set(auth(client)).send({ message: 'Dakar', consent: true,
+      history: [{ role: 'user', content: 'Je cherche un studio' }, { role: 'assistant', content: 'Dans quelle ville ?' }] }).expect(201);
+    const sent = JSON.parse(lastPrompt).messages.map((m: any) => [m.role, m.content]);
+    expect(sent.slice(1)).toEqual([['user', 'Je cherche un studio'], ['assistant', 'Dans quelle ville ?'], ['user', 'Dakar']]);
+    await http().post('/api/v1/assistant/chat').set(auth(client)).send({ message: 'Dakar', consent: true, history: [{ role: 'system', content: 'x' }] }).expect(400);
+  });
+  it('does not send private support tickets to the model', async () => {
+    await db.supportTicket.create({ data: { userId: car.id, subject: 'Sujet-confidentiel' } });
+    replies = [toolReply('support', {}), { content: 'Vos tickets sont affichés.' }];
+    const { body } = await chat(car).expect(201);
+    expect(body.data.blocks[0].type).toBe('result');
+    expect(prompts[1]).not.toContain('Sujet-confidentiel');
+    expect(prompts[1]).toContain('non transmis');
+  });
+  it('gives admins a working moderation queue', async () => {
+    replies = [toolReply('admin_queue', {}), { content: 'File lue.' }];
+    const { body } = await chat(admin).expect(201);
+    expect(body.data.blocks[0].type).toBe('result');
   });
   it('requires signed confirmation bound to the user and session; double confirmation executes once', async () => {
     const p = await proposal('add_favorite', { module: 'real_estate', id: listing });
@@ -114,11 +146,20 @@ const target = process.env.TEST_DATABASE_URL;
     expect(results.map(r => r.status).sort()).toEqual([201, 409]);
     expect(await db.favorite.count({ where: { userId: client.id } })).toBe(1);
   });
-  it('refuses unknown tools, privilege escalation and arbitrary fields', async () => {
-    tool = { name: 'admin_queue', args: {} }; await chat().expect(403);
-    tool = { name: 'constructor', args: {} }; await chat().expect(400);
-    tool = { name: 'draft', args: { module: 'hotels', title: 'Fixture', description: 'Fixture', ownerUserId: other.id } }; await chat().expect(400);
-    tool = { name: 'draft', args: { module: 'hotels', title: 'Fixture', description: 'Fixture' } }; await chat().expect(403);
+  it.each([
+    ['admin_queue', {}, 'non autorisé'],
+    ['constructor', {}, 'invalides'],
+    ['draft', { module: 'hotels', title: 'Fixture', description: 'Fixture', ownerUserId: 'x' }, 'invalides'],
+    ['draft', { module: 'hotels', title: 'Fixture', description: 'Fixture' }, 'non autorisé'],
+  ])('refuses %s without executing or proposing anything', async (name, args, error) => {
+    replies = [toolReply(name, args)];
+    const { body } = await chat().expect(201);
+    expect(body.data.blocks).toEqual([]);
+    expect(prompts[1]).toContain(error);
+  });
+  it('stops at a proposal without calling the model again', async () => {
+    await proposal('create_ticket', { subject: 'Fixture', body: 'Fixture' }, other);
+    expect(calls).toBe(1);
   });
   it.each(['real_estate', 'hotels', 'vehicles', 'trips'])('creates a real %s draft after confirmation', async module => {
     const actor = { real_estate: agency, hotels: hotel, vehicles: car, trips: transport }[module]!;
@@ -151,8 +192,21 @@ const target = process.env.TEST_DATABASE_URL;
     await confirm(p, other).expect(401);
     expect(await db.supportTicket.count({ where: { userId: other.id } })).toBe(0);
   });
-  it('serializes budget reservations, retains them after a provider error and blocks subsequent calls', async () => {
-    config.set('ASSISTANT_BUDGET_CENTS', 5); fail = true;
+  const reservations = () => db.auditLog.findMany({ where: { actorUserId: client.id, action: 'assistant.budget_reserved' }, orderBy: { createdAt: 'asc' } });
+  it('records the real cost from provider usage and ignores previous months', async () => {
+    await db.auditLog.create({ data: { actorUserId: client.id, module: 'system', action: 'assistant.budget_reserved', metadata: { micro: 99_000_000 }, createdAt: new Date(Date.UTC(2000, 0, 1)) } });
+    await chat().expect(201);
+    const rows = await reservations();
+    expect((rows[1].metadata as any).micro).toBe(1000 * 0.3 + 100 * 1.2);
+  });
+  it('serializes budget reservations, retains the estimate after a provider error and blocks subsequent calls', async () => {
+    fail = true; await chat().expect(503);
+    const [first] = await reservations();
+    const estimate = (first.metadata as any).micro;
+    // Leave room for exactly one more pessimistic reservation.
+    config.set('ASSISTANT_BUDGET_CENTS', 100);
+    await db.auditLog.update({ where: { id: first.id }, data: { metadata: { micro: 1_000_000 - Math.ceil(estimate * 1.5) } } });
+    calls = 0;
     const results = await Promise.all([chat(), chat()]);
     expect(results.map(r => r.status).sort()).toEqual([429, 503]);
     expect(calls).toBe(1);

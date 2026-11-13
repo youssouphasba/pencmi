@@ -10,7 +10,11 @@ const number = z.number().int().min(0).max(2147483647).optional();
 const paths: Record<string, string> = { real_estate: 'immobilier', hotels: 'hotels', vehicles: 'voitures', trips: 'voyages' };
 const publish: Record<string, Permission> = { real_estate: 'publish_real_estate', hotels: 'publish_hotel', vehicles: 'publish_vehicle', trips: 'publish_trip' };
 export type ToolRequest = { path: string; method: string; body?: Record<string, unknown> };
-type Tool = { label: string; description: string; schema: z.ZodType; write?: boolean; permission?: Permission;
+// context: what the model may see of a read result. 'public' = whitelisted summary of published listings/FAQ;
+// 'refs' = identifiers, statuses, dates and listing titles only (no person names, contacts or message bodies);
+// absent = only the number of items. The full result always goes to the browser.
+export type ToolContext = 'public' | 'refs';
+type Tool = { label: string; description: string; schema: z.ZodType; write?: boolean; context?: ToolContext; permission?: Permission;
   allowed?: (role: UserRole, args: any) => boolean; request: (args: any, nonce: string) => ToolRequest };
 const get = (path: string, query: Record<string, unknown> = {}): ToolRequest => ({ method: 'GET', path: path + '?' + new URLSearchParams(Object.entries(query).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])) });
 const listing = z.object({ module: moduleSchema, id }).strict();
@@ -26,19 +30,19 @@ const filters = z.object({ city: optionalText, transaction: optionalText, proper
   date: optionalText, passengers: number, vehicleType: optionalText, timeOfDay: z.enum(['morning', 'afternoon', 'evening', 'night']).optional(),
   page: z.number().int().min(1).max(100).optional() }).strict();
 export const ASSISTANT_TOOLS: Record<string, Tool> = {
-  faq: { label: 'Aide Péncmi', description: 'Lire la FAQ publiée. Ne pas inventer de politique commerciale.', schema: empty, request: () => get('/content/faq') },
+  faq: { label: 'Aide Péncmi', description: 'Lire la FAQ publiée. Ne pas inventer de politique commerciale.', schema: empty, context: 'public', request: () => get('/content/faq') },
   search: { label: 'Rechercher des annonces', description: 'Rechercher dans un univers. Utiliser uniquement les filtres de cet univers. Les résultats ne garantissent pas une réservation.',
-    schema: z.object({ module: moduleSchema, filters }).strict(), request: a => get('/' + paths[a.module], { ...a.filters, limit: 6 }) },
-  listing: { label: 'Consulter une annonce', description: 'Lire une annonce publique par son identifiant réel.', schema: listing, request: a => get(`/${paths[a.module]}/${a.id}`) },
-  my_listings: { label: 'Mes annonces', description: 'Lire les annonces du professionnel connecté.', schema: z.object({ module: moduleSchema }).strict(),
+    schema: z.object({ module: moduleSchema, filters }).strict(), context: 'public', request: a => get('/' + paths[a.module], { ...a.filters, limit: 6 }) },
+  listing: { label: 'Consulter une annonce', description: 'Lire une annonce publique par son identifiant réel (chambres, départs, prix, conditions).', schema: listing, context: 'public', request: a => get(`/${paths[a.module]}/${a.id}`) },
+  my_listings: { label: 'Mes annonces', description: 'Lire les annonces du professionnel connecté.', schema: z.object({ module: moduleSchema }).strict(), context: 'refs',
     allowed: (role, a) => hasPermission(role, publish[a.module]), request: a => get(`/dashboard/${paths[a.module]}`, { limit: 10 }) },
-  favorites: { label: 'Mes favoris', description: 'Consulter mes favoris.', schema: empty, request: () => get('/favorites', { limit: 10 }) },
+  favorites: { label: 'Mes favoris', description: 'Consulter mes favoris.', schema: empty, context: 'refs', request: () => get('/favorites', { limit: 10 }) },
   add_favorite: { label: 'Ajouter aux favoris', description: 'Ajouter une annonce aux favoris après confirmation.', schema: listing, write: true, request: a => ({ method: 'PUT', path: `/favorites/${a.module}/${a.id}` }) },
   remove_favorite: { label: 'Retirer des favoris', description: 'Retirer une annonce des favoris après confirmation.', schema: listing, write: true, request: a => ({ method: 'DELETE', path: `/favorites/${a.module}/${a.id}` }) },
-  alerts: { label: 'Mes alertes', description: 'Lire mes recherches sauvegardées.', schema: empty, request: () => get('/saved-alerts', { limit: 10 }) },
+  alerts: { label: 'Mes alertes', description: 'Lire mes recherches sauvegardées.', schema: empty, context: 'refs', request: () => get('/saved-alerts', { limit: 10 }) },
   pause_alert: { label: 'Mettre une alerte en pause', description: 'Désactiver une alerte existante, après confirmation.', schema: z.object({ id }).strict(), write: true, request: a => ({ method: 'PATCH', path: `/saved-alerts/${a.id}`, body: { active: false } }) },
-  my_requests: { label: 'Mes demandes', description: 'Lire les demandes du client connecté, sans inventer leur statut.', schema: z.object({ type: requestType }).strict(), request: a => get('/compte/requests', { type: a.type, limit: 10 }) },
-  received_requests: { label: 'Demandes reçues', description: 'Lire les demandes reçues par le professionnel.', schema: z.object({ type: z.enum(['hotel', 'rental', 'chauffeur', 'trip']) }).strict(),
+  my_requests: { label: 'Mes demandes', description: 'Lire les demandes du client connecté, sans inventer leur statut.', schema: z.object({ type: requestType }).strict(), context: 'refs', request: a => get('/compte/requests', { type: a.type, limit: 10 }) },
+  received_requests: { label: 'Demandes reçues', description: 'Lire les demandes reçues par le professionnel.', schema: z.object({ type: z.enum(['hotel', 'rental', 'chauffeur', 'trip']) }).strict(), context: 'refs',
     allowed: (role, a) => hasPermission(role, managedRequests[a.type][1]), request: a => get(managedRequests[a.type][0], { limit: 10 }) },
   decide_request: { label: 'Traiter une demande', description: 'Proposer une décision sur une demande reçue. Une acceptation reste soumise au stock et aux règles du serveur.',
     schema: z.object({ type: z.enum(['hotel', 'rental', 'chauffeur', 'trip']), id, status: z.enum(['pending', 'accepted', 'refused', 'cancelled', 'requires_more_info']) }).strict(), write: true,
@@ -68,11 +72,17 @@ export const ASSISTANT_TOOLS: Record<string, Tool> = {
         ...(a.module === 'vehicles' && a.vehicleMode ? { vehicleMode: a.vehicleMode } : {}) } }) },
   submit: { label: 'Soumettre à validation', description: 'Soumettre une annonce existante à la modération. Les champs obligatoires seront contrôlés par le serveur. Ne rend pas active.',
     schema: listing, write: true, allowed: (role, a) => hasPermission(role, publish[a.module]), request: a => ({ method: 'POST', path: `/dashboard/${paths[a.module]}/${a.id}/submit` }) },
-  admin_queue: { label: 'Annonces en attente', description: 'Lire les annonces en attente de modération. Aucune décision automatique.', schema: empty, permission: 'access_admin', request: () => get('/admin/listings', { status: 'pending_review', limit: 10 }) },
+  admin_queue: { label: 'Annonces en attente', description: 'Lire les annonces en attente de modération. Aucune décision automatique.', schema: empty, context: 'refs', permission: 'access_admin', request: () => get('/admin/validation', { status: 'pending_review', limit: 10 }) },
 };
+// Without args, a tool restricted per module/type is usable if the role is allowed for at least one of them.
+const PROBES = [...moduleSchema.options.map(module => ({ module })), ...(['hotel', 'rental', 'chauffeur', 'trip'] as const).map(type => ({ type }))];
 export function canUseTool(role: UserRole, name: string, args?: any) {
+  if (!Object.prototype.hasOwnProperty.call(ASSISTANT_TOOLS, name)) return false;
   const tool = ASSISTANT_TOOLS[name];
-  return !!tool && (!tool.permission || hasPermission(role, tool.permission)) && (args === undefined || !tool.allowed || tool.allowed(role, args));
+  if (tool.permission && !hasPermission(role, tool.permission)) return false;
+  if (!tool.allowed) return true;
+  if (args !== undefined) return tool.allowed(role, args);
+  return PROBES.some(probe => { try { return tool.allowed!(role, probe); } catch { return false; } });
 }
 export function modelTools(role: UserRole) {
   return Object.entries(ASSISTANT_TOOLS).filter(([name]) => canUseTool(role, name)).map(([name, tool]) => ({ type: 'function', function: {

@@ -41,7 +41,7 @@ export const envSchema = z.object({
   ASSISTANT_ENABLED: z.enum(['true', 'false']).default('false'),
   ASSISTANT_ROLES: z.string().default('admin'),
   ASSISTANT_MODEL: z.enum(['deepseek-flash']).default('deepseek-flash'),
-  ASSISTANT_BUDGET_CENTS: z.coerce.number().int().min(0).max(200).default(200),
+  ASSISTANT_BUDGET_CENTS: z.coerce.number().int().min(0).max(10000).default(500),
   PASSWORD_RECOVERY_ENABLED: z.enum(['true', 'false']).default('false'),
   EMAIL_VERIFICATION_ENABLED: z.enum(['true', 'false']).default('false'),
   BUSINESS_EMAILS_ENABLED: z.enum(['true', 'false']).default('false'),

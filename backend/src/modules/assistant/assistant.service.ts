@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { z } from 'zod';
@@ -6,24 +6,42 @@ import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
 import { PrismaService } from '../../database/prisma/prisma.service';
 import { ASSISTANT_TOOLS, canUseTool, modelTools, ToolRequest } from './assistant.catalog';
 import { ASSISTANT_DEFAULTS as copy } from './assistant.defaults';
+import { modelView } from './assistant.summary';
+import { helpFor, helpPrompt } from './assistant.help';
 
-const inputSchema = z.object({ message: z.string().trim().min(1).max(2000), history: z.array(z.string().max(2000)).max(3).optional(), consent: z.literal(true) }).strict();
+const turnSchema = z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(8000) }).strict();
+const inputSchema = z.object({ message: z.string().trim().min(1).max(2000), history: z.array(turnSchema).max(12).optional(), consent: z.literal(true) }).strict();
 const confirmationSchema = z.object({ confirmation: z.string().max(15000), approved: z.literal(true) }).strict();
-// Reservation is deliberately pessimistic, retained even on network failure. Never reset on restart.
-const RESERVATION_CENTS = 5;
-const MAX_BODY_BYTES = 48000;
+
+// Cost accounting in micro-dollars, at deepseek-flash peak cache-miss prices (pessimistic).
+// Check https://api-docs.deepseek.com/quick_start/pricing before changing the model.
+const INPUT_MICRO_PER_TOKEN = 0.3;
+const OUTPUT_MICRO_PER_TOKEN = 1.2;
+const MAX_BODY_BYTES = 160000;
 const MAX_OUTPUT_TOKENS = 800;
+const MAX_ROUNDS = 3; // model calls per user message
+const MAX_CALLS_PER_ROUND = 3;
+const DAILY_CALLS_PER_USER = 60;
 const RESERVE_ACTION = 'assistant.budget_reserved';
+
+type Block =
+  | { type: 'result'; tool: string; label: string; module?: string; result: unknown }
+  | { type: 'proposal'; tool: string; label: string; args: unknown; confirmation: string; expiresAt: string }
+  | { type: 'error'; label: string; message: string };
+type ModelMessage = { role: string; content: string; tool_calls?: any[]; tool_call_id?: string; reasoning_content?: string };
+
+class BudgetError extends HttpException {}
 
 @Injectable()
 export class AssistantService {
+  private readonly logger = new Logger('Assistant');
   constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
 
   capabilities(user: AuthenticatedUser) {
     return { enabled: this.enabled(user), tools: Object.entries(ASSISTANT_TOOLS).filter(([name]) => canUseTool(user.role, name))
-      .map(([name, tool]) => ({ name, label: tool.label, confirmationRequired: !!tool.write })), budgetCents: this.budget() };
+      .map(([name, tool]) => ({ name, label: tool.label, confirmationRequired: !!tool.write })), help: helpFor(user.role) };
   }
-  private budget() { return Math.min(200, Number(this.config.get('ASSISTANT_BUDGET_CENTS') ?? 200)); }
+  private budgetCents() { return Math.min(10000, Number(this.config.get('ASSISTANT_BUDGET_CENTS') ?? 500)); }
   private enabled(user: AuthenticatedUser) {
     return this.config.get('ASSISTANT_ENABLED') === 'true' && !!this.config.get('DEEPSEEK_API_KEY') &&
       String(this.config.get('ASSISTANT_ROLES') ?? 'admin').split(',').map(v => v.trim()).includes(user.role);
@@ -31,16 +49,35 @@ export class AssistantService {
   private assertEnabled(user: AuthenticatedUser) {
     if (!this.enabled(user)) throw new ServiceUnavailableException(copy.unavailable);
   }
-  private async reserve(user: AuthenticatedUser) {
-    await this.prisma.$transaction(async tx => {
+
+  /** Reserves a pessimistic estimate before calling the provider; settle() replaces it with the real usage. */
+  private async reserve(user: AuthenticatedUser, payloadBytes: number) {
+    const estimate = Math.ceil((payloadBytes / 2) * INPUT_MICRO_PER_TOKEN + MAX_OUTPUT_TOKENS * OUTPUT_MICRO_PER_TOKEN);
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    return this.prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(784120519)`;
-      const count = await tx.auditLog.count({ where: { action: RESERVE_ACTION, module: 'system' } });
-      if ((count + 1) * RESERVATION_CENTS > this.budget()) throw new HttpException(copy.budget, 429);
+      // Legacy rows (before per-call accounting) stored a flat {cents}.
+      const [{ spent }] = await tx.$queryRaw<{ spent: bigint | null }[]>`
+        SELECT COALESCE(SUM(COALESCE((metadata->>'micro')::bigint, (metadata->>'cents')::bigint * 10000, 0)), 0) AS spent
+        FROM "AuditLog" WHERE action = ${RESERVE_ACTION} AND module = 'system' AND "createdAt" >= ${monthStart}`;
+      if (Number(spent ?? 0) + estimate > this.budgetCents() * 10000) {
+        this.logger.warn(`Monthly budget reached: ${Number(spent ?? 0)} of ${this.budgetCents() * 10000} micro-dollars (ASSISTANT_BUDGET_CENTS).`);
+        throw new BudgetError(copy.budget, 429);
+      }
       const recent = await tx.auditLog.count({ where: { action: RESERVE_ACTION, actorUserId: user.id, createdAt: { gte: new Date(Date.now() - 86400000) } } });
-      if (recent >= 20) throw new HttpException('Votre quota quotidien de test est atteint.', 429);
-      await tx.auditLog.create({ data: { actorUserId: user.id, module: 'system', action: RESERVE_ACTION, metadata: { cents: RESERVATION_CENTS } } });
+      if (recent >= DAILY_CALLS_PER_USER) throw new BudgetError(copy.quota, 429);
+      const row = await tx.auditLog.create({ data: { actorUserId: user.id, module: 'system', action: RESERVE_ACTION, metadata: { micro: estimate, estimated: true } } });
+      return row.id;
     });
   }
+  private async settle(id: string, usage: any) {
+    const input = Number(usage?.prompt_tokens), output = Number(usage?.completion_tokens);
+    if (!Number.isFinite(input) || !Number.isFinite(output)) return; // keep the pessimistic estimate
+    const micro = Math.ceil(input * INPUT_MICRO_PER_TOKEN + output * OUTPUT_MICRO_PER_TOKEN);
+    await this.prisma.auditLog.update({ where: { id }, data: { metadata: { micro, inputTokens: input, outputTokens: output } } }).catch(() => undefined);
+  }
+
   private signature(value: string) {
     return createHmac('sha256', this.config.getOrThrow<string>('JWT_SECRET')).update('pencmi-assistant-confirmation-v1:' + value).digest('hex');
   }
@@ -51,39 +88,102 @@ export class AssistantService {
     if (!canUseTool(user.role, name, parsed.data)) throw new ForbiddenException('Cette action n’est pas autorisée pour votre compte.');
     return parsed.data;
   }
-  async chat(user: AuthenticatedUser, body: unknown, authorization: string) {
-    this.assertEnabled(user);
-    const input = inputSchema.safeParse(body);
-    if (!input.success) throw new BadRequestException('Renseignez une demande et acceptez son traitement par DeepSeek.');
-    const payload = JSON.stringify({ model: this.config.get('ASSISTANT_MODEL') ?? 'deepseek-flash',
-      messages: [{ role: 'system', content: copy.prompt + `\nDate du Sénégal : ${new Date().toISOString()}. Rôle : ${user.role}.` },
-        ...(input.data.history || []).map(content => ({ role: 'user', content })), { role: 'user', content: input.data.message }],
-      tools: modelTools(user.role), max_tokens: MAX_OUTPUT_TOKENS, thinking: { type: 'disabled' }, stream: false });
-    if (Buffer.byteLength(payload) > MAX_BODY_BYTES) throw new ServiceUnavailableException(copy.unavailable);
-    await this.reserve(user);
-    let message: any;
+
+  private async callModel(user: AuthenticatedUser, messages: ModelMessage[], final: boolean) {
+    const payload = JSON.stringify({ model: this.config.get('ASSISTANT_MODEL') ?? 'deepseek-flash', messages,
+      tools: modelTools(user.role), ...(final ? { tool_choice: 'none' } : {}),
+      max_tokens: MAX_OUTPUT_TOKENS, thinking: { type: 'disabled' }, stream: false });
+    const bytes = Buffer.byteLength(payload);
+    if (bytes > MAX_BODY_BYTES) throw new BadRequestException(copy.tooLong);
+    const reservation = await this.reserve(user, bytes);
     try {
       const response = await fetch('https://api.deepseek.com/chat/completions', { method: 'POST', redirect: 'error',
         headers: { Authorization: `Bearer ${this.config.get('DEEPSEEK_API_KEY')}`, 'Content-Type': 'application/json' },
         body: payload, signal: AbortSignal.timeout(30000) });
       if (!response.ok) throw Error('provider');
       const data = await response.json() as any;
-      if (data.choices?.[0]?.finish_reason === 'length') throw Error('truncated');
-      message = data.choices?.[0]?.message;
-      if (!message) throw Error('provider');
+      await this.settle(reservation, data.usage);
+      const message = data.choices?.[0]?.message;
+      if (!message || data.choices[0].finish_reason === 'length') throw Error('provider');
+      return message;
     } catch { throw new ServiceUnavailableException(copy.provider); }
-    if (!message.tool_calls?.length) return { kind: 'reply', text: String(message.content || 'Pouvez-vous préciser votre demande ?').slice(0, 5000) };
-    if (message.tool_calls.length !== 1) throw new BadRequestException('Veuillez demander une seule opération à la fois.');
-    const call = message.tool_calls[0]?.function;
-    let raw: unknown;
-    try { raw = JSON.parse(call.arguments); } catch { throw new BadRequestException(copy.invalid); }
-    const args = this.parse(call.name, raw, user);
-    const tool = ASSISTANT_TOOLS[call.name];
-    const nonce = randomUUID();
-    if (!tool.write) return { kind: 'result', label: tool.label, result: await this.execute(tool.request(args, nonce), authorization) };
-    const encoded = Buffer.from(JSON.stringify({ name: call.name, args, nonce, userId: user.id, sessionId: user.sessionId, role: user.role, exp: Date.now() + 300000 })).toString('base64url');
-    return { kind: 'proposal', label: tool.label, args, confirmation: encoded + '.' + this.signature(encoded), expiresAt: new Date(Date.now() + 300000).toISOString() };
   }
+
+  private proposal(user: AuthenticatedUser, name: string, args: unknown): Block {
+    const nonce = randomUUID(), exp = Date.now() + 300000;
+    const encoded = Buffer.from(JSON.stringify({ name, args, nonce, userId: user.id, sessionId: user.sessionId, role: user.role, exp })).toString('base64url');
+    return { type: 'proposal', tool: name, label: ASSISTANT_TOOLS[name].label, args, confirmation: encoded + '.' + this.signature(encoded), expiresAt: new Date(exp).toISOString() };
+  }
+
+  /** Runs one tool call; returns the text the model will see and adds what the user sees to blocks. */
+  private async runTool(user: AuthenticatedUser, call: any, authorization: string, blocks: Block[], state: { proposed: boolean }) {
+    let args: any;
+    try {
+      args = this.parse(call?.function?.name, JSON.parse(call?.function?.arguments || '{}'), user);
+    } catch (error) {
+      return JSON.stringify({ error: error instanceof ForbiddenException ? 'Outil non autorisé pour ce compte.' : 'Arguments invalides pour cet outil.' });
+    }
+    const name = call.function.name, tool = ASSISTANT_TOOLS[name];
+    if (tool.write) {
+      if (state.proposed) return JSON.stringify({ error: 'Une seule action à confirmer par réponse. Propose les autres ensuite.' });
+      state.proposed = true;
+      blocks.push(this.proposal(user, name, args));
+      return JSON.stringify({ shownToUser: true, status: 'awaiting_user_confirmation', note: 'Rien n’est encore fait : l’utilisateur doit cliquer sur Confirmer.' });
+    }
+    try {
+      const result = await this.execute(tool.request(args, randomUUID()), authorization);
+      blocks.push({ type: 'result', tool: name, label: tool.label, module: args.module, result });
+      return modelView(result, tool.context, args.module);
+    } catch (error) {
+      const message = error instanceof HttpException ? error.message : copy.failure;
+      blocks.push({ type: 'error', label: tool.label, message });
+      return JSON.stringify({ error: message });
+    }
+  }
+
+  async chat(user: AuthenticatedUser, body: unknown, authorization: string) {
+    this.assertEnabled(user);
+    const input = inputSchema.safeParse(body);
+    if (!input.success) throw new BadRequestException('Renseignez une demande et acceptez son traitement par DeepSeek.');
+    const messages: ModelMessage[] = [
+      { role: 'system', content: copy.prompt + '\n' + helpPrompt(user.role) + `\nDate et heure (UTC) : ${new Date().toISOString()}. Rôle du compte : ${user.role}.` },
+      ...(input.data.history || []).map(turn => ({ role: turn.role, content: turn.content })),
+      { role: 'user', content: input.data.message },
+    ];
+    const blocks: Block[] = [];
+    const notes: string[] = [];
+    const state = { proposed: false };
+    let text = '';
+    for (let round = 0; round < MAX_ROUNDS; round++) {
+      let message: any;
+      try {
+        message = await this.callModel(user, messages, round === MAX_ROUNDS - 1);
+      } catch (error) {
+        if (!blocks.length) throw error;
+        text = error instanceof BudgetError ? copy.budget : copy.partial;
+        break;
+      }
+      const calls: any[] = Array.isArray(message.tool_calls) ? message.tool_calls : [];
+      text = String(message.content || '').trim();
+      if (!calls.length) break;
+      messages.push({ role: 'assistant', content: message.content ?? '', tool_calls: calls,
+        ...(message.reasoning_content ? { reasoning_content: message.reasoning_content } : {}) });
+      for (const [index, call] of calls.entries()) {
+        const content = index < MAX_CALLS_PER_ROUND ? await this.runTool(user, call, authorization, blocks, state)
+          : JSON.stringify({ error: 'Trop d’outils dans une même réponse.' });
+        messages.push({ role: 'tool', tool_call_id: String(call?.id ?? index), content });
+        if (index < MAX_CALLS_PER_ROUND && call?.function?.name && ASSISTANT_TOOLS[call.function.name] && !content.startsWith('{"error"'))
+          notes.push(`[${ASSISTANT_TOOLS[call.function.name].label}] ${content}`);
+      }
+      // A proposal ends the turn: the user decides, the model is not called again.
+      if (state.proposed) { text ||= copy.proposed; break; }
+    }
+    text = (text || (blocks.length ? copy.shown : copy.clarify)).slice(0, 5000);
+    // memo: what the browser sends back as this assistant turn, so the next message keeps context.
+    const memo = [text, ...notes].join('\n').slice(0, 8000);
+    return { kind: 'turn', text, blocks, memo };
+  }
+
   async confirm(user: AuthenticatedUser, body: unknown, authorization: string) {
     this.assertEnabled(user);
     const input = confirmationSchema.safeParse(body);
@@ -103,12 +203,14 @@ export class AssistantService {
     try {
       const result = await this.execute(tool.request(args, proposal.nonce), authorization);
       await this.prisma.auditLog.update({ where: { id: proposal.nonce }, data: { action: 'assistant.action_succeeded' } });
-      return { kind: 'result', label: tool.label, result, completed: true };
+      return { kind: 'result', tool: proposal.name, label: tool.label, result, completed: true,
+        memo: `[Action confirmée par l’utilisateur et acceptée par le serveur : ${tool.label}]` };
     } catch (error) {
       await this.prisma.auditLog.update({ where: { id: proposal.nonce }, data: { action: 'assistant.action_check_required' } });
       throw error;
     }
   }
+
   private async execute(operation: ToolRequest, authorization: string) {
     // Only catalog routes reach the same API instance; its JWT, DTO and ownership guards run again.
     const prefix = String(this.config.get('API_PREFIX') ?? 'api/v1').replace(/^\/+|\/+$/g, '');
