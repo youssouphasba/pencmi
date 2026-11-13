@@ -989,6 +989,8 @@ model ContentPage {
   id        String           @id @default(cuid())
   slug      String           @unique
   title     String
+  subtitle  String?
+  updatedByUserId String?
   status    ListingStatus    @default(draft)
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
@@ -1023,6 +1025,7 @@ model FaqItem {
   module    PencmiModule?
   question  String
   answer    String
+  category  String?
   active    Boolean   @default(true)
   position  Int       @default(0)
   createdAt DateTime  @default(now())
