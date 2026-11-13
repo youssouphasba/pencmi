@@ -46,6 +46,7 @@ describe('Vehicle rental double booking', () => {
     const tx = {
       vehicleRentalRequest: rental,
       vehicleListing: { findFirst: async () => listing },
+      vehicleAvailabilityBlock: { findFirst: async () => null },
       contactEvent: { create: async () => ({}) },
       $queryRaw: async () => [{ status: 'active', deletedAt: null }],
     };

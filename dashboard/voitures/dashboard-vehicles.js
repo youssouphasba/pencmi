@@ -3,6 +3,7 @@ const vehicleDashboardRoutes = {
   listings: "/dashboard/voitures/annonces",
   messages: "/dashboard/voitures/messages",
   contacts: "/dashboard/voitures/contacts",
+  calendar: "/dashboard/voitures/calendrier",
   statistics: "/dashboard/voitures/statistiques",
   contactSettings: "/dashboard/voitures/contact-settings",
   emailSettings: "/dashboard/voitures/email-settings",
@@ -114,6 +115,7 @@ function vehicleDashboardRouteHref(path) {
     [vehicleDashboardRoutes.listings]: `${prefix}annonces/`,
     [vehicleDashboardRoutes.messages]: `${prefix}messages/`,
     [vehicleDashboardRoutes.contacts]: `${prefix}contacts/`,
+    [vehicleDashboardRoutes.calendar]: `${prefix}calendrier/`,
     [vehicleDashboardRoutes.statistics]: `${prefix}statistiques/`,
     [vehicleDashboardRoutes.contactSettings]: `${prefix}contact-settings/`,
     [vehicleDashboardRoutes.emailSettings]: `${prefix}email-settings/`,
@@ -141,6 +143,7 @@ function VehiclesDashboardSidebar(currentPage) {
     ["Annonces", vehicleDashboardRoutes.listings, "listings", listingCount],
     ["Messages", vehicleDashboardRoutes.messages, "messages"],
     ["Contacts", vehicleDashboardRoutes.contacts, "contacts", contactCount],
+    ["Calendrier", vehicleDashboardRoutes.calendar, "calendar"],
     ["Statistiques", vehicleDashboardRoutes.statistics, "statistics"],
     ["Moyens de contact", vehicleDashboardRoutes.contactSettings, "contactSettings"],
     ["Emails automatiques", vehicleDashboardRoutes.emailSettings, "emailSettings"]
@@ -242,6 +245,10 @@ async function updateVehicleRequestStatus(id, requestType, status) {
   renderDashboard();
 }
 
+function VehicleCalendarPage() {
+  return VehiclesDashboardLayout(`${DashboardHeader("Calendrier de la flotte", "Locations acceptées, demandes en attente et dates bloquées de vos véhicules en location.")}<div id="pencmi-fleet-calendar"></div>`, "calendar");
+}
+
 function VehicleStatisticsPage() {
   return VehiclesDashboardLayout(`${DashboardHeader("Statistiques voitures", "Vos demandes, contacts et messages réellement enregistrés.")}<div id="pencmi-stats"></div>`, "statistics");
 }
@@ -258,6 +265,7 @@ function renderDashboard() {
     listings: VehicleListingsDashboardPage,
     messages: VehicleMessagesPage,
     contacts: VehicleContactsPage,
+    calendar: VehicleCalendarPage,
     statistics: VehicleStatisticsPage,
     contactSettings: VehicleContactSettingsPage
   };
@@ -318,6 +326,8 @@ function mountVehicleMessaging() {
   if (inbox) void import("../../messaging/inbox.mjs").then(({ mountInbox }) => mountInbox(inbox, { scope: "owner", module: "vehicles", emptyTitle: "Aucun message reçu pour le moment.", emptyText: "Les messages clients liés à vos véhicules apparaîtront ici." }));
   const contacts = document.querySelector("#pencmi-contacts");
   if (contacts) void import("../../messaging/contacts-panel.mjs").then(({ mountContacts }) => mountContacts(contacts, { module: "vehicles", messagesHref: vehicleDashboardRouteHref(vehicleDashboardRoutes.messages) }));
+  const calendar = document.querySelector("#pencmi-fleet-calendar");
+  if (calendar) void import("./calendar.mjs").then(({ mountFleetCalendar }) => mountFleetCalendar(calendar, { listings: vehicleDashboardData.listings }));
   const stats = document.querySelector("#pencmi-stats");
   if (stats) void import("../stats-panel.mjs").then(({ mountStats }) => mountStats(stats, { module: "vehicles" }));
 }

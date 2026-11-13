@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ${conditions.length ? `<section class="vehicle-detail-card"><h2>Conditions et services</h2>${conditions.map((value) => `<p>${esc(value)}</p>`).join('')}</section>` : ''}
     ${typeof SafetyTipsBox === 'function' ? SafetyTipsBox('vehicles') : ''}
     </div><aside class="vehicle-detail-card" id="contact"><h2>Annonceur</h2><div data-listing-messaging></div><span data-favorite-module="vehicles" data-favorite-id="${esc(listing.id)}"></span>${advertiser.logoUrl && vehicleSafeUrl(advertiser.logoUrl) ? `<img src="${esc(vehicleSafeUrl(advertiser.logoUrl))}" alt="${esc(advertiser.name)}" width="72" height="72" style="object-fit:contain">` : ''}<p><strong>${esc(advertiser.name)}</strong></p><p>${esc(advertiser.type)}</p><p>${esc(advertiser.city)}</p><p>${esc(advertiser.openingHours)}</p>${advertiser.verified ? chips(['Professionnel vérifié']) : ''}<div class="vehicle-detail-actions"><a class="btn btn-light" href="${esc(pencmiAdvertiserHref(advertiser.id))}">Voir le profil</a>${phone && preferences.phoneEnabled !== false ? `<a class="btn btn-ghost" href="tel:${esc(phone.replace(/[^+\d]/g, ''))}">Téléphone</a>` : ''}${whatsapp && preferences.whatsappEnabled !== false ? `<a class="btn btn-ghost" href="https://wa.me/${esc(whatsapp.replace(/\D/g, ''))}" target="_blank" rel="noreferrer">WhatsApp</a>` : ''}${email && preferences.emailEnabled !== false ? `<a class="btn btn-ghost" href="mailto:${esc(encodeURIComponent(email))}">Email</a>` : ''}</div></aside></div>
-    ${formEnabled ? `<div class="modal-backdrop" id="vehicle-contact-modal" aria-hidden="true"><section class="vehicle-modal-card" role="dialog" aria-modal="true" aria-labelledby="vehicle-contact-title" tabindex="-1"><h2 id="vehicle-contact-title">${title}</h2><form id="vehicle-request-form" class="vehicle-form-grid"><label class="vehicle-form-field"><span>Nom</span><input name="clientName" required minlength="2" maxlength="120" autocomplete="name"></label><label class="vehicle-form-field"><span>Téléphone</span><input type="tel" name="clientPhone" maxlength="30" autocomplete="tel"></label><label class="vehicle-form-field"><span>Email</span><input type="email" name="clientEmail" maxlength="254" autocomplete="email"></label>${isRequest ? `<label class="vehicle-form-field"><span>${listing.vehicleMode === 'rental' ? 'Début de location' : 'Date du service'}</span><input type="date" name="startDate" required min="${today}"></label>` : ''}${listing.vehicleMode === 'rental' ? `<label class="vehicle-form-field"><span>Fin de location</span><input type="date" name="endDate" required min="${today}"></label>` : ''}<label class="vehicle-form-field"><span>Message</span><textarea name="message" maxlength="2000"></textarea></label><p class="full" id="vehicle-request-error" role="alert" hidden></p><div class="vehicle-form-actions"><button class="btn btn-ghost" type="button" data-close-contact>Fermer</button><button class="btn btn-primary" type="submit">Envoyer${isRequest ? ' la demande' : ''}</button></div></form><p id="vehicle-contact-confirmation" role="status" hidden></p><button class="btn btn-light" type="button" data-close-success hidden>Fermer</button></section></div>` : ''}
+    ${formEnabled ? `<div class="modal-backdrop" id="vehicle-contact-modal" aria-hidden="true"><section class="vehicle-modal-card" role="dialog" aria-modal="true" aria-labelledby="vehicle-contact-title" tabindex="-1"><h2 id="vehicle-contact-title">${title}</h2><form id="vehicle-request-form" class="vehicle-form-grid"><label class="vehicle-form-field"><span>Nom</span><input name="clientName" required minlength="2" maxlength="120" autocomplete="name"></label><label class="vehicle-form-field"><span>Téléphone</span><input type="tel" name="clientPhone" maxlength="30" autocomplete="tel"></label><label class="vehicle-form-field"><span>Email</span><input type="email" name="clientEmail" maxlength="254" autocomplete="email"></label>${isRequest ? `<label class="vehicle-form-field"><span>${listing.vehicleMode === 'rental' ? 'Début de location' : 'Date du service'}</span><input type="date" name="startDate" required min="${today}"></label>` : ''}${listing.vehicleMode === 'rental' ? `<label class="vehicle-form-field"><span>Fin de location</span><input type="date" name="endDate" required min="${today}"></label>` : ''}<label class="vehicle-form-field"><span>Message</span><textarea name="message" maxlength="2000"></textarea></label>${listing.vehicleMode === 'rental' ? '<div class="full" id="vehicle-busy-dates" hidden></div>' : ''}<p class="full" id="vehicle-request-error" role="alert" hidden></p><div class="vehicle-form-actions"><button class="btn btn-ghost" type="button" data-close-contact>Fermer</button><button class="btn btn-primary" type="submit">Envoyer${isRequest ? ' la demande' : ''}</button></div></form><p id="vehicle-contact-confirmation" role="status" hidden></p><button class="btn btn-light" type="button" data-close-success hidden>Fermer</button></section></div>` : ''}
     ${typeof ReportModal === 'function' ? ReportModal() : ''}`;
   if (preferences.internalMessagingEnabled === true) {
     void import('../../messaging/listing-messaging.mjs').then(({ mountListingMessaging }) => mountListingMessaging(document.querySelector('[data-listing-messaging]'), { module: 'vehicles', listingId: listing.id, listingTitle: listing.title, enabled: true }));
@@ -95,6 +95,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   );
   const modal = document.querySelector('#vehicle-contact-modal'),
     form = document.querySelector('#vehicle-request-form');
+  // Busy periods of a rental vehicle (`end` is the first free day), without any client detail.
+  let busyPeriods = [];
+  if (listing.vehicleMode === 'rental') {
+    const busyBox = document.querySelector('#vehicle-busy-dates');
+    const day = (value) => new Date(`${value}T00:00:00Z`).toLocaleDateString('fr-FR', { timeZone: 'UTC', day: 'numeric', month: 'long' });
+    const lastDay = (value) => new Date(new Date(`${value}T00:00:00Z`).valueOf() - 86400000).toISOString().slice(0, 10);
+    pencmiApiRequest(`/voitures/${encodeURIComponent(listing.id)}/availability`).then((availability) => {
+      busyPeriods = availability?.busy || [];
+      if (!busyBox || !busyPeriods.length) return;
+      busyBox.innerHTML = `<strong>Dates déjà indisponibles</strong><ul>${busyPeriods.map(({ start, end }) => `<li>${esc(start === lastDay(end) ? day(start) : `du ${day(start)} au ${day(lastDay(end))}`)}</li>`).join('')}</ul>`;
+      busyBox.hidden = false;
+    }).catch(() => {});
+  }
   const close = () => {
     modal?.classList.remove('is-open');
     modal?.setAttribute('aria-hidden', 'true');
@@ -153,6 +166,16 @@ document.addEventListener('DOMContentLoaded', async () => {
       error = document.querySelector('#vehicle-request-error');
     if (!data.clientPhone?.trim() && !data.clientEmail?.trim()) {
       error.textContent = 'Renseignez un téléphone ou un email.';
+      error.hidden = false;
+      return;
+    }
+    if (data.startDate && data.endDate && data.endDate <= data.startDate) {
+      error.textContent = 'La fin de location doit suivre son début.';
+      error.hidden = false;
+      return;
+    }
+    if (data.startDate && data.endDate && busyPeriods.some(({ start, end }) => data.startDate < end && data.endDate > start)) {
+      error.textContent = 'Ces dates chevauchent une période indisponible. Choisissez une autre période.';
       error.hidden = false;
       return;
     }

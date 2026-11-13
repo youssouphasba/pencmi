@@ -658,10 +658,25 @@ model VehicleListing {
   updatedAt   DateTime      @updatedAt
   deletedAt   DateTime?
   rentalRequests VehicleRentalRequest[]
+  availabilityBlocks VehicleAvailabilityBlock[]
   chauffeurRequests VehicleChauffeurRequest[]
 
   @@index([ownerUserId, status])
   @@index([vehicleMode, city, status])
+}
+
+/** Dates a rental vehicle is not available outside Péncmi (maintenance, rented elsewhere...). End date excluded. */
+model VehicleAvailabilityBlock {
+  id              String         @id @default(cuid())
+  listingId       String
+  listing         VehicleListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  startDate       DateTime
+  endDate         DateTime
+  reason          String?
+  createdByUserId String?
+  createdAt       DateTime       @default(now())
+
+  @@index([listingId, startDate])
 }
 
 model VehicleRentalRequest {

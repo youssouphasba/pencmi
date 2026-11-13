@@ -18,6 +18,7 @@ import {
   PaginationDto,
 } from '../../common/pagination/pagination.dto';
 import { PrismaService } from '../../database/prisma/prisma.service';
+import { vehicleUnavailable } from './vehicle-calendar';
 import { clientRequestId, assertSameClientRequest, CLIENT_REQUEST_TRANSACTION } from '../../common/utils/client-request-retry';
 import { notifyClientRequestStatus } from '../../common/utils/client-request-notification';
 import {
@@ -32,7 +33,7 @@ import {
 import { VEHICLE_DOCUMENT_LABELS } from './vehicle-publication.schema';
 
 export const RENTAL_BOOKED_MESSAGE =
-  'Ce véhicule est déjà réservé sur ces dates. Choisissez une autre période.';
+  'Ce véhicule n’est pas disponible sur ces dates. Choisissez une autre période.';
 
 @Injectable()
 export class VehiclesService {
@@ -422,6 +423,7 @@ export class VehiclesService {
    * One listing is one vehicle. A period is [start, end): a return and a new pick-up may share a day.
    * Call with the listing row locked.
    */
+  /** An accepted rental or an owner's unavailability block covers part of the period. */
   private async rentalBooked(
     tx: Prisma.TransactionClient,
     listingId: string,
@@ -429,17 +431,7 @@ export class VehiclesService {
     end: Date,
     exceptId?: string,
   ) {
-    const clash = await tx.vehicleRentalRequest.findFirst({
-      where: {
-        listingId,
-        status: 'accepted',
-        startDate: { lt: end },
-        endDate: { gt: start },
-        ...(exceptId ? { id: { not: exceptId } } : {}),
-      },
-      select: { id: true },
-    });
-    return Boolean(clash);
+    return Boolean(await vehicleUnavailable(tx, listingId, start, end, exceptId));
   }
 
   private async requestListing(
@@ -677,7 +669,7 @@ export class VehiclesService {
           );
         if (await this.rentalBooked(tx, listing.id, rental.startDate, rental.endDate, id))
           throw new ConflictException(
-            'Ce véhicule est déjà réservé sur ces dates par une autre demande acceptée.',
+            'Ce véhicule n’est pas disponible sur ces dates : une autre location est acceptée ou vous les avez bloquées dans le calendrier.',
           );
       }
       const include = {

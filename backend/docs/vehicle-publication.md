@@ -140,3 +140,14 @@ Le test PostgreSQL existant a révélé une course dans l'upsert de création : 
 ## Disponibilité des locations
 
 Une annonce de location représente un véhicule. Une période est `[début, fin)` : un retour et un nouveau départ peuvent partager la même journée. Sous le verrou de l'annonce, `POST /voitures/:id/rental-requests` répond 409 si la période croise une location déjà acceptée, et l'acceptation côté annonceur répond 409 dans le même cas ou si la demande n'a pas de dates complètes. Plusieurs demandes en attente peuvent coexister ; une seule peut être acceptée pour les mêmes jours. Annuler ou refuser une location acceptée libère la période. Aucun changement de schéma.
+
+## Calendrier de flotte (location)
+
+Page `/dashboard/voitures/calendrier` : par véhicule en location et par mois, les locations acceptées, les demandes en attente et les dates bloquées par le loueur (entretien, location hors Péncmi). Motif privé, jamais montré aux clients.
+
+- `GET /dashboard/voitures/:id/calendar?from=&to=` (400 jours au plus).
+- `POST /dashboard/voitures/:id/blocks` `{ startDate, endDate, reason? }` : dates incluses ; refusé sur une date passée, plus de 366 jours, ou en chevauchement avec une location acceptée ou un autre blocage. Même verrou que l'acceptation d'une location.
+- `DELETE /dashboard/voitures/:id/blocks/:blockId`.
+- `GET /voitures/:id/availability` (public) : périodes occupées fusionnées, `end` étant le premier jour libre, sans aucune donnée client.
+
+Une demande de location et son acceptation sont refusées sur des dates bloquées comme sur des dates déjà louées. La fiche publique liste les dates indisponibles et bloque l'envoi d'une demande qui les chevauche.
