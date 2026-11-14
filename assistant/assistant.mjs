@@ -196,6 +196,8 @@ function attach(node) {
 }
 
 function resultBlock(block) {
+  // The FAQ only feeds Guindi's answer: its raw result is not shown.
+  if (block.tool === 'faq') return null;
   const data = block.result?.data ?? block.result;
   if (block.module && (block.tool === 'search' || block.tool === 'listing')) {
     const list = Array.isArray(data) ? data : data ? [data] : [];

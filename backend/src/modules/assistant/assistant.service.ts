@@ -23,6 +23,7 @@ const MAX_ROUNDS = 3; // model calls per user message
 const MAX_CALLS_PER_ROUND = 3;
 const DAILY_CALLS_PER_USER = 60;
 const DAILY_CALLS_PER_VISITOR = 20;
+const DAILY_CALLS_ALL_VISITORS = 300; // bounds the cost even if visitor addresses were spoofed
 const VISITOR_FREE_QUESTIONS = 2; // per 24 hours; the next one invites to sign in or create an account
 const VISITOR_MESSAGE_ACTION = 'assistant.visitor_message';
 // Visitors (not signed in) may search, read a listing and ask about Péncmi; anything tied to an account asks them to sign in.
@@ -96,6 +97,10 @@ export class AssistantService {
         throw new BudgetError(copy.budget, 429);
       }
       const since = new Date(Date.now() - 86400000);
+      if (isVisitor(user)) {
+        const [{ n }] = await tx.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM "AuditLog" WHERE action = ${RESERVE_ACTION} AND metadata ? 'visitor' AND "createdAt" >= ${since}`;
+        if (Number(n) >= DAILY_CALLS_ALL_VISITORS) throw new BudgetError(copy.visitorQuota, 429);
+      }
       const recent = isVisitor(user)
         ? Number((await tx.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM "AuditLog" WHERE action = ${RESERVE_ACTION} AND metadata->>'visitor' = ${user.key} AND "createdAt" >= ${since}`)[0].n)
         : await tx.auditLog.count({ where: { action: RESERVE_ACTION, actorUserId: user.id, createdAt: { gte: since } } });

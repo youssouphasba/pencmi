@@ -28,7 +28,9 @@ async function refresh() {
 void refresh();
 window.addEventListener('pageshow', () => void refresh());
 window.addEventListener('storage', event => {
-  if (event.key === 'pencmi_access_token') location.reload();
+  // A sign-in inside Guindi's panel must not reload the page under the conversation;
+  // the launcher refreshes the page when the panel closes.
+  if (event.key === 'pencmi_access_token' && !document.body.classList.contains('guindi-open')) location.reload();
 });
 new MutationObserver(records => {
   if (records.some(record => [...record.addedNodes].some(node => node.nodeType === 1))) updateLinks();
