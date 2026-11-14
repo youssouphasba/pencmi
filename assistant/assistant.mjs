@@ -257,11 +257,12 @@ function loginBlock(block) {
   const feedback = el('p', '', { role: 'alert', class: 'small' });
   const target = EMBED ? { target: '_top' } : {};
   const here = EMBED ? (() => { try { return window.parent.location.pathname; } catch { return '/'; } })() : '/assistant/';
+  const register = el('a', copy.register, { href: `/register/?next=${encodeURIComponent(here)}`, class: 'button ghost', ...target });
   const links = el('p', undefined, { class: 'small login-links' });
-  links.append(el('a', copy.register, { href: `/register/?next=${encodeURIComponent(here)}`, ...target }), document.createTextNode(' · '),
-    el('a', copy.forgot, { href: '/forgot-password/', ...target }));
+  links.append(el('a', copy.forgot, { href: '/forgot-password/', ...target }));
   const form = el('form', undefined, { class: 'login-form' });
-  form.append(el('p', block.reason, { class: 'panel-title' }), identifier, password, submitButton, feedback, links);
+  form.append(el('p', block.reason, { class: 'panel-title' }), identifier, password, el('div', undefined, { class: 'login-actions' }, ), feedback, links);
+  form.querySelector('.login-actions').append(submitButton, register);
   panel.append(form);
   form.addEventListener('submit', async event => {
     event.preventDefault();

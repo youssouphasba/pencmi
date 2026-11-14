@@ -284,3 +284,5 @@ button:disabled { opacity: .5; cursor: default; }
 .login-form [role=alert]:empty { display: none; }
 .login-links { color: var(--g-muted); }
 .login-links a { font-weight: 600; text-decoration: none; }
+.login-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.login-actions .button { width: 100%; }

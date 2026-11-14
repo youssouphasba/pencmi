@@ -52,7 +52,8 @@ function topbar() {
   const back = link('← Retour au site', '/', 'space-pill space-primary');
   actions.append(home, bell, back);
   bar.append(brand, actions);
-  document.body.prepend(bar);
+  const trust = document.querySelector('.trust-bar');
+  if (trust) trust.after(bar); else document.body.prepend(bar);
 }
 
 function backdrop() {

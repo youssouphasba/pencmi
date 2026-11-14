@@ -10,15 +10,16 @@ describe('AssistantService loop', () => {
     owner: { firstName: 'Awa', professionalProfile: { professionalPhone: '+221770000000', professionalEmail: 'pro@example.test' } },
     metadata: { contactPreferences: { phoneNumber: '+221770000000' }, photos: ['https://x/p.jpg'] } };
   let replies: any[], prompts: any[], apiCalls: string[], apiAuth: (string | null)[];
-  let visitorCalls = 0;
+  let visitorCalls = 0, visitorMessages = 0;
   let service: AssistantService;
   const toolReply = (name: string, args: unknown, id = 'c1') => ({ tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
 
   beforeEach(() => {
-    replies = []; prompts = []; apiCalls = []; apiAuth = []; visitorCalls = 0;
+    replies = []; prompts = []; apiCalls = []; apiAuth = []; visitorCalls = 0; visitorMessages = 0;
     const tx = { $queryRaw: jest.fn(async (strings: TemplateStringsArray) => strings.join('').includes('SUM') ? [{ spent: 0n }] : strings.join('').includes('count(*)') ? [{ n: BigInt(visitorCalls) }] : [{ locked: 1 }]),
       auditLog: { count: jest.fn(async () => 0), create: jest.fn(async () => ({ id: 'r1' })) } };
-    const prisma = { $transaction: jest.fn(async (fn: any) => fn(tx)), auditLog: { update: jest.fn(async () => ({})), findUnique: jest.fn(async () => ({ metadata: {} })) },
+    const prisma = { $transaction: jest.fn(async (fn: any) => fn(tx)), auditLog: { update: jest.fn(async () => ({})), findUnique: jest.fn(async () => ({ metadata: {} })), create: jest.fn(async () => { visitorMessages++; return {}; }) },
+      $queryRaw: jest.fn(async () => [{ n: BigInt(visitorMessages) }]),
       user: { findUnique: jest.fn(async () => ({ firstName: 'Fatou', lastName: 'Diop', email: 'fatou@example.test', phone: '+221770000001' })) } } as any;
     const config = new ConfigService({ ASSISTANT_ENABLED: 'true', DEEPSEEK_API_KEY: 'k', ASSISTANT_ROLES: 'client,visitor', JWT_SECRET: 'secret', PORT: 4000 });
     service = new AssistantService(prisma, config);
@@ -48,6 +49,11 @@ describe('AssistantService loop', () => {
     for (const secret of ['+221770000000', 'pro@example.test', 'owner-secret', 'Awa', 'p.jpg', 'Bearer'])
       expect(JSON.stringify(prompts)).not.toContain(secret);
     expect(turn.memo).toContain('lst1');
+  });
+
+  it('gives Guindi the first name of a signed-in person', async () => {
+    await service.chat(user, { message: 'Bonjour', consent: true }, 'Bearer t');
+    expect(prompts[0].messages[0].content).toContain('s\'appelle Fatou');
   });
 
   it('keeps private content out of the model', async () => {
@@ -92,6 +98,15 @@ describe('AssistantService loop', () => {
       const second = await service.chat(visitor(), { message: 'Favori', consent: true }, '');
       expect(second.blocks).toEqual([]);
       expect(apiCalls).toEqual([]);
+    });
+    it('offers sign-in at the third question without calling the model', async () => {
+      replies = [{ content: 'Un.' }, { content: 'Deux.' }];
+      await service.chat(visitor(), { message: 'Q1', consent: true }, '');
+      await service.chat(visitor(), { message: 'Q2', consent: true }, '');
+      const third = await service.chat(visitor(), { message: 'Q3', consent: true }, '');
+      expect(prompts).toHaveLength(2);
+      expect(third.blocks).toEqual([{ type: 'login', reason: expect.stringContaining('Connectez-vous') }]);
+      expect(third.text).toContain('créez un compte');
     });
     it('caps daily messages per visitor', async () => {
       visitorCalls = 20;

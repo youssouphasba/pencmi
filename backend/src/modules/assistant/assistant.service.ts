@@ -23,6 +23,8 @@ const MAX_ROUNDS = 3; // model calls per user message
 const MAX_CALLS_PER_ROUND = 3;
 const DAILY_CALLS_PER_USER = 60;
 const DAILY_CALLS_PER_VISITOR = 20;
+const VISITOR_FREE_QUESTIONS = 2; // per 24 hours; the next one invites to sign in or create an account
+const VISITOR_MESSAGE_ACTION = 'assistant.visitor_message';
 // Visitors (not signed in) may search, read a listing and ask about Péncmi; anything tied to an account asks them to sign in.
 const VISITOR_TOOLS = ['faq', 'search', 'listing'];
 const SIGN_IN_TOOL = { type: 'function', function: { name: 'sign_in',
@@ -201,12 +203,31 @@ export class AssistantService {
     }
   }
 
+  /** Visitors get a few free questions; past that, Guindi invites them to sign in (no model call, no cost). */
+  private async visitorAllowance(visitor: Visitor) {
+    const since = new Date(Date.now() - 86400000);
+    const [{ n }] = await this.prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM "AuditLog" WHERE action = ${VISITOR_MESSAGE_ACTION} AND metadata->>'visitor' = ${visitor.key} AND "createdAt" >= ${since}`;
+    if (Number(n) >= VISITOR_FREE_QUESTIONS) return false;
+    await this.prisma.auditLog.create({ data: { actorUserId: null, module: 'system', action: VISITOR_MESSAGE_ACTION, metadata: { visitor: visitor.key } } });
+    return true;
+  }
+  /** First name of a signed-in account, so Guindi can address the person naturally. */
+  private async firstName(user: AuthenticatedUser) {
+    const account = await this.prisma.user.findUnique({ where: { id: user.id }, select: { firstName: true } }).catch(() => null);
+    return account?.firstName?.trim().slice(0, 60) || '';
+  }
+
   async chat(user: Caller, body: unknown, authorization: string) {
     this.assertEnabled(user);
     const input = inputSchema.safeParse(body);
     if (!input.success) throw new BadRequestException('Écrivez votre message.');
+    if (isVisitor(user) && !(await this.visitorAllowance(user)))
+      return { kind: 'turn', text: copy.visitorLimitText, blocks: [{ type: 'login', reason: copy.visitorLimitReason }], memo: copy.visitorLimitText, limited: true };
+    const name = isVisitor(user) ? '' : await this.firstName(user);
+    const persona = isVisitor(user) ? copy.visitorPrompt
+      : helpPrompt(user.role) + ` Rôle du compte : ${user.role}.` + (name ? `\nL'utilisateur s'appelle ${name}. Appelle-le par son prénom de temps en temps, naturellement (par exemple pour saluer ou confirmer), sans le répéter à chaque message.` : '');
     const messages: ModelMessage[] = [
-      { role: 'system', content: copy.prompt + '\n' + (isVisitor(user) ? copy.visitorPrompt : helpPrompt(user.role) + ` Rôle du compte : ${user.role}.`) + `\n${today()}` },
+      { role: 'system', content: copy.prompt + '\n' + persona + `\n${today()}` },
       ...(input.data.history || []).map(turn => ({ role: turn.role, content: turn.content })),
       { role: 'user', content: input.data.message },
     ];

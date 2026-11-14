@@ -150,28 +150,28 @@ function navigateTo(path) {
 const categories = [
   {
     title: "Immobilier",
-    icon: "IM",
+    icon: "🏠",
     text: "Louer, acheter ou vendre une maison, un appartement, un terrain ou un studio au Sénégal.",
     button: "Voir les biens",
     href: routes.realEstate
   },
   {
     title: "Hôtels & Auberges",
-    icon: "HT",
+    icon: "🏨",
     text: "Réserver un hôtel, une auberge, une résidence ou un appartement meublé.",
     button: "Trouver un séjour",
     href: routes.hotels
   },
   {
     title: "Voitures",
-    icon: "VO",
+    icon: "🚗",
     text: "Louer, acheter ou vendre une voiture avec ou sans chauffeur.",
     button: "Voir les voitures",
     href: routes.vehicles
   },
   {
     title: "Voyages interurbains",
-    icon: "TR",
+    icon: "🚌",
     text: "Trouver un trajet entre les villes du Sénégal : bus, car, minibus ou 7 places.",
     button: "Chercher un trajet",
     href: routes.trips
