@@ -52,7 +52,10 @@ export function renderBody(body = '') {
 function header() {
   return el('header', { class: 'content-header' },
     el('a', { class: 'brand', href: href('/'), 'aria-label': 'Accueil Péncmi' },
-      el('span', { class: 'brand-mark', text: 'P' }), el('span', {}, el('strong', { text: 'Péncmi' }), el('small', { text: 'Informations et aide' }))));
+      el('span', { class: 'brand-mark', text: 'P' }), el('span', {}, el('strong', { text: 'Péncmi' }), el('small', { text: 'Informations et aide' }))),
+    el('nav', { class: 'content-nav', 'aria-label': 'Univers' },
+      [['Immobilier', '/immobilier'], ['Hôtels', '/hotels'], ['Voitures', '/voitures'], ['Voyages', '/voyages']].map(([text, path]) => el('a', { href: href(path), text }))),
+    el('a', { class: 'btn btn-primary content-home', href: href('/'), text: '← Accueil' }));
 }
 const footer = () => el('footer', { class: 'content-footer' }, el('div', { class: 'content-actions' }, FOOTER.map(([text, path]) => el('a', { href: href(path), text }))));
 const publicShell = (...main) => [header(), el('main', { class: 'content-main' }, main), footer()];
@@ -77,7 +80,9 @@ async function mountPublicPage(root, slug) {
 }
 
 async function mountHelp(root) {
-  const items = (await publicGet('/content/faq')) || DEFAULT_FAQ;
+  // An empty saved FAQ means "not written yet": show the default questions.
+  const saved = await publicGet('/content/faq');
+  const items = Array.isArray(saved) && saved.length ? saved : DEFAULT_FAQ;
   const search = el('input', { type: 'search', placeholder: 'Rechercher une question…', 'aria-label': 'Rechercher dans l’aide' });
   const results = el('div', { 'aria-live': 'polite' });
   const normalize = (text) => text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');

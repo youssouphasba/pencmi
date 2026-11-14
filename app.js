@@ -568,69 +568,85 @@ function HorizontalListingSection(section) {
 }
 
 const escapeValue = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+const cardPhoto = (href, label, image) => `
+      <a href="${escapeValue(href)}" aria-label="${escapeValue(label)}" tabindex="-1">
+        ${image ? `<img src="${escapeValue(image)}" alt="${escapeValue(label)}" loading="lazy">` : '<div class="real-estate-photo-placeholder" role="img" aria-label="Aucune photo disponible">Aucune photo disponible</div>'}
+      </a>`;
+const cardTags = tags => {
+  const items = tags.filter(Boolean);
+  return items.length ? `<div class="listing-card-tags">${items.map(tag => `<span>${escapeValue(tag)}</span>`).join("")}</div>` : "";
+};
+function ListingCardBody({ href, category, title, place, price, tags = [] }) {
+  return `
+      <div class="listing-card-body">
+        ${category ? `<p>${escapeValue(category)}</p>` : ""}
+        <h3><a href="${escapeValue(href)}">${escapeValue(title)}</a></h3>
+        ${place ? `<span class="listing-card-place">${escapeValue(place)}</span>` : ""}
+        ${price ? `<strong>${escapeValue(price)}</strong>` : ""}
+        ${cardTags(tags)}
+        <a class="listing-card-link" href="${escapeValue(href)}">Voir détails</a>
+      </div>`;
+}
+
 function RealEstateCard(listing) {
   return `
-    <article class="listing-card">
-      <a href="${listing.href}" aria-label="${escapeValue(listing.title)}">
-        ${listing.image ? `<img src="${escapeValue(listing.image)}" alt="${escapeValue(listing.title)}">` : '<div class="real-estate-photo-placeholder" role="img" aria-label="Aucune photo disponible">Aucune photo disponible</div>'}
-      </a>
-      <p>${escapeValue(listing.category)}</p>
-      <h3><a href="${listing.href}">${escapeValue(listing.title)}</a></h3>
-      <span>${escapeValue([listing.city, listing.district].filter(Boolean).join(', '))}</span>
-      <strong>${listing.price}</strong>
-      ${listing.verified ? "<span>Vérifié</span>" : ""}
-      <a href="${listing.href}">Voir détails</a>
+    <article class="listing-card">${cardPhoto(listing.href, listing.title, listing.image)}${ListingCardBody({
+      href: listing.href, category: listing.category, title: listing.title,
+      place: [listing.city, listing.district].filter(Boolean).join(", "), price: listing.price,
+      tags: [listing.verified && "Vérifié"],
+    })}
     </article>
   `;
 }
 
 function HotelCard(listing) {
   return `
-    <article class="listing-card">
-      <a href="${escapeValue(listing.href)}" aria-label="${escapeValue(listing.name)}">
-        ${listing.image ? `<img src="${escapeValue(listing.image)}" alt="${escapeValue(listing.name)}">` : '<div class="real-estate-photo-placeholder" role="img" aria-label="Aucune photo disponible">Aucune photo disponible</div>'}
-      </a>
-      <p>${escapeValue(listing.category)}</p>
-      <h3><a href="${escapeValue(listing.href)}">${escapeValue(listing.name)}</a></h3>
-      <span>${escapeValue(listing.city)}</span>
-      <strong>${listing.priceFrom}</strong>
-      ${listing.rating ? `<span>${listing.rating}</span>` : ""}
-      ${listing.verified ? "<span>Vérifié</span>" : ""}
-      <a href="${listing.href}">Voir détails</a>
+    <article class="listing-card">${cardPhoto(listing.href, listing.name, listing.image)}${ListingCardBody({
+      href: listing.href, category: listing.category, title: listing.name, place: listing.city, price: listing.priceFrom,
+      tags: [listing.rating, listing.verified && "Vérifié"],
+    })}
     </article>
   `;
 }
 
 function VehicleCard(listing) {
+  const title = [listing.brand, listing.model].filter(Boolean).join(" ");
   return `
-    <article class="listing-card">
-      <a href="${escapeValue(listing.href)}" aria-label="${escapeValue(listing.brand)} ${escapeValue(listing.model)}">
-        ${listing.image ? `<img src="${escapeValue(listing.image)}" alt="${escapeValue(listing.brand)} ${escapeValue(listing.model)}">` : '<div class="real-estate-photo-placeholder" role="img" aria-label="Aucune photo disponible">Aucune photo disponible</div>'}
-      </a>
-      <p>${escapeValue(listing.category)}</p>
-      <h3><a href="${escapeValue(listing.href)}">${escapeValue(listing.brand)} ${escapeValue(listing.model)}</a></h3>
-      <span>${escapeValue(listing.city)}</span>
-      <strong>${escapeValue(listing.price)}</strong>
-      ${listing.transmission ? `<span>${escapeValue(listing.transmission)}</span>` : ""}
-      ${listing.fuel ? `<span>${escapeValue(listing.fuel)}</span>` : ""}
-      ${listing.verified ? "<span>Vérifié</span>" : ""}
-      <a href="${listing.href}">Voir détails</a>
+    <article class="listing-card">${cardPhoto(listing.href, title, listing.image)}${ListingCardBody({
+      href: listing.href, category: listing.category, title, place: listing.city, price: listing.price,
+      tags: [listing.transmission, listing.fuel, listing.verified && "Vérifié"],
+    })}
     </article>
   `;
 }
 
 function TripCard(listing) {
   return `
-    <article class="listing-card">
-      <h3><a href="${listing.href}">${listing.departureCity} → ${listing.arrivalCity}</a></h3>
-      <p>${listing.transportType}</p>
-      <strong>${listing.priceFrom}</strong>
-      ${listing.company ? `<span>${listing.company}</span>` : ""}
-      ${listing.departureTime ? `<span>${listing.departureTime}</span>` : ""}
-      ${listing.verified ? "<span>Vérifié</span>" : ""}
-      <a href="${listing.href}">Voir détails</a>
+    <article class="listing-card">${ListingCardBody({
+      href: listing.href, category: listing.transportType, title: `${listing.departureCity} → ${listing.arrivalCity}`,
+      place: [listing.company, listing.departureTime].filter(Boolean).join(" · "), price: listing.priceFrom,
+      tags: [listing.verified && "Vérifié"],
+    })}
     </article>
   `;
+}
+
+// Mobile carousels advance on their own, pause while the visitor interacts, and respect reduced motion.
+function AutoScrollCarousels() {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  for (const list of document.querySelectorAll(".horizontal-list")) {
+    let pausedUntil = 0;
+    const pause = () => { pausedUntil = Date.now() + 8000; };
+    for (const type of ["pointerdown", "touchstart", "wheel", "focusin", "mouseenter"]) list.addEventListener(type, pause, { passive: true });
+    setInterval(() => {
+      if (Date.now() < pausedUntil || document.hidden || list.scrollWidth <= list.clientWidth + 4) return;
+      const card = list.querySelector(".listing-card");
+      if (!card) return;
+      const step = card.getBoundingClientRect().width + parseFloat(getComputedStyle(list).columnGap || "0");
+      const atEnd = list.scrollLeft + list.clientWidth >= list.scrollWidth - 4;
+      list.scrollTo({ left: atEnd ? 0 : list.scrollLeft + step, behavior: "smooth" });
+    }, 4000);
+  }
 }
 
 function ListingSections() {
@@ -693,6 +709,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   CategoryGrid();
   await loadHomeListings();
   ListingSections();
+  AutoScrollCarousels();
   AdvantagesSection();
   ProfessionalCTA();
   Footer();

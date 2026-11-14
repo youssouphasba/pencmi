@@ -1,0 +1,157 @@
+/* Shared shell for professional and admin spaces: top bar, compact header,
+   closable menu, readable KPIs and tables on phones. Loaded by space-shell.mjs. */
+.space-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px clamp(14px, 3vw, 32px);
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+.space-brand { display: flex; align-items: center; gap: 10px; color: #0f2a5f; font-weight: 800; text-decoration: none; }
+.space-brand img { width: 36px; height: 36px; object-fit: contain; border-radius: 8px; }
+.space-topbar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.space-topbar a.space-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0 12px;
+  color: #0f2a5f;
+  background: #e8f0fe;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.space-topbar a.space-primary { color: #fff; background: #1d4ed8; }
+.space-topbar a:focus-visible, .space-menu-btn:focus-visible { outline: 3px solid #93c5fd; outline-offset: 2px; }
+
+.space-backdrop { position: fixed; inset: 0; z-index: 65; background: rgba(15, 23, 42, .45); }
+.space-backdrop[hidden] { display: none; }
+.space-logout {
+  width: 100%;
+  margin-top: 16px;
+  color: #fecaca !important;
+  background: transparent !important;
+  border: 1px solid rgba(254, 202, 202, .35) !important;
+  box-shadow: none !important;
+}
+
+/* The floating Guindi button must never hide the end of a page. */
+body:has(.guindi-launcher) { padding-bottom: 84px; }
+
+@media (max-width: 860px) {
+  .space-hide-mobile { display: none !important; }
+  .space-topbar .space-label { display: none; }
+}
+@media (max-width: 480px) {
+  .space-topbar:has(.space-home:not(.space-hide-mobile)) .space-brand span { display: none; }
+}
+@media (max-width: 860px) {
+
+  /* Page header: menu + title on one line, small actions on the next. */
+  .dashboard-header, .hotel-dashboard-header, .vehicle-dashboard-header, .trip-dashboard-header, .admin-header {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px !important;
+    margin-bottom: 14px !important;
+  }
+  .dashboard-header > div:first-child, .hotel-dashboard-header > div:first-child, .vehicle-dashboard-header > div:first-child,
+  .trip-dashboard-header > div:first-child, .admin-header > div:first-child {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+    width: 100%;
+  }
+  .dashboard-header h1, .hotel-dashboard-header h1, .vehicle-dashboard-header h1, .trip-dashboard-header h1, .admin-header h1 {
+    margin: 0 !important;
+    font-size: 1.35rem !important;
+    line-height: 1.2;
+  }
+  .dashboard-header p, .hotel-dashboard-header p, .vehicle-dashboard-header p, .trip-dashboard-header p, .admin-header p { display: none; }
+  .dashboard-header-actions, .admin-header-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    gap: 8px !important;
+    width: 100%;
+  }
+  .dashboard-header-actions .btn, .admin-header-actions .btn {
+    width: auto !important;
+    min-height: 38px;
+    padding: 0 14px;
+    font-size: .88rem;
+  }
+  .dashboard-header-actions .notification-shell { display: none; }
+  .space-menu-btn {
+    display: inline-grid !important;
+    place-items: center;
+    width: 40px !important;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px !important;
+    padding: 0 !important;
+    font-size: 18px !important;
+  }
+
+  /* KPI tiles: two per row, no meaningless letter icons. */
+  .kpi-grid, .hotel-kpi-grid, .vehicle-kpi-grid, .trip-kpi-grid, .admin-kpi-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+  .kpi-icon { display: none !important; }
+  .kpi-card, .admin-kpi-card { min-height: 0 !important; padding: 12px !important; }
+  .kpi-card h3 { margin: 0 !important; font-size: .85rem !important; font-weight: 600; color: #64748b; }
+  .kpi-value, .admin-kpi-value { margin-top: 4px !important; font-size: 1.35rem !important; }
+
+  /* Tables become cards: each cell shows its column name. */
+  table.space-cards, table.space-cards tbody, table.space-cards tr, table.space-cards td { display: block; width: 100% !important; min-width: 0 !important; max-width: 100%; }
+  table.space-cards { table-layout: auto !important; }
+  table.space-cards thead { display: none; }
+  table.space-cards tr { padding: 12px 14px; border-bottom: 1px solid #e2e8f0; }
+  table.space-cards td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0 !important;
+    border: 0 !important;
+    flex-wrap: wrap;
+    text-align: right;
+    white-space: normal !important;
+  }
+  table.space-cards td > * { max-width: 100%; }
+  table.space-cards td::before { content: attr(data-label) / ""; color: #64748b; font-size: .85rem; text-align: left; }
+  table.space-cards td:first-child { display: block; text-align: left; font-weight: 700; }
+  table.space-cards td:first-child::before { display: none; }
+  .hotel-table-wrap:has(> table.space-cards), .vehicle-table-wrap:has(> table.space-cards), .trip-table-wrap:has(> table.space-cards),
+  .performance-table-wrap:has(> table.space-cards), .admin-table-shell:has(table.space-cards) { overflow: visible !important; }
+  .hotel-table-wrap, .vehicle-table-wrap, .trip-table-wrap, .performance-table-wrap { overflow-x: auto; }
+
+  /* Profile and settings pages of professional accounts: the menu becomes a row of tabs. */
+  .account-sidebar {
+    position: static !important;
+    display: flex !important;
+    gap: 8px;
+    padding: 6px !important;
+    overflow-x: auto;
+    background: #fff !important;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    scrollbar-width: none;
+  }
+  .account-sidebar .dashboard-brand, .account-sidebar .notification-badge { display: none !important; }
+  .account-sidebar .account-logout-button { flex: 0 0 auto; width: auto !important; min-height: 36px; margin: 0 !important; padding: 0 12px !important; color: #b91c1c !important; background: #fef2f2 !important; border: 0 !important; border-radius: 999px; }
+  .account-nav { display: flex !important; gap: 6px; }
+  .account-nav a { flex: 0 0 auto; padding: 8px 12px !important; color: #0f2a5f !important; border-radius: 999px; white-space: nowrap; }
+  .account-nav a[aria-current="page"] { color: #fff !important; background: #1d4ed8 !important; }
+}
+.space-has-more:not(.space-more-open) .space-secondary { display: none !important; }
+.space-more-toggle { min-height: 36px; padding: 0 12px; color: #1d4ed8; background: none; border: 0; font: inherit; font-weight: 700; cursor: pointer; }

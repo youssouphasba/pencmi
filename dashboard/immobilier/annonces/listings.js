@@ -263,7 +263,7 @@ function AdvertiserListingsHeader() {
       </div>
       <div class="dashboard-header-actions">
         <a class="btn btn-primary" href="${routeHref(routes.publish)}">Publier une annonce</a>
-        <a class="btn btn-light" href="${routeHref(routes.dashboard)}">Retour au dashboard</a>
+        <a class="btn btn-light" href="${routeHref(routes.dashboard)}">Tableau de bord</a>
       </div>
     </header>
   `;

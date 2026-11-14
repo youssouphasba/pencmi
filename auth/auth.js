@@ -101,6 +101,17 @@ function getNextParam() {
   return new URLSearchParams(window.location.search).get("next");
 }
 
+// Without an explicit ?next, return to the page the visitor came from (same site only;
+// safeNext() still rejects other origins and the login/register pages).
+function getPreviousPage() {
+  try {
+    const previous = new URL(document.referrer);
+    if (previous.origin !== window.location.origin) return null;
+    if (/^\/(forgot-password|reset-password|verify-email)(\/|$)/.test(previous.pathname)) return null;
+    return previous.pathname + previous.search + previous.hash;
+  } catch { return null; }
+}
+
 async function getRedirectAfterLogin(role = "client", next = getNextParam()) {
   const { safeNext } = await import('./navigation.mjs');
   return safeNext(next, getDashboardRouteByRole(role));
@@ -856,7 +867,7 @@ function bindAuthForms() {
       });
       await setStoredTokens(tokens);
       await loadCurrentSession();
-      const target = await getRedirectAfterLogin(authState.currentUser?.role || "client", getNextParam());
+      const target = await getRedirectAfterLogin(authState.currentUser?.role || "client", getNextParam() || getPreviousPage());
       window.location.href = authRouteHref(target);
     } catch (apiError) {
       showMessage(error, apiError.message || "Identifiants incorrects. Veuillez réessayer.");

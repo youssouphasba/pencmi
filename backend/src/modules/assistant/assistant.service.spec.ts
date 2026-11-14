@@ -17,7 +17,8 @@ describe('AssistantService loop', () => {
     replies = []; prompts = []; apiCalls = [];
     const tx = { $queryRaw: jest.fn(async (strings: TemplateStringsArray) => strings.join('').includes('SUM') ? [{ spent: 0n }] : [{ locked: 1 }]),
       auditLog: { count: jest.fn(async () => 0), create: jest.fn(async () => ({ id: 'r1' })) } };
-    const prisma = { $transaction: jest.fn(async (fn: any) => fn(tx)), auditLog: { update: jest.fn(async () => ({})) } } as any;
+    const prisma = { $transaction: jest.fn(async (fn: any) => fn(tx)), auditLog: { update: jest.fn(async () => ({})) },
+      user: { findUnique: jest.fn(async () => ({ firstName: 'Fatou', lastName: 'Diop', email: 'fatou@example.test', phone: '+221770000001' })) } } as any;
     const config = new ConfigService({ ASSISTANT_ENABLED: 'true', DEEPSEEK_API_KEY: 'k', ASSISTANT_ROLES: 'client', JWT_SECRET: 'secret', PORT: 4000 });
     service = new AssistantService(prisma, config);
     global.fetch = jest.fn(async (url: any, options: any) => {
@@ -62,6 +63,12 @@ describe('AssistantService loop', () => {
     expect(apiCalls).toEqual([]);
     expect(turn.blocks[0]).toMatchObject({ type: 'proposal', tool: 'add_favorite' });
     expect((turn.blocks[0] as any).confirmation).toMatch(/^[\w-]+\.[a-f0-9]{64}$/);
+  });
+
+  it('fills the request contact from the signed-in account', async () => {
+    replies = [toolReply('create_request', { type: 'trip', id: 'trip1', details: { occurrenceId: 'occ1', requestedSeats: 2 } })];
+    const turn = await service.chat(user, { message: 'Réserve 2 places', consent: true }, 'Bearer t');
+    expect((turn.blocks[0] as any).args.details).toMatchObject({ clientName: 'Fatou Diop', clientEmail: 'fatou@example.test', clientPhone: '+221770000001', requestedSeats: 2 });
   });
 
   it('bounds the number of model calls and forces a final text answer', async () => {

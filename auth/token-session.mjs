@@ -13,7 +13,7 @@ const SESSION_MESSAGES = Object.freeze({
   uncertain: "Le renouvellement n’a pas pu être confirmé. Reconnectez-vous pour continuer.",
   offline: "Connexion indisponible. Réessayez lorsque le réseau sera rétabli.",
   storageUnavailable: "Le stockage de session est indisponible. Veuillez vous reconnecter.",
-  unsupported: "Ce navigateur ne permet pas de renouveler la session en toute sécurité. Veuillez vous reconnecter.",
+  unsupported: "Votre session a expiré. Reconnectez-vous pour continuer.",
   loginFailed: "Connexion impossible. Veuillez réessayer.",
 });
 

@@ -411,7 +411,10 @@ test(
           .waitFor();
         failed = true;
         const failureDialog = page.waitForEvent('dialog');
-        await page.locator('[data-trip-request-status="pending"]').first().click();
+        // On phones, secondary actions are folded under "Plus d’actions".
+        const pending = page.locator('[data-trip-request-status="pending"]').first();
+        if (!(await pending.isVisible())) await pending.locator('xpath=..').locator('.space-more-toggle').click();
+        await pending.click();
         const dialog = await failureDialog;
         assert.equal(dialog.message(),'Erreur réseau test');
         await dialog.accept();

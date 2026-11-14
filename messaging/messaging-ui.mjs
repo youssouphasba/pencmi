@@ -10,6 +10,20 @@ export function loginHref() {
 }
 
 /** Text only ever goes through textContent: user content cannot become HTML. */
+// Optional pieces of UI are often written as `condition ? node : null`. The DOM's own
+// append()/replaceChildren() would print those as the text "null": drop them instead.
+if (!globalThis.__pencmiSafeAppend) {
+  globalThis.__pencmiSafeAppend = true;
+  const keep = (item) => item !== null && item !== undefined && item !== false;
+  for (const proto of [Element.prototype, Document.prototype, DocumentFragment.prototype]) {
+    for (const name of ['append', 'prepend', 'replaceChildren']) {
+      const original = proto[name];
+      if (typeof original !== 'function') continue;
+      proto[name] = function (...nodes) { return original.apply(this, nodes.filter(keep)); };
+    }
+  }
+}
+
 export function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(props)) {

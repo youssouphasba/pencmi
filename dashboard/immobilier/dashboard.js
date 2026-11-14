@@ -258,7 +258,7 @@ function DashboardHeader() {
     <header class="dashboard-header">
       <div>
         <button class="btn btn-ghost dashboard-menu-toggle" type="button" data-open-sidebar>Menu</button>
-        <h1>Dashboard immobilier</h1>
+        <h1>Tableau de bord</h1>
         <p>Gérez vos annonces et vos demandes réelles.</p>
       </div>
       <div class="dashboard-header-actions">

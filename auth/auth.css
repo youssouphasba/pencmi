@@ -363,3 +363,54 @@
     width: 100%;
   }
 }
+
+/* Mobile: the form comes first, the header stays on one line. */
+@media (max-width: 680px) {
+  .auth-header {
+    flex-direction: row;
+    align-items: center;
+    padding: 10px 14px;
+  }
+
+  .auth-header .auth-actions {
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .auth-header .btn {
+    width: auto;
+    min-height: 36px;
+    padding-inline: 12px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  [data-auth-page="login"] .auth-header .btn-ghost,
+  [data-auth-page="register"] .auth-header .btn-light {
+    display: none;
+  }
+
+  .auth-main {
+    padding-top: 16px;
+  }
+
+  .auth-shell {
+    gap: 14px;
+  }
+
+  .auth-card {
+    order: -1;
+  }
+
+  .auth-card h1 {
+    font-size: 1.5rem;
+  }
+
+  .auth-intro h1 {
+    font-size: 1.2rem;
+  }
+
+  .auth-intro .verification-grid {
+    display: none;
+  }
+}

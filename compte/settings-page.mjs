@@ -13,6 +13,18 @@ import {
   sessionRequired,
 } from './account-ui.mjs';
 
+// Turns a raw User-Agent into "Chrome · Android" style labels.
+export function describeDevice(agent = '') {
+  const ua = String(agent);
+  if (!ua) return 'Appareil inconnu';
+  if (/Headless|Playwright|bot|curl|^node$/i.test(ua)) return 'Navigateur automatisé (tests)';
+  const browser = /Edg\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet'
+    : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : 'Navigateur';
+  const system = /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'iPhone / iPad' : /Windows/.test(ua) ? 'Windows'
+    : /Mac OS X/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
+  return system ? `${browser} · ${system}` : browser;
+}
+
 export function mountAccountSettings(root) {
   accountStyles();
   if (sessionRequired(root)) return;
@@ -21,13 +33,18 @@ export function mountAccountSettings(root) {
   const verificationBody = el('div');
   const deletionBody = el('div');
   const businessEmailBody = el('div');
-  const section = (title, ...children) =>
-    el(
-      'section',
-      { class: 'ae-section' },
-      el('h2', { text: title }),
-      ...children,
+  // Each setting is a collapsed row: the title and a short status, opened on demand.
+  const section = (title, hint, ...children) => {
+    const hintNode = el('span', { class: 'ae-panel-hint', text: hint });
+    const panel = el(
+      'details',
+      { class: 'ae-panel' },
+      el('summary', {}, el('span', { class: 'ae-panel-title', text: title }), hintNode),
+      el('div', { class: 'ae-panel-body' }, ...children),
     );
+    panel.setHint = (text) => { hintNode.textContent = text; };
+    return panel;
+  };
   const fields = Object.fromEntries(
     [
       ['currentPassword', 'Mot de passe actuel'],
@@ -164,31 +181,32 @@ export function mountAccountSettings(root) {
       const result = await apiRequest(`/auth/sessions?page=${page}&limit=20`, {
         includeMeta: true,
       });
+      const total = result.meta?.total ?? result.data.length;
+      sessionsPanel.setHint(`${total} appareil${total > 1 ? 's' : ''} connecté${total > 1 ? 's' : ''}`);
+      const sessions = [...result.data].sort((a, b) => Number(b.current) - Number(a.current));
       sessionBody.replaceChildren(
         el(
-          'div',
+          'ul',
           { class: 'ae-sessions' },
-          result.data.map((session) =>
+          sessions.map((session) =>
             el(
-              'article',
+              'li',
               { class: 'ae-session' },
-              el('h3', {
-                text: session.current ? 'Cet appareil' : session.device,
-              }),
-              el('p', {
-                text: `Connexion : ${formatDateTime(session.createdAt)}`,
-              }),
-              session.lastUsedAt
-                ? el('p', {
-                    text: `Dernière activité : ${formatDateTime(session.lastUsedAt)}`,
-                  })
-                : null,
+              el(
+                'div',
+                { class: 'ae-session-info' },
+                el('strong', { text: describeDevice(session.device) },
+                  session.current ? el('span', { class: 'ae-badge', text: 'Cet appareil' }) : null),
+                el('span', {
+                  class: 'pm-muted',
+                  text: `Dernière activité : ${formatDateTime(session.lastUsedAt || session.createdAt)}`,
+                }),
+              ),
               el('button', {
                 type: 'button',
-                class: 'btn btn-light',
-                text: session.current
-                  ? 'Déconnecter cet appareil'
-                  : 'Déconnecter cette session',
+                class: 'ae-link-button',
+                text: 'Déconnecter',
+                'aria-label': session.current ? 'Déconnecter cet appareil' : `Déconnecter ${describeDevice(session.device)}`,
                 onClick: () =>
                   revoke(
                     `/auth/sessions/${encodeURIComponent(session.id)}`,
@@ -198,13 +216,14 @@ export function mountAccountSettings(root) {
             ),
           ),
         ),
-        el('button', {
-          class: 'btn btn-light',
-          type: 'button',
-          text: 'Déconnecter les autres appareils',
-          disabled: result.meta?.total <= 1,
-          onClick: () => revoke('/auth/sessions/others'),
-        }),
+        total > 1
+          ? el('button', {
+              class: 'btn btn-light',
+              type: 'button',
+              text: 'Déconnecter tous les autres appareils',
+              onClick: () => revoke('/auth/sessions/others'),
+            })
+          : null,
       );
       if (result.meta?.totalPages > 1)
         sessionBody.append(
@@ -238,43 +257,49 @@ export function mountAccountSettings(root) {
       accountError(sessionBody, error, loadSessions);
     }
   }
+  const sessionsPanel = section('Appareils connectés', 'Chargement…', sessionBody);
+  const emailPanel = section('Adresse email', 'Vérification de l’adresse', verificationBody);
   root.replaceChildren(
-    section('Mot de passe', form),
-    section('Adresse email', verificationBody),
-    section('Sessions connectées', sessionBody),
-    section(
-      'Notifications et alertes',
-      businessEmailBody,
-      el(
-        'div',
-        { class: 'ae-actions' },
-        el('a', {
-          class: 'btn btn-light',
-          href: '/compte/notifications/',
-          text: 'Mes notifications',
-        }),
-        el('a', {
-          class: 'btn btn-light',
-          href: '/compte/alertes/',
-          text: 'Gérer mes alertes',
+    el(
+      'div',
+      { class: 'ae-panels' },
+      section('Mot de passe', 'Modifier votre mot de passe', form),
+      emailPanel,
+      sessionsPanel,
+      section(
+        'Notifications et emails',
+        'Emails de suivi, notifications, alertes',
+        businessEmailBody,
+        el(
+          'div',
+          { class: 'ae-actions' },
+          el('a', { class: 'btn btn-light', href: '/compte/notifications/', text: 'Mes notifications' }),
+          el('a', { class: 'btn btn-light', href: '/compte/alertes/', text: 'Gérer mes alertes' }),
+        ),
+        el('p', {
+          class: 'pm-muted',
+          text: 'Les notifications de sécurité et de suivi des demandes restent actives.',
         }),
       ),
-      el('p', {
-        text: 'Les notifications de sécurité et de suivi des demandes restent actives. La vérification par SMS est indisponible.',
-      }),
+      section(
+        'Confidentialité',
+        'Partage de vos coordonnées',
+        el('p', {
+          text: 'Les coordonnées fournies dans une demande sont partagées uniquement avec l’annonceur concerné. L’interface est en français.',
+        }),
+      ),
     ),
-    section(
-      'Langue et confidentialité',
-      el('p', { text: 'Langue de l’interface : français.' }),
-      el('p', {
-        text: 'Les coordonnées fournies dans une demande sont partagées avec l’annonceur concerné. Aucun réglage global de confidentialité n’est disponible pour le moment.',
-      }),
+    el(
+      'div',
+      { class: 'ae-panels ae-danger' },
+      section('Supprimer mon compte', 'Action définitive', deletionBody),
     ),
-    section('Suppression du compte', deletionBody),
     feedback,
   );
   void loadSessions();
-  void mountEmailVerification(verificationBody);
+  void mountEmailVerification(verificationBody).then(() => {
+    emailPanel.setHint(verificationBody.textContent.includes('Email vérifié') ? 'Vérifiée ✓' : 'À vérifier');
+  });
   void mountBusinessEmailPreference(businessEmailBody);
   void mountAccountDeletion(deletionBody, () => requireLogin('Votre compte a été supprimé.'));
 }

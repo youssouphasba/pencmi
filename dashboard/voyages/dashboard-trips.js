@@ -150,10 +150,10 @@ function EmptyState(title, text = "", action = "") {
 
 function TripsDashboardPage() {
   if (tripDashboardData.loading) {
-    return TripsDashboardLayout(`${DashboardHeader("Dashboard voyages", "Chargement de vos données annonceur.")}${EmptyState("Chargement en cours.")}`, "overview");
+    return TripsDashboardLayout(`${DashboardHeader("Tableau de bord", "Chargement de vos données annonceur.")}${EmptyState("Chargement en cours.")}`, "overview");
   }
   if (tripDashboardData.error) {
-    return TripsDashboardLayout(`${DashboardHeader("Dashboard voyages", "Vos données annonceur.")}${EmptyState(tripDashboardData.error)}`, "overview");
+    return TripsDashboardLayout(`${DashboardHeader("Tableau de bord", "Vos données annonceur.")}${EmptyState(tripDashboardData.error)}`, "overview");
   }
   const activeTrips = tripDashboardData.trips.filter((trip) => trip.status === "active").length;
   const pendingTrips = tripDashboardData.trips.filter((trip) => trip.status === "pending_review").length;
@@ -167,7 +167,7 @@ function TripsDashboardPage() {
     ["Contacts directs", tripDashboardData.stats?.directContacts ?? null]
   ];
   return TripsDashboardLayout(`
-    ${DashboardHeader("Dashboard voyages", "Suivez vos trajets, demandes, contacts, messages et performances.", `<a class="btn btn-primary" href="${tripDashboardRouteHref(tripDashboardRoutes.publish)}">Publier un trajet</a>`)}
+    ${DashboardHeader("Tableau de bord", "Suivez vos trajets, demandes, contacts, messages et performances.", `<a class="btn btn-primary" href="${tripDashboardRouteHref(tripDashboardRoutes.publish)}">Publier un trajet</a>`)}
     <section class="trip-kpi-grid">${kpis.map(([title, value]) => KpiCard(title, value == null ? "" : String(value))).join("")}</section>
     ${tripDashboardData.trips.length || tripDashboardData.reservations.length ? "" : EmptyState("Aucune donnée disponible pour le moment.")}
   `, "overview");
@@ -248,7 +248,7 @@ function TripContactsPage() {
 }
 
 function TripStatisticsPage() {
-  return TripsDashboardLayout(`${DashboardHeader('Statistiques voyages','Vos demandes, places, contacts et messages réellement enregistrés.')}<div id="pencmi-stats"></div>`,'statistics');
+  return TripsDashboardLayout(`${DashboardHeader('Statistiques voyages','Vos demandes, places, contacts et messages.')}<div id="pencmi-stats"></div>`,'statistics');
 }
 
 function TripContactSettingsPage() {

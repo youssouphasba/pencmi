@@ -3,6 +3,7 @@ let clientUnreadLoaded = false;
 const clientCounts = {};
 
 const clientRoutes = {
+  home: "/",
   overview: "/compte",
   profile: "/compte/profil",
   messages: "/compte/messages",
@@ -59,6 +60,7 @@ function clientRouteHref(path) {
   const depth = Number(document.body.dataset.routeDepth || "1");
   const prefix = "../".repeat(depth);
   const routes = {
+    "/": `${prefix}index.html`,
     "/compte": `${prefix}compte/`,
     "/compte/profil": `${prefix}compte/profil/`,
     "/compte/messages": `${prefix}compte/messages/`,
@@ -141,16 +143,27 @@ function sortByRecent(items) {
 
 function ClientAccountLayout(content, currentPage = "overview", title = "Mon compte", subtitle = "Suivez vos demandes, favoris, messages et alertes depuis un seul espace.") {
   return `
+    <div class="client-topbar">
+      <a class="client-topbar-brand" href="${clientRouteHref(clientRoutes.home)}" aria-label="Accueil du site Péncmi"><img src="/Logo%20pencmi.jpeg" alt="" width="40" height="40"><strong>Péncmi</strong></a>
+      <nav class="client-topbar-links" aria-label="Site Péncmi">
+        <a href="${clientRouteHref(clientRoutes.realEstate)}">Immobilier</a><a href="${clientRouteHref(clientRoutes.hotels)}">Hôtels</a><a href="${clientRouteHref(clientRoutes.vehicles)}">Voitures</a><a href="${clientRouteHref(clientRoutes.voyages)}">Voyages</a>
+      </nav>
+      <div class="client-topbar-actions">
+        <a class="client-topbar-bell" href="${clientRouteHref(clientRoutes.notifications)}" aria-label="Notifications${clientCounts.unreadNotifications ? ` (${clientCounts.unreadNotifications} non lues)` : ""}"><span aria-hidden="true">🔔</span><span class="client-topbar-bell-label">Notifications</span>${clientCounts.unreadNotifications ? `<span class="notification-badge">${clientCounts.unreadNotifications}</span>` : ""}</a>
+        <a class="btn btn-primary client-topbar-home" href="${clientRouteHref(clientRoutes.home)}">← Retour au site</a>
+      </div>
+    </div>
     <div class="client-account-shell">
       ${ClientSidebar(currentPage)}
       <main class="client-main">
         <header class="client-header">
-          <div>
-            <button class="btn btn-ghost client-menu-toggle" type="button" data-open-client-sidebar>Menu</button>
-            <h1>${title}</h1>
-            <p>${subtitle}</p>
+          <div class="client-header-title">
+            <button class="btn btn-ghost client-menu-toggle" type="button" data-open-client-sidebar aria-label="Ouvrir le menu" aria-controls="client-sidebar" aria-expanded="false">☰<span class="client-menu-label"> Menu</span></button>
+            <div>
+              <h1>${title}</h1>
+              <p>${subtitle}</p>
+            </div>
           </div>
-          <div class="client-header-actions"><a class="btn btn-light" href="${clientRouteHref(clientRoutes.notifications)}">Notifications</a><button class="btn btn-ghost" type="button" data-client-logout>Se déconnecter</button></div>
         </header>
         ${content}
       </main>
@@ -176,48 +189,55 @@ function ClientSidebar(currentPage = "overview") {
   ];
 
   return `
+    <div class="client-sidebar-backdrop" data-close-client-sidebar hidden></div>
     <aside class="client-sidebar" id="client-sidebar">
-      <div class="dashboard-brand"><span>P</span><div><strong>Péncmi</strong><small>Espace client</small></div></div>
+      <button class="client-sidebar-close" type="button" data-close-client-sidebar aria-label="Fermer le menu">✕</button>
+      <a class="dashboard-brand" href="${clientRouteHref(clientRoutes.home)}" aria-label="Accueil du site Péncmi"><span>P</span><div><strong>Péncmi</strong><small>Espace client</small></div></a>
       <nav class="client-nav">${nav.map(([label, href, key, badge]) => `<a href="${clientRouteHref(href)}"${key === currentPage ? ' aria-current="page"' : ""}><span>${label}</span>${typeof badge === "number" ? `<span class="notification-badge">${badge}</span>` : ""}</a>`).join("")}</nav>
+      <button class="client-sidebar-logout" type="button" data-client-logout>Se déconnecter</button>
     </aside>
   `;
 }
 
 function ClientOverviewPage() {
+  // Each tile is a link to the matching page, so the overview needs no separate shortcut lists.
   const summaries = [
-    ["Messages non lus", clientUnreadLoaded ? clientMessages.reduce((total, item) => total + item.unreadCount, 0) : "—"],
-    ["Favoris", clientCounts.favorites ?? "—"],
-    ["Alertes actives", clientCounts.activeAlerts ?? "—"],
-    ["Demandes hôtels", '<span data-request-total="hotel">—</span>'],
-    ["Visites immobilières", '<span data-request-total="visit">—</span>'],
-    ["Locations voitures", '<span data-request-total="rental">—</span>'],
-    ["Demandes chauffeur", '<span data-request-total="chauffeur">—</span>'],
-    ["Trajets interurbains", '<span data-request-total="trip">—</span>'],
-    ["Notifications non lues", clientCounts.unreadNotifications ?? "—"]
+    ["Messages non lus", clientUnreadLoaded ? clientMessages.reduce((total, item) => total + item.unreadCount, 0) : "—", clientRoutes.messages],
+    ["Favoris", clientCounts.favorites ?? "—", clientRoutes.favorites],
+    ["Alertes actives", clientCounts.activeAlerts ?? "—", clientRoutes.alerts],
+    ["Notifications", clientCounts.unreadNotifications ?? "—", clientRoutes.notifications],
   ];
-  const shortcuts = [
-    ["Voir mes favoris", clientRoutes.favorites],
-    ["Voir mes messages", clientRoutes.messages],
-    ["Voir mes alertes", clientRoutes.alerts],
-    ["Rechercher un bien", clientRoutes.realEstate],
-    ["Rechercher un hôtel", clientRoutes.hotels],
-    ["Rechercher une voiture", clientRoutes.vehicles],
-    ["Rechercher un trajet", clientRoutes.voyages]
+  const requests = [
+    ["Hôtels", "hotel", clientRoutes.reservations],
+    ["Visites", "visit", clientRoutes.visits],
+    ["Locations", "rental", clientRoutes.rentals],
+    ["Chauffeur", "chauffeur", clientRoutes.chauffeur],
+    ["Trajets", "trip", clientRoutes.trips],
+  ];
+  const searches = [
+    ["Un bien immobilier", clientRoutes.realEstate],
+    ["Un hôtel", clientRoutes.hotels],
+    ["Une voiture", clientRoutes.vehicles],
+    ["Un trajet", clientRoutes.voyages],
   ];
 
   return ClientAccountLayout(`
-    <section class="client-summary-grid">${summaries.map(([label, value]) => ClientSummaryCard(label, value)).join("")}</section>
-    <section class="client-section client-card">
-      <h2>Accès rapides</h2>
-      <div class="client-shortcuts">${shortcuts.map(([label, href]) => `<a class="btn btn-light" href="${clientRouteHref(href)}">${label}</a>`).join("")}</div>
-    </section>
+    <section class="client-summary-grid" aria-label="Mon activité">${summaries.map(([label, value, href]) => ClientSummaryCard(label, value, href)).join("")}</section>
     <div id="pencmi-request-summary-status" role="status"></div>
-    <section class="client-section"><h2>Mes demandes</h2><div class="client-shortcuts cr-shortcuts">${["reservations", "visits", "rentals", "chauffeur", "trips"].map((key, i) => `<a class="btn btn-light" href="${clientRouteHref(clientRoutes[key])}">${["Hôtels", "Visites", "Locations", "Chauffeur", "Voyages"][i]}</a>`).join("")}</div></section>
+    <section class="client-section">
+      <h2 class="client-section-title">Mes demandes</h2>
+      <div class="client-summary-grid client-request-grid">${requests.map(([label, type, href]) => ClientSummaryCard(label, `<span data-request-total="${type}">—</span>`, href)).join("")}</div>
+    </section>
+    <section class="client-section">
+      <h2 class="client-section-title">Rechercher</h2>
+      <div class="client-search-chips">${searches.map(([label, href]) => `<a href="${clientRouteHref(href)}">${label}</a>`).join("")}</div>
+    </section>
   `);
 }
 
-function ClientSummaryCard(label, value = 0) {
-  return `<article class="client-summary-card"><span>${label}</span><div class="client-summary-value">${value}</div></article>`;
+function ClientSummaryCard(label, value = 0, href) {
+  const inner = `<span>${label}</span><div class="client-summary-value">${value}</div>`;
+  return href ? `<a class="client-summary-card" href="${clientRouteHref(href)}">${inner}</a>` : `<article class="client-summary-card">${inner}</article>`;
 }
 
 function ClientMessagesPage() {
@@ -291,8 +311,23 @@ function ClientModuleBadge(module) {
 }
 
 function bindClientSpace() {
-  document.querySelector("[data-open-client-sidebar]")?.addEventListener("click", () => {
-    document.querySelector("#client-sidebar")?.classList.toggle("is-open");
+  // Mobile menu: closes with the ✕ button, a tap outside, the Escape key or a choice.
+  const sidebar = document.querySelector("#client-sidebar");
+  const toggle = document.querySelector("[data-open-client-sidebar]");
+  const backdrop = document.querySelector(".client-sidebar-backdrop");
+  const setSidebar = (open) => {
+    if (!sidebar) return;
+    sidebar.classList.toggle("is-open", open);
+    if (backdrop) backdrop.hidden = !open;
+    toggle?.setAttribute("aria-expanded", String(open));
+    document.body.classList.toggle("client-menu-open", open);
+    if (open) sidebar.querySelector("a, button")?.focus();
+    else toggle?.focus();
+  };
+  toggle?.addEventListener("click", () => setSidebar(!sidebar?.classList.contains("is-open")));
+  document.querySelectorAll("[data-close-client-sidebar]").forEach((button) => button.addEventListener("click", () => setSidebar(false)));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && sidebar?.classList.contains("is-open")) setSidebar(false);
   });
 
   document.querySelectorAll("[data-client-form]").forEach((form) => {

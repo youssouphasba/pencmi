@@ -24,9 +24,12 @@ export function accountError(root, error, retry) {
   root.replaceChildren(
     el('p', {
       role: 'alert',
-      text: needsLogin
-        ? 'Votre session a expiré. Reconnectez-vous.'
-        : error?.message || 'Chargement impossible.',
+      // A visitor who never signed in must not be told their session "expired".
+      text: !hasSession()
+        ? 'Connectez-vous pour accéder à cette page.'
+        : needsLogin
+          ? 'Votre session a expiré. Reconnectez-vous.'
+          : error?.message || 'Chargement impossible. Réessayez.',
     }),
     needsLogin
       ? el('a', {

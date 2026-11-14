@@ -64,21 +64,21 @@ function moduleKpis(module, data, words) {
   const cards = [
     kpi(words.active, number(data.listings.byStatus.active || 0)),
     kpi(words.requests, number(data.requests.total), 'Reçues sur la période'),
-    kpi('Demandes acceptées', number(data.requests.accepted), 'Ce ne sont pas des transactions réalisées'),
+    kpi('Demandes acceptées', number(data.requests.accepted)),
     kpi('Demandes à traiter', number(data.requests.pending)),
     kpi('Taux d’acceptation', data.acceptanceRate.value === null ? null : percent(data.acceptanceRate.value),
       data.acceptanceRate.value === null ? 'Aucune demande sur la période' : `${number(data.acceptanceRate.accepted)} sur ${number(data.acceptanceRate.received)} demandes`),
-    kpi('Contacts directs', number(data.contacts.direct), 'Hors demandes et messages'),
+    kpi('Contacts directs', number(data.contacts.direct), 'Appels, WhatsApp, emails'),
     kpi('Conversations ouvertes', number(data.messages.conversationsOpened)),
     kpi('Messages reçus', number(data.messages.inbound)),
     kpi('Favoris reçus', number(data.favorites.inPeriod), `${number(data.favorites.allTime)} au total`),
   ];
   if (module === 'hotels') cards.push(
     kpi('Chambres actives', number(data.hotels.rooms.active), `${number(data.hotels.rooms.total)} au total`),
-    kpi('Nuitées allouées', number(data.hotels.allocatedRoomNights), 'Stock alloué sur les dates de la période'));
+    kpi('Nuits réservées', number(data.hotels.allocatedRoomNights), 'Sur la période'));
   if (module === 'trips') cards.push(
-    kpi('Places demandées', number(data.trips.requestedSeats), 'Déclarées par les clients'),
-    kpi('Places allouées', number(data.trips.allocatedSeats), 'Sur les demandes acceptées de la période'));
+    kpi('Places demandées', number(data.trips.requestedSeats)),
+    kpi('Places réservées', number(data.trips.allocatedSeats), 'Sur la période'));
   return cards;
 }
 
@@ -86,20 +86,20 @@ function draw(body, module, data, words) {
   const noActivity = !data.requests.total && !data.contacts.direct && !data.messages.inbound && !data.messages.conversationsOpened;
   body.replaceChildren(
     el('section', { class: 'ps-kpis', 'aria-label': 'Indicateurs' }, moduleKpis(module, data, words)),
-    noActivity ? el('p', { class: 'ps-card', text: 'Aucune demande, aucun contact et aucun message sur cette période : ce zéro est réel.' }) : null,
+    noActivity ? el('p', { class: 'ps-card', text: 'Rien à signaler sur cette période : aucune demande, aucun contact, aucun message.' }) : null,
     el('div', { class: 'ps-grid' },
       chart(`${words.requests} par jour`, data.series, 'requests'),
       chart('Contacts directs par jour', data.series, 'contacts'),
       chart('Messages reçus par jour', data.series, 'inboundMessages'),
       card(`${words.listings} par statut`, Object.keys(data.listings.byStatus).length ? rows(Object.entries(data.listings.byStatus), LISTING_STATUS) : el('p', { class: 'pm-muted', text: 'Aucune.' }),
-        data.listings.deleted ? el('p', { class: 'pm-muted', text: `${number(data.listings.deleted)} supprimée(s), dont l’historique reste compté dans les demandes.` }) : null),
+        data.listings.deleted ? el('p', { class: 'pm-muted', text: `${number(data.listings.deleted)} supprimée(s).` }) : null),
       data.requests.total ? card('Demandes par statut', rows(Object.entries(data.requests.byStatus), STATUS)) : null,
       Object.keys(data.requests.byType).length > 1 ? card('Demandes par type', rows(Object.entries(data.requests.byType), TYPE)) : null,
       data.contacts.direct ? card('Contacts directs par canal', rows(Object.entries(data.contacts.bySource), SOURCE)) : null,
       data.hotels?.topRooms.length ? card('Chambres les plus demandées', rows(data.hotels.topRooms.map((row) => [row.name, row.requests]))) : null,
       data.activeWithoutActivity.length && !data.listingId ? card(`${words.active} sans activité`, el('ul', {}, data.activeWithoutActivity.slice(0, 10).map((row) => el('li', { text: row.title }))),
         data.activeWithoutActivity.length > 10 ? el('p', { class: 'pm-muted', text: `Et ${number(data.activeWithoutActivity.length - 10)} autre(s).` }) : null) : null),
-    data.trips?.historicalUnallocatedRequests ? el('p', { class: 'ps-card', text: `${number(data.trips.historicalUnallocatedRequests)} demande(s) acceptée(s) sans allocation de places connue, non comptée(s) dans les places allouées.` }) : null,
+    data.trips?.historicalUnallocatedRequests ? el('p', { class: 'ps-card', text: `${number(data.trips.historicalUnallocatedRequests)} ancienne(s) demande(s) acceptée(s) ne sont pas comptées dans les places réservées.` }) : null,
     data.topListings.rows.length ? card(`${words.listings} classés par demandes reçues`,
       el('div', { class: 'ps-table-wrap' }, el('table', { class: 'ps-table' },
         el('thead', {}, el('tr', {}, [words.listing, 'Demandes', 'Contacts', 'Messages'].map((text) => el('th', { scope: 'col', text })))),

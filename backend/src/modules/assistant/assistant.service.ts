@@ -32,6 +32,14 @@ type ModelMessage = { role: string; content: string; tool_calls?: any[]; tool_ca
 
 class BudgetError extends HttpException {}
 
+/** Spelled-out date in Dakar time: models miscount weekdays from a bare ISO timestamp. */
+function today(now = new Date()) {
+  const day = (offset: number) => new Intl.DateTimeFormat('fr-FR', { timeZone: 'Africa/Dakar', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    .format(new Date(now.getTime() + offset * 86400000));
+  const iso = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Dakar' }).format(now);
+  return `Aujourd'hui : ${day(0)} (${iso}). Demain : ${day(1)}. Les 7 jours suivants : ${[2, 3, 4, 5, 6, 7, 8].map(day).join(' ; ')}.`;
+}
+
 @Injectable()
 export class AssistantService {
   private readonly logger = new Logger('Assistant');
@@ -85,7 +93,7 @@ export class AssistantService {
     if (!Object.prototype.hasOwnProperty.call(ASSISTANT_TOOLS, name)) throw new BadRequestException(copy.invalid);
     const parsed = ASSISTANT_TOOLS[name].schema.safeParse(args);
     if (!parsed.success) throw new BadRequestException(copy.invalid);
-    if (!canUseTool(user.role, name, parsed.data)) throw new ForbiddenException('Cette action n’est pas autorisée pour votre compte.');
+    if (!canUseTool(user.role, name, parsed.data)) throw new ForbiddenException('Votre compte ne permet pas cette action.');
     return parsed.data;
   }
 
@@ -115,6 +123,19 @@ export class AssistantService {
     return { type: 'proposal', tool: name, label: ASSISTANT_TOOLS[name].label, args, confirmation: encoded + '.' + this.signature(encoded), expiresAt: new Date(exp).toISOString() };
   }
 
+  /** A signed-in user should not retype their contact details: fill the gaps from the account. */
+  private async withAccountContact(user: AuthenticatedUser, args: any) {
+    const details = { ...(args.details || {}) };
+    if (!details.clientName || !details.clientEmail || !details.clientPhone) {
+      const account = await this.prisma.user.findUnique({ where: { id: user.id }, select: { firstName: true, lastName: true, email: true, phone: true } });
+      details.clientName ||= [account?.firstName, account?.lastName].filter(Boolean).join(' ').trim() || undefined;
+      details.clientEmail ||= account?.email || undefined;
+      details.clientPhone ||= account?.phone || undefined;
+    }
+    if (!details.clientName || details.clientName.length < 2) return null;
+    return { ...args, details };
+  }
+
   /** Runs one tool call; returns the text the model will see and adds what the user sees to blocks. */
   private async runTool(user: AuthenticatedUser, call: any, authorization: string, blocks: Block[], state: { proposed: boolean }) {
     let args: any;
@@ -124,6 +145,11 @@ export class AssistantService {
       return JSON.stringify({ error: error instanceof ForbiddenException ? 'Outil non autorisé pour ce compte.' : 'Arguments invalides pour cet outil.' });
     }
     const name = call.function.name, tool = ASSISTANT_TOOLS[name];
+    if (name === 'create_request') {
+      const filled = await this.withAccountContact(user, args);
+      if (!filled) return JSON.stringify({ error: 'Le compte n’a pas de nom : demande le nom à utiliser pour la demande.' });
+      args = filled;
+    }
     if (tool.write) {
       if (state.proposed) return JSON.stringify({ error: 'Une seule action à confirmer par réponse. Propose les autres ensuite.' });
       state.proposed = true;
@@ -144,9 +170,9 @@ export class AssistantService {
   async chat(user: AuthenticatedUser, body: unknown, authorization: string) {
     this.assertEnabled(user);
     const input = inputSchema.safeParse(body);
-    if (!input.success) throw new BadRequestException('Renseignez une demande et acceptez son traitement par DeepSeek.');
+    if (!input.success) throw new BadRequestException('Écrivez votre message.');
     const messages: ModelMessage[] = [
-      { role: 'system', content: copy.prompt + '\n' + helpPrompt(user.role) + `\nDate et heure (UTC) : ${new Date().toISOString()}. Rôle du compte : ${user.role}.` },
+      { role: 'system', content: copy.prompt + '\n' + helpPrompt(user.role) + `\n${today()} Rôle du compte : ${user.role}.` },
       ...(input.data.history || []).map(turn => ({ role: turn.role, content: turn.content })),
       { role: 'user', content: input.data.message },
     ];
@@ -220,9 +246,9 @@ export class AssistantService {
       response = await fetch(`${origin}/${prefix}${operation.path}`, { method: operation.method, redirect: 'error',
         headers: { Authorization: authorization, 'Content-Type': 'application/json' },
         body: operation.body ? JSON.stringify(operation.body) : undefined, signal: AbortSignal.timeout(20000) });
-    } catch { throw new ServiceUnavailableException('La réponse du service n’a pas été reçue. Vérifiez votre espace avant toute nouvelle tentative.'); }
+    } catch { throw new ServiceUnavailableException('Pas de réponse. Vérifiez dans votre espace avant de réessayer.'); }
     const data = await response.json().catch(() => null) as any;
-    if (!response.ok) throw new HttpException(data?.error?.message || data?.message || 'Le service a refusé cette opération.', response.status);
+    if (!response.ok) throw new HttpException(data?.error?.message || data?.message || 'Ça n’a pas marché. Réessayez.', response.status);
     return data;
   }
 }

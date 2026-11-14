@@ -43,7 +43,7 @@ function realEstateDashboardEmptyPage() {
   const root = document.querySelector("#dashboard-layout");
   if (!root) return;
   const currentPage = document.body.dataset.dashboardPage || "messages";
-  const title = document.body.dataset.pageTitle || "Dashboard immobilier";
+  const title = document.body.dataset.pageTitle || "Tableau de bord";
   const subtitle = document.body.dataset.pageSubtitle || "";
   const emptyTitle = document.body.dataset.emptyTitle || "Aucune donnée disponible pour le moment.";
   const emptyText = document.body.dataset.emptyText || "";

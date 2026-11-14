@@ -166,10 +166,10 @@ function EmptyState(title, text = "", action = "") {
 
 function VehiclesDashboardPage() {
   if (vehicleDashboardData.loading) {
-    return VehiclesDashboardLayout(`${DashboardHeader("Dashboard voitures", "Chargement de vos données annonceur.")}${EmptyState("Chargement en cours.")}`, "overview");
+    return VehiclesDashboardLayout(`${DashboardHeader("Tableau de bord", "Chargement de vos données annonceur.")}${EmptyState("Chargement en cours.")}`, "overview");
   }
   if (vehicleDashboardData.error) {
-    return VehiclesDashboardLayout(`${DashboardHeader("Dashboard voitures", "Vos données annonceur.")}${EmptyState(vehicleDashboardData.error)}`, "overview");
+    return VehiclesDashboardLayout(`${DashboardHeader("Tableau de bord", "Vos données annonceur.")}${EmptyState(vehicleDashboardData.error)}`, "overview");
   }
   const activeListings = vehicleDashboardData.listings.filter((listing) => listing.status === "active").length;
   const pendingListings = vehicleDashboardData.listings.filter((listing) => listing.status === "pending_review").length;
@@ -181,7 +181,7 @@ function VehiclesDashboardPage() {
     ["Contacts", vehicleDashboardData.contactTotal ?? "—"]
   ];
   return VehiclesDashboardLayout(`
-    ${DashboardHeader("Dashboard voitures", "Suivez vos annonces, contacts, messages et performances.", `<a class="btn btn-primary" href="${vehicleDashboardRouteHref(vehicleDashboardRoutes.publish)}">Publier une voiture</a>`)}
+    ${DashboardHeader("Tableau de bord", "Suivez vos annonces, contacts, messages et performances.", `<a class="btn btn-primary" href="${vehicleDashboardRouteHref(vehicleDashboardRoutes.publish)}">Publier une voiture</a>`)}
     <section class="vehicle-kpi-grid">${kpis.map(([title, value]) => KpiCard(title, String(value))).join("")}</section>
     ${vehicleDashboardData.listings.length || vehicleDashboardData.requests.length ? "" : EmptyState("Aucune donnée disponible pour le moment.")}
   `, "overview");
@@ -250,7 +250,7 @@ function VehicleCalendarPage() {
 }
 
 function VehicleStatisticsPage() {
-  return VehiclesDashboardLayout(`${DashboardHeader("Statistiques voitures", "Vos demandes, contacts et messages réellement enregistrés.")}<div id="pencmi-stats"></div>`, "statistics");
+  return VehiclesDashboardLayout(`${DashboardHeader("Statistiques voitures", "Vos demandes, contacts et messages.")}<div id="pencmi-stats"></div>`, "statistics");
 }
 
 function VehicleContactSettingsPage() {

@@ -189,10 +189,10 @@ function AvailabilityAlerts() {
 
 function HotelsDashboardPage() {
   if (hotelDashboardData.loading) {
-    return HotelsDashboardLayout(`${DashboardHeader("Dashboard hôtels", "Chargement de vos données annonceur.")}${EmptyState("Chargement en cours.")}`, "overview");
+    return HotelsDashboardLayout(`${DashboardHeader("Tableau de bord", "Chargement de vos données annonceur.")}${EmptyState("Chargement en cours.")}`, "overview");
   }
   if (hotelDashboardData.error) {
-    return HotelsDashboardLayout(`${DashboardHeader("Dashboard hôtels", "Vos données annonceur.")}${EmptyState(hotelDashboardData.error)}`, "overview");
+    return HotelsDashboardLayout(`${DashboardHeader("Tableau de bord", "Vos données annonceur.")}${EmptyState(hotelDashboardData.error)}`, "overview");
   }
   const activeHotels = hotelDashboardData.hotels.filter((hotel) => hotel.status === "active").length;
   const pendingHotels = hotelDashboardData.hotels.filter((hotel) => hotel.status === "pending_review").length;
@@ -206,7 +206,7 @@ function HotelsDashboardPage() {
     ["Contacts", hotelDashboardData.contactTotal ?? "—"]
   ];
   return HotelsDashboardLayout(`
-    ${DashboardHeader("Dashboard hôtels", "Suivez vos hébergements, disponibilités, demandes et performances.", `<a class="btn btn-primary" href="${hotelDashboardRouteHref(hotelDashboardRoutes.publish)}">Publier un hébergement</a>`)}
+    ${DashboardHeader("Tableau de bord", "Suivez vos hébergements, disponibilités, demandes et performances.", `<a class="btn btn-primary" href="${hotelDashboardRouteHref(hotelDashboardRoutes.publish)}">Publier un hébergement</a>`)}
     <section class="hotel-kpi-grid">${kpis.map(([title, value]) => KpiCard(title, String(value))).join("")}</section>
     ${hotelDashboardData.hotels.length || hotelDashboardData.reservations.length ? "" : EmptyState("Aucune donnée disponible pour le moment.")}
     <div class="dashboard-grid"><section>${HotelAvailabilityDashboard()}</section><section>${AvailabilityAlerts()}</section></div>
@@ -223,7 +223,7 @@ function HotelListingsDashboardPage() {
 function HotelListingsTable() {
   return `<section class="hotel-table-wrap"><table class="hotel-table"><thead><tr><th>Hébergement</th><th>Statut</th><th>Ville</th><th>Type</th><th>Chambres</th><th>Demandes</th><th>Actions</th></tr></thead><tbody>${hotelDashboardData.hotels.map((hotel) => {
     const requests = hotelDashboardData.reservations.filter((request) => request.property?.id === hotel.id).length;
-    return `<tr><td>${hotelDashboardEscape(hotel.name || 'Hébergement sans nom')}</td><td>${HotelStatusBadge(hotel.status)}</td><td>${hotelDashboardEscape(hotel.city)}</td><td>${hotelDashboardEscape(hotel.propertyType)}</td><td>${Array.isArray(hotel.rooms) ? hotel.rooms.length : 0}</td><td>${requests}</td><td><a class="btn btn-light" href="${hotelEditHref(hotel.id)}">${hotel.status === 'draft' ? 'Reprendre' : 'Modifier'}</a>${hotel.status === 'active' ? `<a class="btn btn-ghost" href="${hotelDashboardRouteHref(`/hotels/${hotel.id}`)}">Voir</a>` : ''}<a class="btn btn-ghost" href="${hotelEditHref(hotel.id, 8)}">Disponibilités</a></td></tr>`;
+    return `<tr><td>${hotelDashboardEscape(hotel.name || 'Hébergement sans nom')}</td><td>${HotelStatusBadge(hotel.status)}</td><td>${hotelDashboardEscape(hotel.city)}</td><td>${hotelDashboardEscape(({ hotel: 'Hôtel', auberge: 'Auberge', residence: 'Résidence', appartement_meuble: 'Appartement meublé', maison_hotes: 'Maison d’hôtes', villa: 'Villa', campement: 'Campement', chambre_habitant: 'Chambre chez l’habitant' })[hotel.propertyType] || hotel.propertyType || '')}</td><td>${Array.isArray(hotel.rooms) ? hotel.rooms.length : 0}</td><td>${requests}</td><td><a class="btn btn-light" href="${hotelEditHref(hotel.id)}">${hotel.status === 'draft' ? 'Reprendre' : 'Modifier'}</a>${hotel.status === 'active' ? `<a class="btn btn-ghost" href="${hotelDashboardRouteHref(`/hotels/${hotel.id}`)}">Voir</a>` : ''}<a class="btn btn-ghost" href="${hotelEditHref(hotel.id, 8)}">Disponibilités</a></td></tr>`;
   }).join("")}</tbody></table></section>`;
 }
 
@@ -290,7 +290,7 @@ function HotelContactsPage() {
 }
 
 function HotelStatisticsPage() {
-  return HotelsDashboardLayout(`${DashboardHeader("Statistiques hôtels", "Vos demandes, chambres, contacts et messages réellement enregistrés.")}<div id="pencmi-stats"></div>`, "statistics");
+  return HotelsDashboardLayout(`${DashboardHeader("Statistiques hôtels", "Vos demandes, chambres, contacts et messages.")}<div id="pencmi-stats"></div>`, "statistics");
 }
 
 function HotelContactSettingsPage() {

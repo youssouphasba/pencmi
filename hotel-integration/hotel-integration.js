@@ -30,9 +30,9 @@ function hotelIntegrationNav(items, currentPage, className) {
 function HotelIntegrationSyncSettingsPage() {
   const sidebar = `<aside class="dashboard-sidebar"><div class="dashboard-brand"><span>P</span><div><strong>Péncmi</strong><small>Intégration hôtel</small></div></div>${hotelIntegrationNav([
     ["Synchronisation", hotelIntegrationRoutes.syncSettings, "syncSettings"],
-    ["Dashboard hôtels", hotelIntegrationRoutes.hotelDashboard, "dashboard"]
+    ["Tableau de bord", hotelIntegrationRoutes.hotelDashboard, "dashboard"]
   ], "syncSettings", "dashboard-nav")}</aside>`;
-  return `<div class="hotel-integration-shell"><div class="hotel-integration-layout">${sidebar}<main class="hotel-integration-main"><header class="hotel-integration-header"><div><h1>Synchronisation des disponibilités</h1><p>${hotelIntegrationEscape("Reliez votre logiciel hôtelier par calendrier iCal ou par votre channel manager : Péncmi se met à jour sans que vous ayez à vous connecter.")}</p></div><a class="btn btn-ghost" href="${buildHotelIntegrationRoute(hotelIntegrationRoutes.hotelDashboard)}">Dashboard hôtels</a></header><div id="hotel-sync-root"><p>Chargement des réglages…</p></div></main></div></div>`;
+  return `<div class="hotel-integration-shell"><div class="hotel-integration-layout">${sidebar}<main class="hotel-integration-main"><header class="hotel-integration-header"><div><h1>Synchronisation des disponibilités</h1><p>${hotelIntegrationEscape("Reliez votre logiciel hôtelier par calendrier iCal ou par votre channel manager : Péncmi se met à jour sans que vous ayez à vous connecter.")}</p></div><a class="btn btn-ghost" href="${buildHotelIntegrationRoute(hotelIntegrationRoutes.hotelDashboard)}">Tableau de bord</a></header><div id="hotel-sync-root"><p>Chargement des réglages…</p></div></main></div></div>`;
 }
 
 function AdminHotelIntegrationPartnersPage() {

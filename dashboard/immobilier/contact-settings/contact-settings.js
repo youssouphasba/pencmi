@@ -185,7 +185,7 @@ function ContactSettingsHeader() {
         <button class="btn btn-ghost summary-toggle" type="button" data-toggle-summary>Voir le résumé</button>
       </div>
       <div class="dashboard-header-actions">
-        <a class="btn btn-ghost" href="${routeHref(routes.dashboard)}">Retour au dashboard</a>
+        <a class="btn btn-ghost" href="${routeHref(routes.dashboard)}">Tableau de bord</a>
         <a class="btn btn-light" href="${routes.listings}">Voir mes annonces</a>
         <a class="btn btn-light" href="${routeHref(routes.emailSettings)}">Emails automatiques</a>
       </div>

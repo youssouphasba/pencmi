@@ -277,3 +277,13 @@
     width: 100%;
   }
 }
+
+/* Header navigation: universes on large screens, a clear way home on phones. */
+.content-header { display: flex; align-items: center; gap: 18px; }
+.content-nav { display: flex; gap: 18px; margin-left: auto; }
+.content-nav a { color: #314963; font-weight: 600; text-decoration: none; }
+.content-home { white-space: nowrap; }
+@media (max-width: 760px) {
+  .content-nav { display: none; }
+  .content-home { margin-left: auto; min-height: 38px; padding: 0 14px; font-size: .9rem; }
+}

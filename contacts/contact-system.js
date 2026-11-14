@@ -161,6 +161,24 @@ function ContactHistoryTable() {
   `;
 }
 
+// What the owner reads instead of internal trigger codes.
+function emailTriggerLabel(trigger) {
+  return ({
+    request_received: "Envoyé quand un client fait une demande",
+    request_accepted: "Envoyé quand vous acceptez une demande",
+    request_refused: "Envoyé quand vous refusez une demande",
+    request_cancelled: "Envoyé quand une demande est annulée",
+    message_received: "Envoyé à chaque nouveau message",
+    visit_proposed: "Envoyé quand vous proposez une visite",
+    visit_confirmed: "Envoyé quand une visite est confirmée",
+    visit_cancelled: "Envoyé quand une visite est annulée",
+    arrival_reminder: "Envoyé la veille de l’arrivée",
+    post_service_message: "Envoyé après le service",
+    price_drop_alert: "Envoyé quand le prix baisse",
+    schedule_changed: "Envoyé quand l’horaire change",
+  })[trigger] || "Email automatique";
+}
+
 function EmailTemplateList(config) {
   return `
     <section class="contact-system-card">
@@ -169,7 +187,7 @@ function EmailTemplateList(config) {
         ${config.templates.length ? config.templates.map(([trigger, subject], index) => `
           <article class="email-template-item">
             <header><h3>${subject}</h3><label><input type="checkbox" checked> Actif</label></header>
-            <span class="email-status-badge">${trigger}</span>
+            <span class="email-status-badge">${emailTriggerLabel(trigger)}</span>
             <button class="btn btn-ghost" type="button" data-select-template="${index}">Modifier</button>
           </article>
         `).join("") : `<p>Aucun email automatique configuré pour le moment.</p>`}
@@ -184,7 +202,7 @@ function EmailTemplateEditor(config) {
     <section class="email-editor-card">
       <h2>Modifier le modèle</h2>
       <div class="email-editor-grid">
-        <label class="email-field"><span>Déclencheur</span><select><option>${template[0]}</option></select></label>
+        <label class="email-field"><span>Quand l’envoyer</span><select><option>${emailTriggerLabel(template[0])}</option></select></label>
         <label class="email-field"><span>Statut</span><select><option>Activé</option><option>Désactivé</option></select></label>
         <label class="email-field full"><span>Objet</span><input type="text" value="${template[1]}"></label>
         <label class="email-field full"><span>Message</span><textarea>${template[2]}</textarea></label>

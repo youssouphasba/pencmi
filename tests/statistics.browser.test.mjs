@@ -121,12 +121,12 @@ test('statistics of the four universes: filters, true chart, states and no injec
         assert.ok((await text()).includes('<b>piège</b>'));
         assert.equal(await page.evaluate(() => window.xss), undefined);
         await noOverflow(page, label);
-        if (universe.module === 'trips') { assert.ok((await text()).includes('Places demandées')); assert.ok((await text()).includes('Places allouées')); }
-        if (universe.module === 'hotels') { assert.ok((await text()).includes('Nuitées allouées')); assert.ok(!(await text()).includes('Taux d’occupation\n0')); }
+        if (universe.module === 'trips') { assert.ok((await text()).includes('Places demandées')); assert.ok((await text()).includes('Places réservées')); }
+        if (universe.module === 'hotels') { assert.ok((await text()).includes('Nuits réservées')); assert.ok(!(await text()).includes('Taux d’occupation\n0')); }
         // A true zero is a zero, with no chart and no invented rate.
         state.mode = 'zero';
         await page.locator('select[name=period]').selectOption('90');
-        await page.getByText('ce zéro est réel', { exact: false }).waitFor();
+        await page.getByText('Rien à signaler sur cette période', { exact: false }).waitFor();
         assert.equal(await page.locator('.ps-chart').count(), 0);
         assert.ok((await page.locator('.ps-kpis').innerText()).includes('Donnée indisponible'));
         // An error is never shown as zeros, and it can be retried.

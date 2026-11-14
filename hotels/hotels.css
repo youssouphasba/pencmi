@@ -528,3 +528,13 @@
     display: grid;
   }
 }
+
+/* Mobile search: dates side by side, guests and rooms on one row. */
+@media (max-width: 720px) {
+  #hotel-search-form { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+  #hotel-search-form > .hotel-field { grid-column: span 6; }
+  #hotel-search-form > .hotel-field:has([name=checkIn]), #hotel-search-form > .hotel-field:has([name=checkOut]) { grid-column: span 3; }
+  #hotel-search-form > .hotel-field:has([name=adults]), #hotel-search-form > .hotel-field:has([name=children]), #hotel-search-form > .hotel-field:has([name=rooms]) { grid-column: span 2; }
+  #hotel-search-form > button { grid-column: span 6; }
+  #hotel-search-form input { min-width: 0; }
+}
