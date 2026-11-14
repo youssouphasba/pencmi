@@ -178,6 +178,7 @@ function fields(value, depth = 0, proposal = false) {
   } else if (typeof value === 'object') {
     for (const [key, item] of Object.entries(value)) {
       if (item === null || item === undefined || item === '') continue;
+      if (proposal && key === 'details' && typeof item === 'object') { box.append(...fields(item, depth + 1, proposal).children); continue; }
       if (!labels[key] || /(^id$|Id$)/.test(key)) continue;
       const line = el('div', undefined, { class: 'field' });
       line.append(el('span', labels[key], { class: 'field-label' }));
