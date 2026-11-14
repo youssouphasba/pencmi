@@ -1,10 +1,11 @@
+import { ConversationsModule } from '../conversations/conversations.module';
 import { Module } from '@nestjs/common';
 import { RealEstateController } from './real-estate.controller';
 import { RealEstateService } from './real-estate.service';
 import { FilesModule } from '../../files/files.module';
 
 @Module({
-  imports: [FilesModule],
+  imports: [FilesModule, ConversationsModule],
   controllers: [RealEstateController],
   providers: [RealEstateService],
 })

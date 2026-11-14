@@ -11,6 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
@@ -24,6 +25,7 @@ import {
   RealEstateSearchDto,
   UpdateRealEstateDto,
   UpdateVisitRequestStatusDto,
+  VisitRequestMessageDto,
   UploadListingPhotoDto,
 } from './real-estate.dto';
 import { UploadedImage } from '../../files/files.service';
@@ -87,6 +89,18 @@ export class RealEstateController {
     @Body() dto: UpdateVisitRequestStatusDto,
   ) {
     return this.service.updateVisitRequestStatus(user.id, id, dto);
+  }
+
+  @ApiBearerAuth()
+  @RequirePermissions('manage_real_estate')
+  @Post('dashboard/immobilier/visits/:id/messages')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
+  messageVisitRequester(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: VisitRequestMessageDto,
+  ) {
+    return this.service.messageVisitRequester(user.id, id, dto);
   }
 
   @ApiBearerAuth()

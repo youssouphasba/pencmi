@@ -1,3 +1,4 @@
+import { ConversationsService } from '../conversations/conversations.service';
 import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -38,7 +39,7 @@ const testUrl = process.env.TEST_DATABASE_URL;
           API_PREFIX: 'api/v1',
         }),
       );
-      const service = new RealEstateService(prisma as PrismaService, files);
+      const service = new RealEstateService(prisma as PrismaService, files, new ConversationsService(prisma as PrismaService));
       let ownerUserId: string | undefined;
       try {
         const user = await prisma.user.create({

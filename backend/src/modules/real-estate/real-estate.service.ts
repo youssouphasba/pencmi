@@ -29,7 +29,9 @@ import {
   RealEstateSearchDto,
   UpdateRealEstateDto,
   UpdateVisitRequestStatusDto,
+  VisitRequestMessageDto,
 } from './real-estate.dto';
+import { ConversationsService } from '../conversations/conversations.service';
 import { FilesService, UploadedImage } from '../../files/files.service';
 import {
   MAX_LISTING_PHOTOS,
@@ -58,6 +60,7 @@ export class RealEstateService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly files: FilesService,
+    private readonly conversations: ConversationsService,
   ) {}
 
   async findPublic(query: RealEstateSearchDto) {
@@ -295,7 +298,12 @@ export class RealEstateService {
     id: string,
     dto: UpdateVisitRequestStatusDto,
   ) {
-    return this.prisma.$transaction(async (tx) => {
+    const note = dto.message?.trim() || '';
+    if (dto.status === 'pending' && !dto.proposedDate)
+      throw new BadRequestException('Choisissez la date de visite à proposer.');
+    if (dto.status === 'requires_more_info' && !note)
+      throw new BadRequestException('Écrivez la précision que vous attendez du client.');
+    const updated = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT "id" FROM "RealEstateVisitRequest" WHERE "id" = ${id} FOR UPDATE`;
       const request = await tx.realEstateVisitRequest.findFirst({
         where: {
@@ -323,6 +331,25 @@ export class RealEstateService {
       await notifyClientRequestStatus(tx, 'visit', request, dto.status);
       return updated;
     });
+    // A proposed slot or a question reaches the client in the conversation, not only as a status.
+    const body = visitStatusMessage(dto, note);
+    if (!body) return updated;
+    if (!updated.clientUserId) return { ...updated, messageDelivered: false };
+    const sent = await this.conversations.writeToRequester(ownerUserId, 'real_estate', updated.listingId, updated.clientUserId, body,
+      dto.requestId ?? randomUUID());
+    return { ...updated, messageDelivered: true, conversationId: sent.conversationId };
+  }
+
+  /** "Écrire au client": only to someone who sent a visit request on one of this owner's listings. */
+  async messageVisitRequester(ownerUserId: string, id: string, dto: VisitRequestMessageDto) {
+    const request = await this.prisma.realEstateVisitRequest.findFirst({
+      where: { id, listing: { ownerUserId, deletedAt: null } },
+      select: { listingId: true, clientUserId: true },
+    });
+    if (!request) throw new NotFoundException('Demande introuvable.');
+    if (!request.clientUserId)
+      throw new ConflictException('Ce client n’a pas de compte Péncmi : contactez-le par téléphone ou par email.');
+    return this.conversations.writeToRequester(ownerUserId, 'real_estate', request.listingId, request.clientUserId, dto.body.trim(), dto.requestId);
   }
 
   private parse(dto: CreateRealEstateDto) {
@@ -705,4 +732,15 @@ export class RealEstateService {
       });
     });
   }
+}
+
+function visitStatusMessage(dto: UpdateVisitRequestStatusDto, note: string) {
+  if (dto.status === 'pending' && dto.proposedDate) {
+    const day = new Intl.DateTimeFormat('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
+      .format(new Date(`${dto.proposedDate}T00:00:00Z`));
+    return [`Je vous propose une visite le ${day}${dto.proposedTime ? ` à ${dto.proposedTime.replace(':', 'h')}` : ''}.`, note,
+      'Répondez-moi ici pour confirmer ou proposer un autre moment.'].filter(Boolean).join('\n\n');
+  }
+  if (dto.status === 'requires_more_info') return `Pour votre demande de visite : ${note}`;
+  return note;
 }

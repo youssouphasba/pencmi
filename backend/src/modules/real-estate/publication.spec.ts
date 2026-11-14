@@ -24,6 +24,7 @@ import { FilesController } from '../../files/files.controller';
 import { FilesService } from '../../files/files.service';
 import { RealEstateController } from './real-estate.controller';
 import { RealEstateService } from './real-estate.service';
+import { ConversationsService } from '../conversations/conversations.service';
 import { publicationDatabase } from './publication.fixture';
 
 const sharp: typeof SharpFactory = require('sharp');
@@ -104,6 +105,7 @@ describe('Real estate publication API', () => {
       providers: [
         RealEstateService,
         FilesService,
+        ConversationsService,
         { provide: PrismaService, useValue: db.prisma },
         {
           provide: ConfigService,

@@ -1,6 +1,8 @@
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  MinLength,
+  Matches,
   ArrayUnique,
   IsArray,
   IsDateString,
@@ -130,4 +132,15 @@ const visitRequestStatuses = [
 export class UpdateVisitRequestStatusDto {
   @IsIn(visitRequestStatuses)
   status: (typeof visitRequestStatuses)[number];
+
+  // Sent to the client in the conversation: required to propose a slot or ask for details.
+  @IsOptional() @IsString() @MaxLength(2000) message?: string;
+  @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) proposedDate?: string;
+  @IsOptional() @Matches(/^([01]\d|2[0-3]):[0-5]\d$/) proposedTime?: string;
+  @IsOptional() @IsUUID() requestId?: string;
+}
+
+export class VisitRequestMessageDto {
+  @IsString() @MinLength(1) @MaxLength(2000) body: string;
+  @IsUUID() requestId: string;
 }

@@ -239,6 +239,36 @@ export class ConversationsService {
     });
   }
 
+  /**
+   * An advertiser writes to a client who sent them a request on this listing. The conversation is
+   * the one the client would have opened (same deterministic id), so there is never a duplicate.
+   * Callers must have verified that this client really sent a request to this owner.
+   */
+  async writeToRequester(ownerUserId: string, module: ListingModule, listingId: string, clientUserId: string, body: string, requestId: string) {
+    if (ownerUserId === clientUserId) throw new ForbiddenException("Vous ne pouvez pas vous écrire à vous-même.");
+    for (let attempt = 0; ; attempt++) {
+      const existing = await this.existingFor(module, listingId, clientUserId, ownerUserId);
+      if (existing) return { conversationId: existing.id, message: await this.createMessage(existing.id, ownerUserId, { body, requestId }) };
+      const conversationId = this.conversationId(module, listingId, clientUserId);
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          await tx.conversation.create({
+            data: { id: conversationId, module, targetType: "listing", targetId: listingId,
+              participants: { create: [{ userId: clientUserId }, { userId: ownerUserId }] } },
+          });
+          const message = await tx.message.create({
+            data: { id: this.messageId(conversationId, ownerUserId, requestId), conversationId, senderUserId: ownerUserId, body },
+          });
+          await queueBusinessEmail(tx, 'message', message.id, clientUserId, '/compte/messages/');
+          return { conversationId, message };
+        });
+      } catch (error) {
+        // The client opened it at the same moment: the next pass finds it.
+        if (!isUniqueViolation(error) || attempt > 0) throw error;
+      }
+    }
+  }
+
   private create(userId: string, dto: OpenConversationDto, ownerUserId: string) {
     const conversationId = this.conversationId(dto.module, dto.listingId, userId);
     return this.prisma.$transaction(async (tx) => {

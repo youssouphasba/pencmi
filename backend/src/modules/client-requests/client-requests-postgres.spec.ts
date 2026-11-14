@@ -20,6 +20,7 @@ import { PrismaService } from '../../database/prisma/prisma.service';
 import { FilesService } from '../../files/files.service';
 import { RealEstateController } from '../real-estate/real-estate.controller';
 import { RealEstateService } from '../real-estate/real-estate.service';
+import { ConversationsService } from '../conversations/conversations.service';
 import { HotelsController } from '../hotels/hotels.controller';
 import { HotelsService } from '../hotels/hotels.service';
 import { HotelPublicationService } from '../hotels/hotel-publication.service';
@@ -209,6 +210,7 @@ const url = process.env.TEST_DATABASE_URL;
           AuthService,
           ClientRequestsService,
           RealEstateService,
+          ConversationsService,
           HotelsService,
           HotelReservationsService,
           VehiclesService,
