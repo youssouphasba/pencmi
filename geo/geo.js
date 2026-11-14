@@ -353,15 +353,10 @@ function renderGeoAdminPage() {
   const root = document.querySelector("#geo-admin-root");
   if (!root) return;
   const page = document.body.dataset.geoAdminPage || "dashboard";
-  const pages = {
-    dashboard: AdminGeoDashboard,
-    questions: AdminGeoDashboard,
-    answers: AdminGeoDashboard,
-    entities: AdminGeoDashboard,
-    templates: AdminGeoDashboard,
-    files: AdminGeoFilesPage,
-    audit: AdminGeoDashboard
-  };
+  // Former sub-pages (questions, answers, entities, templates, audit) had no real editor:
+  // their old addresses lead to the overview instead of showing it twice.
+  if (!["dashboard", "files"].includes(page)) { window.location.replace(adminGeoRouteHref("/admin/geo")); return; }
+  const pages = { dashboard: AdminGeoDashboard, files: AdminGeoFilesPage };
   root.innerHTML = (pages[page] || AdminGeoDashboard)();
   root.querySelectorAll("[data-geo-file]").forEach((pre) => {
     const path = pre.getAttribute("data-geo-file");

@@ -21,6 +21,23 @@ const EMBED = new URLSearchParams(location.search).get('embed') === '1' && windo
 if (EMBED) document.documentElement.classList.add('embed');
 const closePanel = () => window.parent.postMessage('guindi:close', location.origin);
 let history = [];
+// The conversation survives page changes within the tab (sessionStorage, one key per account).
+let log = [];          // replayable entries: { u: text } or { t: turn }
+let settled = {};      // proposal confirmation -> 'done' | 'cancelled' | error message
+let storeKey = null;
+function persist() {
+  if (!storeKey) return;
+  try { sessionStorage.setItem(storeKey, JSON.stringify({ history, log: log.slice(-40), settled })); } catch { /* storage is optional */ }
+}
+function restore() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(storeKey) || 'null');
+    if (!saved) return;
+    history = Array.isArray(saved.history) ? saved.history.slice(-MAX_HISTORY) : [];
+    log = Array.isArray(saved.log) ? saved.log : [];
+    settled = saved.settled && typeof saved.settled === 'object' ? saved.settled : {};
+  } catch { /* ignore a corrupted entry */ }
+}
 let busy = false;
 let account = '/compte/';
 let help = [];
@@ -185,6 +202,13 @@ function resultBlock(block) {
 function proposalBlock(block) {
   const panel = el('div', undefined, { class: 'bubble proposal' });
   panel.append(el('p', block.label, { class: 'panel-title' }), fields(block.args, 0, true), el('p', copy.proposed, { class: 'muted small' }));
+  const outcome = settled[block.confirmation];
+  if (outcome) {
+    panel.append(outcome === 'done' ? el('p', `✓ ${copy.success}`, { class: 'success' })
+      : outcome === 'cancelled' ? el('p', copy.cancelled, { class: 'muted small' }) : el('p', outcome, { role: 'alert' }));
+    return attach(panel);
+  }
+  if (Date.parse(block.expiresAt) <= Date.now()) { panel.append(el('p', copy.expired, { class: 'muted small' })); return attach(panel); }
   const actions = el('div', undefined, { class: 'proposal-actions' });
   const confirm = el('button', copy.confirm, { type: 'button', class: 'button primary' });
   const cancel = el('button', copy.cancel, { type: 'button', class: 'button ghost' });
@@ -192,6 +216,7 @@ function proposalBlock(block) {
   panel.append(actions);
   cancel.addEventListener('click', () => {
     actions.replaceWith(el('p', copy.cancelled, { class: 'muted small' }));
+    settled[block.confirmation] = 'cancelled';
     remember('assistant', `[${copy.cancelledMemo} : ${block.label}]`);
   });
   confirm.addEventListener('click', async () => {
@@ -201,9 +226,12 @@ function proposalBlock(block) {
     try {
       const result = await publicationRequest('/assistant/confirm', { method: 'POST', body: { confirmation: block.confirmation, approved: true } });
       actions.replaceWith(el('p', `✓ ${copy.success}`, { class: 'success' }));
+      settled[block.confirmation] = 'done';
       remember('assistant', result.memo);
     } catch (error) {
       actions.replaceWith(el('p', error.message || copy.failure, { role: 'alert' }));
+      settled[block.confirmation] = error.message || copy.failure;
+      persist();
     } finally { lock(false); scrollToEnd(); }
   });
   return attach(panel);
@@ -223,6 +251,7 @@ function remember(role, content) {
   if (!content) return;
   history.push({ role, content: String(content).slice(0, 8000) });
   history = history.slice(-MAX_HISTORY);
+  persist();
 }
 function lock(value) {
   busy = value;
@@ -236,7 +265,8 @@ function greet() {
 }
 function resetConversation() {
   if (busy) return;
-  history = [];
+  history = []; log = []; settled = {};
+  try { sessionStorage.removeItem(storeKey); } catch { /* optional */ }
   thread.replaceChildren();
   errorBox.textContent = '';
   greet();
@@ -254,6 +284,7 @@ async function submit(message) {
   try {
     const turn = await publicationRequest('/assistant/chat', { method: 'POST', body: { message, history, consent: true } });
     dots.remove();
+    log.push({ u: message }, { t: turn });
     remember('user', message);
     remember('assistant', turn.memo || turn.text);
     showTurn(turn);
@@ -299,6 +330,8 @@ function buildSheet() {
 async function start() {
   try {
     const user = await publicationRequest('/auth/me');
+    storeKey = user?.id ? `pencmi_guindi_${user.id}` : null;
+    if (storeKey) restore();
     account = accountRoutes[user.role] || '/compte/';
     if (!EMBED) try {
       const previous = new URL(document.referrer);
@@ -339,6 +372,11 @@ async function start() {
     });
     form.addEventListener('submit', event => { event.preventDefault(); void submit(input.value.trim()); });
     greet();
+    if (log.length) {
+      suggestionsRow.hidden = true;
+      for (const entry of log) { if (entry.u) bubble(entry.u, 'user'); else if (entry.t) showTurn(entry.t); }
+      thread.scrollTop = thread.scrollHeight;
+    }
   } catch (error) {
     status.textContent = error.status === 401 || !storage.get('pencmi_access_token') ? copy.loginRequired : error.message;
     thread.append(el('a', copy.login, { href: '/login/?next=%2Fassistant%2F', class: 'button primary' }));
