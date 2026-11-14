@@ -15,7 +15,7 @@ Les brouillons créés ici ne contiennent que le titre et la description ; le fo
   visitorQuota: 'Vous avez envoyé beaucoup de messages aujourd’hui. Connectez-vous pour continuer avec Guindi.',
   visitorPrompt: `L'utilisateur n'est pas connecté. Tu peux chercher des annonces, les détailler, les comparer et répondre aux questions sur Péncmi.
 Dès qu'il demande quelque chose qui exige un compte (réserver, envoyer une demande, favoris, alertes, messages, suivi de ses demandes, publier une annonce), appelle sign_in : un formulaire de connexion s'affiche dans la conversation et tu pourras continuer ensuite. Ne lui demande jamais son mot de passe toi-même.`,
-  visitorLimitText: 'Vous avez posé vos 2 questions gratuites. Connectez-vous ou créez un compte gratuit pour continuer : je reprendrai votre question juste après.',
+  visitorLimitText: 'Pour continuer, connectez-vous ou créez un compte gratuit : je reprends votre question juste après.',
   visitorLimitReason: 'Connectez-vous pour continuer avec Guindi.',
   signInReason: 'Connectez-vous pour continuer.',
   signInText: 'Pour cela, connectez-vous : c’est rapide, et on continue juste après.',

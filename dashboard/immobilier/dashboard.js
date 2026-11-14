@@ -296,7 +296,7 @@ function DashboardOverview() {
   return `
     <section class="dashboard-section">
       <div class="dashboard-section-header">
-        <h2>KPI principaux</h2>
+        <h2>Vos chiffres</h2>
       </div>
       <div class="kpi-grid">${kpiDefinitions.map(KpiCard).join("")}</div>
     </section>

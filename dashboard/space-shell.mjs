@@ -18,7 +18,7 @@ function addStyles() {
   if (document.querySelector('link[data-space-shell]')) return;
   const link = document.createElement('link');
   link.rel = 'stylesheet';
-  link.href = '/dashboard/space-shell.css?v=20261114-4';
+  link.href = '/dashboard/space-shell.css?v=20261114-5';
   link.dataset.spaceShell = '';
   document.head.append(link);
 }
@@ -111,6 +111,7 @@ function enhance() {
     table.classList.add('space-cards');
     table.dataset.spaceDone = String(table.rows.length);
   });
+  document.querySelectorAll('.dashboard-sidebar .notification-badge, .admin-sidebar .notification-badge, .client-sidebar .notification-badge').forEach(badge => badge.classList.toggle('space-zero', badge.textContent.trim() === '0'));
   groupActions();
   sync();
 }

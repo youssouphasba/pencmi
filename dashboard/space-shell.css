@@ -155,3 +155,7 @@ body:has(.guindi-launcher) { padding-bottom: 84px; }
 }
 .space-has-more:not(.space-more-open) .space-secondary { display: none !important; }
 .space-more-toggle { min-height: 36px; padding: 0 12px; color: #1d4ed8; background: none; border: 0; font: inherit; font-weight: 700; cursor: pointer; }
+/* An open menu always sits above the top bar and the dimmed backdrop. */
+.dashboard-sidebar.is-open, .admin-sidebar.is-open { z-index: 70 !important; }
+/* A "0" next to every menu entry carries no information. */
+.space-zero { display: none !important; }
