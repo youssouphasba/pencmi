@@ -15,7 +15,7 @@ import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
-import { Public, OptionalAuthentication } from '../../common/decorators/public.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { PaginationDto } from '../../common/pagination/pagination.dto';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
 import {
@@ -52,31 +52,32 @@ export class VehiclesController {
     return this.service.findPublicOne(id);
   }
 
-  @Public()
+  @ApiBearerAuth()
+  // A request needs an account: visitors can browse but not send requests.
   @Post('voitures/:id/rental-requests')
-  @OptionalAuthentication()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   createRentalRequest(
     @Param('id') id: string,
     @Body() dto: CreateVehicleRequestDto,
-    @CurrentUser() user?: AuthenticatedUser,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.service.createRentalRequest(id, dto, user?.id);
+    return this.service.createRentalRequest(id, dto, user.id);
   }
 
-  @Public()
+  @ApiBearerAuth()
+  // A request needs an account: visitors can browse but not send requests.
   @Post('voitures/:id/chauffeur-requests')
-  @OptionalAuthentication()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   createChauffeurRequest(
     @Param('id') id: string,
     @Body() dto: CreateVehicleRequestDto,
-    @CurrentUser() user?: AuthenticatedUser,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.service.createChauffeurRequest(id, dto, user?.id);
+    return this.service.createChauffeurRequest(id, dto, user.id);
   }
 
-  @Public()
+  @ApiBearerAuth()
+  // Contacting a seller is a request too: it needs an account.
   @Post('voitures/:id/contact')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   createContact(@Param('id') id: string, @Body() dto: CreateVehicleRequestDto) {

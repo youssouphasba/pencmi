@@ -98,6 +98,18 @@ export function messageList(messages, { hasOlder, onOlder } = {}) {
     hasOlder ? el('li', { class: 'pm-older' }, el('button', { class: 'btn btn-ghost', type: 'button', text: 'Afficher les messages précédents', onClick: onOlder })) : null,
     messages.map((message) => el('li', { class: `pm-message${message.mine ? ' is-mine' : ''}` },
       el('p', { class: 'pm-message-body', text: message.body }),
-      el('small', { text: `${message.mine ? 'Vous' : 'Reçu'} · ${formatDateTime(message.createdAt)}` }),
-      !message.mine && message.id ? el('a', { href: `/signaler/?${new URLSearchParams({ module: 'messages', targetType: 'message', targetId: message.id })}`, text: 'Signaler', class: 'pm-message-report' }) : null)));
+      el('div', { class: 'pm-message-meta' },
+        el('time', { dateTime: message.createdAt, text: messageTime(message.createdAt) }),
+        !message.mine && message.id ? el('a', { href: `/signaler/?${new URLSearchParams({ module: 'messages', targetType: 'message', targetId: message.id })}`, text: 'Signaler', class: 'pm-message-report' }) : null))));
+}
+
+// "07:06" today, "13 nov., 18:20" otherwise (Dakar time).
+function messageTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const zone = { timeZone: 'Africa/Dakar' };
+  const day = (d) => new Intl.DateTimeFormat('fr-FR', { ...zone, dateStyle: 'short' }).format(d);
+  const time = new Intl.DateTimeFormat('fr-FR', { ...zone, hour: '2-digit', minute: '2-digit' }).format(date);
+  if (day(date) === day(new Date())) return time;
+  return `${new Intl.DateTimeFormat('fr-FR', { ...zone, day: 'numeric', month: 'short' }).format(date)}, ${time}`;
 }

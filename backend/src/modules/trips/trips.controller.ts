@@ -11,7 +11,7 @@ import {
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
 import { CurrentUser } from "../../common/decorators/current-user.decorator";
 import { RequirePermissions } from "../../common/decorators/permissions.decorator";
-import { Public, OptionalAuthentication } from "../../common/decorators/public.decorator";
+import { Public } from "../../common/decorators/public.decorator";
 import { PaginationDto } from "../../common/pagination/pagination.dto";
 import { AuthenticatedUser } from "../../auth/types/authenticated-user.type";
 import {
@@ -67,16 +67,16 @@ export class TripsController {
     return this.service.findPublicOne(id, query.occurrenceId);
   }
 
-  @Public()
+  @ApiBearerAuth()
+  // A request needs an account: visitors can browse but not send requests.
   @Post("voyages/:id/seat-requests")
-  @OptionalAuthentication()
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   createSeatRequest(
     @Param("id") id: string,
     @Body() dto: CreateSeatRequestDto,
-    @CurrentUser() user?: AuthenticatedUser,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.service.createSeatRequest(id, dto, user?.id);
+    return this.service.createSeatRequest(id, dto, user.id);
   }
 
   @ApiBearerAuth()

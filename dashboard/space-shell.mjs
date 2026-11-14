@@ -122,7 +122,7 @@ const PRIMARY = /^(Accepter|Refuser|Confirmer|Voir|Modifier|Reprendre|Examiner|O
 function groupActions() {
   document.querySelectorAll('table td, .hotel-row-actions, .vehicle-row-actions, .trip-row-actions').forEach(cell => {
     if (cell.querySelector('.space-more-toggle')) return;
-    const buttons = [...cell.querySelectorAll(':scope > button, :scope > a.btn, :scope > div > button, :scope > div > a.btn')];
+    const buttons = [...cell.querySelectorAll(':scope > button, :scope > a.btn, :scope > div > button, :scope > div > a.btn')].filter(button => !button.matches('.ra-write, .space-more-toggle'));
     if (buttons.length <= 3) return;
     const secondary = buttons.filter(button => !PRIMARY.test(button.textContent.trim()));
     if (secondary.length < 2) return;

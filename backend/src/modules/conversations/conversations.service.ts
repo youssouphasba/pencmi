@@ -44,6 +44,9 @@ function isUniqueViolation(error: unknown) {
   );
 }
 
+export const REQUESTER_TYPES = ['visit', 'hotel', 'rental', 'chauffeur', 'trip'] as const;
+export type RequesterType = (typeof REQUESTER_TYPES)[number];
+
 @Injectable()
 export class ConversationsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -237,6 +240,33 @@ export class ConversationsService {
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       select: { id: true },
     });
+  }
+
+  /** Finds a request of this owner and writes to its client; works for every request type. */
+  async messageRequester(ownerUserId: string, type: RequesterType, id: string, body: string, requestId: string) {
+    const found = await this.findOwnedRequest(ownerUserId, type, id);
+    if (!found) throw new NotFoundException("Demande introuvable.");
+    if (!found.clientUserId)
+      throw new ConflictException("Ce client n’a pas de compte Péncmi : contactez-le par téléphone ou par email.");
+    return this.writeToRequester(ownerUserId, found.module, found.listingId, found.clientUserId, body.trim(), requestId);
+  }
+
+  private async findOwnedRequest(ownerUserId: string, type: RequesterType, id: string): Promise<{ module: ListingModule; listingId: string; clientUserId: string | null } | null> {
+    if (type === 'visit') {
+      const row = await this.prisma.realEstateVisitRequest.findFirst({ where: { id, listing: { ownerUserId, deletedAt: null } }, select: { listingId: true, clientUserId: true } });
+      return row && { module: 'real_estate', listingId: row.listingId, clientUserId: row.clientUserId };
+    }
+    if (type === 'hotel') {
+      const row = await this.prisma.hotelReservationRequest.findFirst({ where: { id, property: { ownerUserId } }, select: { propertyId: true, clientUserId: true } });
+      return row && { module: 'hotels', listingId: row.propertyId, clientUserId: row.clientUserId };
+    }
+    if (type === 'rental' || type === 'chauffeur') {
+      const model: any = type === 'rental' ? this.prisma.vehicleRentalRequest : this.prisma.vehicleChauffeurRequest;
+      const row = await model.findFirst({ where: { id, listing: { ownerUserId } }, select: { listingId: true, clientUserId: true } });
+      return row && { module: 'vehicles', listingId: row.listingId, clientUserId: row.clientUserId };
+    }
+    const row = await this.prisma.tripSeatRequest.findFirst({ where: { id, trip: { ownerUserId } }, select: { tripId: true, clientUserId: true } });
+    return row && { module: 'trips', listingId: row.tripId, clientUserId: row.clientUserId };
   }
 
   /**

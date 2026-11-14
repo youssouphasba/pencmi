@@ -128,6 +128,12 @@ test('a client sees unavailable dates and cannot request them', {
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(`${origin}/voitures/detail/?id=v1`);
+    // A visitor without an account is invited to sign in instead of seeing the form.
+    await page.locator('[data-open-contact]').click({ timeout: 5000 });
+    await page.getByText('Connectez-vous pour envoyer votre demande').waitFor();
+    assert.equal(await page.getByRole('link', { name: 'Se connecter' }).getAttribute('href'), '/login/?next=%2Fvoitures%2Fdetail%2F%3Fid%3Dv1');
+    await page.evaluate(() => localStorage.setItem('pencmi_access_token', 'test-token'));
+    await page.reload();
     await page.locator('[data-open-contact]').click({ timeout: 5000 }).catch(async (error) => { throw new Error(`${error.message}\n${errors.join('\n')}\n${(await page.locator('body').innerText()).slice(0, 500)}`); });
     await page.getByText('Dates déjà indisponibles').waitFor();
     await page.getByLabel('Nom').fill('Fatou');

@@ -54,3 +54,7 @@
   .pm-table td { border: 0; padding: 6px; }
   .pm-table td::before { content: attr(data-label); display: block; font-size: .8rem; color: #5f6b66; }
 }
+.pm-message-meta { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; font-size: .78rem; color: #5f6b66; }
+.pm-message.is-mine .pm-message-meta { justify-content: flex-end; }
+.pm-message-report { color: #94a3b8; font-size: .75rem; text-decoration: none; }
+.pm-message-report:hover { color: #b91c1c; text-decoration: underline; }
