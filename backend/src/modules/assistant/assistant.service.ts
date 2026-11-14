@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { z } from 'zod';
 import { AuthenticatedUser } from '../../auth/types/authenticated-user.type';
 import { PrismaService } from '../../database/prisma/prisma.service';
@@ -22,12 +22,24 @@ const MAX_OUTPUT_TOKENS = 800;
 const MAX_ROUNDS = 3; // model calls per user message
 const MAX_CALLS_PER_ROUND = 3;
 const DAILY_CALLS_PER_USER = 60;
+const DAILY_CALLS_PER_VISITOR = 20;
+// Visitors (not signed in) may search, read a listing and ask about Péncmi; anything tied to an account asks them to sign in.
+const VISITOR_TOOLS = ['faq', 'search', 'listing'];
+const SIGN_IN_TOOL = { type: 'function', function: { name: 'sign_in',
+  description: 'L’utilisateur n’est pas connecté. Appelle cet outil dès qu’il demande une action qui exige un compte (réserver, envoyer une demande, favoris, alertes, messages, suivi de ses demandes, publier). Indique en une phrase ce qui sera possible après connexion.',
+  parameters: { type: 'object', properties: { reason: { type: 'string', maxLength: 200 } }, required: ['reason'], additionalProperties: false } } };
+
+/** Who is talking to Guindi: a signed-in account or an anonymous visitor (keyed by a hashed IP). */
+export type Visitor = { visitor: true; key: string; role: 'visitor'; id?: undefined; sessionId?: undefined };
+export type Caller = AuthenticatedUser | Visitor;
+const isVisitor = (caller: Caller): caller is Visitor => (caller as Visitor).visitor === true;
 const RESERVE_ACTION = 'assistant.budget_reserved';
 
 type Block =
   | { type: 'result'; tool: string; label: string; module?: string; result: unknown }
   | { type: 'proposal'; tool: string; label: string; args: unknown; confirmation: string; expiresAt: string }
-  | { type: 'error'; label: string; message: string };
+  | { type: 'error'; label: string; message: string }
+  | { type: 'login'; reason: string };
 type ModelMessage = { role: string; content: string; tool_calls?: any[]; tool_call_id?: string; reasoning_content?: string };
 
 class BudgetError extends HttpException {}
@@ -45,21 +57,29 @@ export class AssistantService {
   private readonly logger = new Logger('Assistant');
   constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
 
-  capabilities(user: AuthenticatedUser) {
+  visitor(ip: string | undefined): Visitor {
+    const key = createHash('sha256').update(`${this.config.get('JWT_SECRET') ?? ''}:visitor:${ip ?? 'unknown'}`).digest('hex').slice(0, 32);
+    return { visitor: true, key, role: 'visitor' };
+  }
+  capabilities(user: Caller) {
+    if (isVisitor(user)) {
+      const help = helpFor('client' as any).filter(group => group.id === 'find');
+      return { enabled: this.enabled(user), visitor: true, tools: VISITOR_TOOLS.map(name => ({ name, label: ASSISTANT_TOOLS[name].label, confirmationRequired: false })), help };
+    }
     return { enabled: this.enabled(user), tools: Object.entries(ASSISTANT_TOOLS).filter(([name]) => canUseTool(user.role, name))
       .map(([name, tool]) => ({ name, label: tool.label, confirmationRequired: !!tool.write })), help: helpFor(user.role) };
   }
   private budgetCents() { return Math.min(10000, Number(this.config.get('ASSISTANT_BUDGET_CENTS') ?? 500)); }
-  private enabled(user: AuthenticatedUser) {
+  private enabled(user: Caller) {
     return this.config.get('ASSISTANT_ENABLED') === 'true' && !!this.config.get('DEEPSEEK_API_KEY') &&
       String(this.config.get('ASSISTANT_ROLES') ?? 'admin').split(',').map(v => v.trim()).includes(user.role);
   }
-  private assertEnabled(user: AuthenticatedUser) {
+  private assertEnabled(user: Caller) {
     if (!this.enabled(user)) throw new ServiceUnavailableException(copy.unavailable);
   }
 
   /** Reserves a pessimistic estimate before calling the provider; settle() replaces it with the real usage. */
-  private async reserve(user: AuthenticatedUser, payloadBytes: number) {
+  private async reserve(user: Caller, payloadBytes: number) {
     const estimate = Math.ceil((payloadBytes / 2) * INPUT_MICRO_PER_TOKEN + MAX_OUTPUT_TOKENS * OUTPUT_MICRO_PER_TOKEN);
     const now = new Date();
     const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
@@ -73,9 +93,13 @@ export class AssistantService {
         this.logger.warn(`Monthly budget reached: ${Number(spent ?? 0)} of ${this.budgetCents() * 10000} micro-dollars (ASSISTANT_BUDGET_CENTS).`);
         throw new BudgetError(copy.budget, 429);
       }
-      const recent = await tx.auditLog.count({ where: { action: RESERVE_ACTION, actorUserId: user.id, createdAt: { gte: new Date(Date.now() - 86400000) } } });
-      if (recent >= DAILY_CALLS_PER_USER) throw new BudgetError(copy.quota, 429);
-      const row = await tx.auditLog.create({ data: { actorUserId: user.id, module: 'system', action: RESERVE_ACTION, metadata: { micro: estimate, estimated: true } } });
+      const since = new Date(Date.now() - 86400000);
+      const recent = isVisitor(user)
+        ? Number((await tx.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM "AuditLog" WHERE action = ${RESERVE_ACTION} AND metadata->>'visitor' = ${user.key} AND "createdAt" >= ${since}`)[0].n)
+        : await tx.auditLog.count({ where: { action: RESERVE_ACTION, actorUserId: user.id, createdAt: { gte: since } } });
+      if (recent >= (isVisitor(user) ? DAILY_CALLS_PER_VISITOR : DAILY_CALLS_PER_USER)) throw new BudgetError(isVisitor(user) ? copy.visitorQuota : copy.quota, 429);
+      const row = await tx.auditLog.create({ data: { actorUserId: isVisitor(user) ? null : user.id, module: 'system', action: RESERVE_ACTION,
+        metadata: { micro: estimate, estimated: true, ...(isVisitor(user) ? { visitor: user.key } : {}) } } });
       return row.id;
     });
   }
@@ -83,23 +107,26 @@ export class AssistantService {
     const input = Number(usage?.prompt_tokens), output = Number(usage?.completion_tokens);
     if (!Number.isFinite(input) || !Number.isFinite(output)) return; // keep the pessimistic estimate
     const micro = Math.ceil(input * INPUT_MICRO_PER_TOKEN + output * OUTPUT_MICRO_PER_TOKEN);
-    await this.prisma.auditLog.update({ where: { id }, data: { metadata: { micro, inputTokens: input, outputTokens: output } } }).catch(() => undefined);
+    const row = await this.prisma.auditLog.findUnique({ where: { id }, select: { metadata: true } }).catch(() => null);
+    const visitor = (row?.metadata as any)?.visitor;
+    await this.prisma.auditLog.update({ where: { id }, data: { metadata: { micro, inputTokens: input, outputTokens: output, ...(visitor ? { visitor } : {}) } } }).catch(() => undefined);
   }
 
   private signature(value: string) {
     return createHmac('sha256', this.config.getOrThrow<string>('JWT_SECRET')).update('pencmi-assistant-confirmation-v1:' + value).digest('hex');
   }
-  private parse(name: string, args: unknown, user: AuthenticatedUser) {
+  private parse(name: string, args: unknown, user: Caller) {
     if (!Object.prototype.hasOwnProperty.call(ASSISTANT_TOOLS, name)) throw new BadRequestException(copy.invalid);
     const parsed = ASSISTANT_TOOLS[name].schema.safeParse(args);
     if (!parsed.success) throw new BadRequestException(copy.invalid);
-    if (!canUseTool(user.role, name, parsed.data)) throw new ForbiddenException('Votre compte ne permet pas cette action.');
+    if (isVisitor(user) ? !VISITOR_TOOLS.includes(name) : !canUseTool(user.role, name, parsed.data)) throw new ForbiddenException('Votre compte ne permet pas cette action.');
     return parsed.data;
   }
 
-  private async callModel(user: AuthenticatedUser, messages: ModelMessage[], final: boolean) {
+  private async callModel(user: Caller, messages: ModelMessage[], final: boolean) {
+    const tools = isVisitor(user) ? [...modelTools('client' as any).filter(tool => VISITOR_TOOLS.includes(tool.function.name)), SIGN_IN_TOOL] : modelTools(user.role);
     const payload = JSON.stringify({ model: this.config.get('ASSISTANT_MODEL') ?? 'deepseek-flash', messages,
-      tools: modelTools(user.role), ...(final ? { tool_choice: 'none' } : {}),
+      tools, ...(final ? { tool_choice: 'none' } : {}),
       max_tokens: MAX_OUTPUT_TOKENS, thinking: { type: 'disabled' }, stream: false });
     const bytes = Buffer.byteLength(payload);
     if (bytes > MAX_BODY_BYTES) throw new BadRequestException(copy.tooLong);
@@ -137,7 +164,13 @@ export class AssistantService {
   }
 
   /** Runs one tool call; returns the text the model will see and adds what the user sees to blocks. */
-  private async runTool(user: AuthenticatedUser, call: any, authorization: string, blocks: Block[], state: { proposed: boolean }) {
+  private async runTool(user: Caller, call: any, authorization: string, blocks: Block[], state: { proposed: boolean }) {
+    if (isVisitor(user) && call?.function?.name === 'sign_in') {
+      let reason = '';
+      try { reason = String(JSON.parse(call.function.arguments || '{}').reason || '').slice(0, 200); } catch { /* keep default */ }
+      if (!state.proposed) { state.proposed = true; blocks.push({ type: 'login', reason: reason || copy.signInReason }); }
+      return JSON.stringify({ shownToUser: true, status: 'sign_in_requested', note: 'Un formulaire de connexion est affiché. La conversation reprendra après la connexion.' });
+    }
     let args: any;
     try {
       args = this.parse(call?.function?.name, JSON.parse(call?.function?.arguments || '{}'), user);
@@ -145,7 +178,7 @@ export class AssistantService {
       return JSON.stringify({ error: error instanceof ForbiddenException ? 'Outil non autorisé pour ce compte.' : 'Arguments invalides pour cet outil.' });
     }
     const name = call.function.name, tool = ASSISTANT_TOOLS[name];
-    if (name === 'create_request') {
+    if (name === 'create_request' && !isVisitor(user)) {
       const filled = await this.withAccountContact(user, args);
       if (!filled) return JSON.stringify({ error: 'Le compte n’a pas de nom : demande le nom à utiliser pour la demande.' });
       args = filled;
@@ -153,6 +186,7 @@ export class AssistantService {
     if (tool.write) {
       if (state.proposed) return JSON.stringify({ error: 'Une seule action à confirmer par réponse. Propose les autres ensuite.' });
       state.proposed = true;
+      if (isVisitor(user)) return JSON.stringify({ error: 'Connexion requise : appelle sign_in.' });
       blocks.push(this.proposal(user, name, args));
       return JSON.stringify({ shownToUser: true, status: 'awaiting_user_confirmation', note: 'Rien n’est encore fait : l’utilisateur doit cliquer sur Confirmer.' });
     }
@@ -167,12 +201,12 @@ export class AssistantService {
     }
   }
 
-  async chat(user: AuthenticatedUser, body: unknown, authorization: string) {
+  async chat(user: Caller, body: unknown, authorization: string) {
     this.assertEnabled(user);
     const input = inputSchema.safeParse(body);
     if (!input.success) throw new BadRequestException('Écrivez votre message.');
     const messages: ModelMessage[] = [
-      { role: 'system', content: copy.prompt + '\n' + helpPrompt(user.role) + `\n${today()} Rôle du compte : ${user.role}.` },
+      { role: 'system', content: copy.prompt + '\n' + (isVisitor(user) ? copy.visitorPrompt : helpPrompt(user.role) + ` Rôle du compte : ${user.role}.`) + `\n${today()}` },
       ...(input.data.history || []).map(turn => ({ role: turn.role, content: turn.content })),
       { role: 'user', content: input.data.message },
     ];
@@ -201,8 +235,8 @@ export class AssistantService {
         if (index < MAX_CALLS_PER_ROUND && call?.function?.name && ASSISTANT_TOOLS[call.function.name] && !content.startsWith('{"error"'))
           notes.push(`[${ASSISTANT_TOOLS[call.function.name].label}] ${content}`);
       }
-      // A proposal ends the turn: the user decides, the model is not called again.
-      if (state.proposed) { text ||= copy.proposed; break; }
+      // A proposal or a sign-in request ends the turn: the user acts, the model is not called again.
+      if (state.proposed) { text ||= blocks.some(block => block.type === 'login') ? copy.signInText : copy.proposed; break; }
     }
     text = (text || (blocks.length ? copy.shown : copy.clarify)).slice(0, 5000);
     // memo: what the browser sends back as this assistant turn, so the next message keeps context.
@@ -244,7 +278,7 @@ export class AssistantService {
     let response: Response;
     try {
       response = await fetch(`${origin}/${prefix}${operation.path}`, { method: operation.method, redirect: 'error',
-        headers: { Authorization: authorization, 'Content-Type': 'application/json' },
+        headers: { ...(authorization ? { Authorization: authorization } : {}), 'Content-Type': 'application/json' },
         body: operation.body ? JSON.stringify(operation.body) : undefined, signal: AbortSignal.timeout(20000) });
     } catch { throw new ServiceUnavailableException('Pas de réponse. Vérifiez dans votre espace avant de réessayer.'); }
     const data = await response.json().catch(() => null) as any;

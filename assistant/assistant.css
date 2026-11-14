@@ -276,3 +276,11 @@ button:disabled { opacity: .5; cursor: default; }
 .msg.assistant:has(+ .msg.assistant) .avatar.small { visibility: hidden; }
 .msg.assistant:has(+ .msg.assistant) .bubble { border-bottom-left-radius: 18px; }
 .embed #assistant { max-width: none; border: 0; }
+/* Sign-in inside the conversation */
+.login-form { display: grid; gap: 8px; }
+.login-form input { width: 100%; min-height: 42px; padding: 0 12px; color: inherit; background: var(--g-bg); border: 1px solid var(--g-line); border-radius: 10px; font: inherit; font-size: 16px; }
+.login-form input:focus { outline: none; border-color: var(--g-blue); background: #fff; }
+.login-form .button { width: 100%; }
+.login-form [role=alert]:empty { display: none; }
+.login-links { color: var(--g-muted); }
+.login-links a { font-weight: 600; text-decoration: none; }

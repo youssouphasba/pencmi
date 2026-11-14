@@ -16,6 +16,8 @@ export const copy = {
   helpButton: 'Ce que Guindi sait faire', clear: 'Nouvelle conversation', close: 'Fermer',
   capabilitiesTitle: 'Ce que Guindi sait faire',
   confirmNote: 'Touchez un exemple pour l’essayer. Guindi vous demande toujours votre accord avant d’envoyer quoi que ce soit.',
+  identifier: 'Email ou téléphone', password: 'Mot de passe', signedIn: 'Vous êtes connecté',
+  register: 'Créer un compte', forgot: 'Mot de passe oublié ?', loginFailed: 'Identifiants incorrects. Réessayez.',
   cannot: 'Pour payer, ajouter des photos ou publier une annonce, passez par votre espace.',
 };
 export const labels = {

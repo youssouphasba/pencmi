@@ -9,17 +9,18 @@ describe('AssistantService loop', () => {
   const listing = { id: 'lst1', title: 'Studio Plateau', city: 'Dakar', price: 150000, currency: 'XOF', ownerUserId: 'owner-secret',
     owner: { firstName: 'Awa', professionalProfile: { professionalPhone: '+221770000000', professionalEmail: 'pro@example.test' } },
     metadata: { contactPreferences: { phoneNumber: '+221770000000' }, photos: ['https://x/p.jpg'] } };
-  let replies: any[], prompts: any[], apiCalls: string[];
+  let replies: any[], prompts: any[], apiCalls: string[], apiAuth: (string | null)[];
+  let visitorCalls = 0;
   let service: AssistantService;
   const toolReply = (name: string, args: unknown, id = 'c1') => ({ tool_calls: [{ id, type: 'function', function: { name, arguments: JSON.stringify(args) } }] });
 
   beforeEach(() => {
-    replies = []; prompts = []; apiCalls = [];
-    const tx = { $queryRaw: jest.fn(async (strings: TemplateStringsArray) => strings.join('').includes('SUM') ? [{ spent: 0n }] : [{ locked: 1 }]),
+    replies = []; prompts = []; apiCalls = []; apiAuth = []; visitorCalls = 0;
+    const tx = { $queryRaw: jest.fn(async (strings: TemplateStringsArray) => strings.join('').includes('SUM') ? [{ spent: 0n }] : strings.join('').includes('count(*)') ? [{ n: BigInt(visitorCalls) }] : [{ locked: 1 }]),
       auditLog: { count: jest.fn(async () => 0), create: jest.fn(async () => ({ id: 'r1' })) } };
-    const prisma = { $transaction: jest.fn(async (fn: any) => fn(tx)), auditLog: { update: jest.fn(async () => ({})) },
+    const prisma = { $transaction: jest.fn(async (fn: any) => fn(tx)), auditLog: { update: jest.fn(async () => ({})), findUnique: jest.fn(async () => ({ metadata: {} })) },
       user: { findUnique: jest.fn(async () => ({ firstName: 'Fatou', lastName: 'Diop', email: 'fatou@example.test', phone: '+221770000001' })) } } as any;
-    const config = new ConfigService({ ASSISTANT_ENABLED: 'true', DEEPSEEK_API_KEY: 'k', ASSISTANT_ROLES: 'client', JWT_SECRET: 'secret', PORT: 4000 });
+    const config = new ConfigService({ ASSISTANT_ENABLED: 'true', DEEPSEEK_API_KEY: 'k', ASSISTANT_ROLES: 'client,visitor', JWT_SECRET: 'secret', PORT: 4000 });
     service = new AssistantService(prisma, config);
     global.fetch = jest.fn(async (url: any, options: any) => {
       if (String(url).startsWith('https://api.deepseek.com')) {
@@ -27,6 +28,7 @@ describe('AssistantService loop', () => {
         return Response.json({ choices: [{ finish_reason: 'stop', message: replies.shift() ?? { content: 'Fin.' } }], usage: { prompt_tokens: 10, completion_tokens: 5 } });
       }
       apiCalls.push(`${options.method} ${url}`);
+      apiAuth.push(options.headers?.Authorization ?? null);
       if (String(url).includes('/messages/conversations')) return Response.json({ success: true, data: [{ id: 'cv1', lastMessage: 'Mon numéro est le 77 000 00 00' }] });
       if (String(url).includes('/immobilier')) return Response.json({ success: true, data: [listing], meta: { total: 1, page: 1 } });
       return Response.json({ success: true, data: [] });
@@ -69,6 +71,36 @@ describe('AssistantService loop', () => {
     replies = [toolReply('create_request', { type: 'trip', id: 'trip1', details: { occurrenceId: 'occ1', requestedSeats: 2 } })];
     const turn = await service.chat(user, { message: 'Réserve 2 places', consent: true }, 'Bearer t');
     expect((turn.blocks[0] as any).args.details).toMatchObject({ clientName: 'Fatou Diop', clientEmail: 'fatou@example.test', clientPhone: '+221770000001', requestedSeats: 2 });
+  });
+
+  describe('visitors', () => {
+    const visitor = () => service.visitor('203.0.113.7');
+    it('searches public listings without any credential', async () => {
+      replies = [toolReply('search', { module: 'real_estate', filters: { city: 'Dakar' } }), { content: 'Voici.' }];
+      const turn = await service.chat(visitor(), { message: 'Un studio', consent: true }, '');
+      expect(turn.blocks[0]).toMatchObject({ type: 'result', tool: 'search' });
+      expect(apiAuth).toEqual([null]);
+      const names = prompts[0].tools.map((tool: any) => tool.function.name).sort();
+      expect(names).toEqual(['faq', 'listing', 'search', 'sign_in']);
+    });
+    it('asks to sign in for account actions and never proposes them', async () => {
+      replies = [toolReply('sign_in', { reason: 'Pour réserver ce trajet.' })];
+      const turn = await service.chat(visitor(), { message: 'Réserve', consent: true }, '');
+      expect(turn.blocks).toEqual([{ type: 'login', reason: 'Pour réserver ce trajet.' }]);
+      expect(prompts).toHaveLength(1);
+      replies = [toolReply('add_favorite', { module: 'real_estate', id: 'lst1' }), { content: 'Connectez-vous.' }];
+      const second = await service.chat(visitor(), { message: 'Favori', consent: true }, '');
+      expect(second.blocks).toEqual([]);
+      expect(apiCalls).toEqual([]);
+    });
+    it('caps daily messages per visitor', async () => {
+      visitorCalls = 20;
+      await expect(service.chat(visitor(), { message: 'x', consent: true }, '')).rejects.toThrow('Connectez-vous pour continuer');
+    });
+    it('hashes the address instead of storing it', () => {
+      expect(visitor().key).toMatch(/^[a-f0-9]{32}$/);
+      expect(visitor().key).not.toContain('203');
+    });
   });
 
   it('bounds the number of model calls and forces a final text answer', async () => {

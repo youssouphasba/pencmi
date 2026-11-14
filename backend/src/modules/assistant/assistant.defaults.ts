@@ -12,6 +12,11 @@ Les brouillons créés ici ne contiennent que le titre et la description ; le fo
   unavailable: 'Guindi est indisponible pour le moment.',
   // Shown to users: never mention the budget or internal limits.
   budget: 'Guindi est très sollicité en ce moment. Réessayez un peu plus tard ; le reste du site fonctionne normalement.',
+  visitorQuota: 'Vous avez envoyé beaucoup de messages aujourd’hui. Connectez-vous pour continuer avec Guindi.',
+  visitorPrompt: `L'utilisateur n'est pas connecté. Tu peux chercher des annonces, les détailler, les comparer et répondre aux questions sur Péncmi.
+Dès qu'il demande quelque chose qui exige un compte (réserver, envoyer une demande, favoris, alertes, messages, suivi de ses demandes, publier une annonce), appelle sign_in : un formulaire de connexion s'affiche dans la conversation et tu pourras continuer ensuite. Ne lui demande jamais son mot de passe toi-même.`,
+  signInReason: 'Connectez-vous pour continuer.',
+  signInText: 'Pour cela, connectez-vous : c’est rapide, et on continue juste après.',
   quota: 'Vous avez envoyé beaucoup de messages aujourd’hui. Guindi sera de nouveau disponible pour vous demain.',
   tooLong: 'Cette conversation est trop longue. Touchez ↺ pour en commencer une nouvelle.',
   invalid: 'Je n’ai pas compris. Pouvez-vous reformuler ?',

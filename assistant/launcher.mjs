@@ -3,7 +3,7 @@
 // Shown only when the server says the assistant is enabled for this account; silent on any error.
 import { publicationRequest, getPublicationApiBase } from '../publier/real-estate-api.mjs';
 
-let panel, frame, launcher;
+let panel, frame, launcher, signedInHere = false;
 
 function styles() {
   const style = document.createElement('style');
@@ -50,6 +50,8 @@ function close() {
   if (!panel || panel.hidden) return;
   panel.hidden = true;
   document.body.classList.remove('guindi-open');
+  // A visitor who signed in inside the conversation: refresh the page so it shows the account.
+  if (signedInHere) { window.location.reload(); return; }
   launcher?.focus();
 }
 
@@ -65,7 +67,10 @@ async function mountGuindiLauncher() {
     });
   }
   try {
-    const capabilities = await publicationRequest('/assistant/capabilities');
+    // Visitors are welcome too: without a session, ask the public endpoint.
+    const capabilities = localStorage.getItem('pencmi_access_token')
+      ? await publicationRequest('/assistant/capabilities')
+      : await fetch(getPublicationApiBase() + '/assistant/capabilities').then(response => response.ok ? response.json() : null).then(payload => payload?.data ?? payload);
     if (!capabilities?.enabled) return;
   } catch { return; }
   styles();
@@ -81,7 +86,9 @@ async function mountGuindiLauncher() {
   document.body.append(launcher);
   document.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
   window.addEventListener('message', event => {
-    if (event.origin === location.origin && event.data === 'guindi:close') close();
+    if (event.origin !== location.origin) return;
+    if (event.data === 'guindi:close') close();
+    if (event.data === 'guindi:signed-in') signedInHere = true;
   });
 }
 

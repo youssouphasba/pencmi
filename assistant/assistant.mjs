@@ -1,4 +1,5 @@
-import { publicationRequest } from '../publier/real-estate-api.mjs';
+import { publicationRequest, getPublicationApiBase } from '../publier/real-estate-api.mjs';
+import { tokenSession } from '../auth/token-session.mjs';
 import { accountRoutes } from '../auth/navigation.mjs';
 import { copy, labels, values } from './copy.mjs';
 
@@ -51,6 +52,15 @@ const date = value => {
   return parsed && !Number.isNaN(parsed.getTime()) ? new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium' }).format(parsed) : '';
 };
 const safeId = value => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
+// Visitors talk to Guindi without a token; signed-in accounts go through the session-aware client.
+const signedIn = () => Boolean(storage.get('pencmi_access_token'));
+async function api(path, body) {
+  if (signedIn()) return publicationRequest(path, body === undefined ? {} : { method: 'POST', body });
+  const response = await fetch(getPublicationApiBase() + path, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw Object.assign(new Error(payload?.error?.message || payload?.message || copy.failure), { status: response.status });
+  return payload?.data ?? payload;
+}
 const detailPaths = { real_estate: '/immobilier/annonce/', hotels: '/hotels/detail/', vehicles: '/voitures/detail/', trips: '/voyages/detail/' };
 
 // ---------- Shell ----------
@@ -237,10 +247,60 @@ function proposalBlock(block) {
   return attach(panel);
 }
 
+// Sign-in inside the conversation: the visitor stays here and the pending request resumes.
+function loginBlock(block) {
+  const panel = el('div', undefined, { class: 'bubble panel login-panel' });
+  if (signedIn()) { panel.append(el('p', `✓ ${copy.signedIn}`, { class: 'success' })); return attach(panel); }
+  const identifier = el('input', undefined, { type: 'text', autocomplete: 'username', required: '', 'aria-label': copy.identifier, placeholder: copy.identifier });
+  const password = el('input', undefined, { type: 'password', autocomplete: 'current-password', required: '', 'aria-label': copy.password, placeholder: copy.password });
+  const submitButton = el('button', copy.login, { type: 'submit', class: 'button primary' });
+  const feedback = el('p', '', { role: 'alert', class: 'small' });
+  const target = EMBED ? { target: '_top' } : {};
+  const here = EMBED ? (() => { try { return window.parent.location.pathname; } catch { return '/'; } })() : '/assistant/';
+  const links = el('p', undefined, { class: 'small login-links' });
+  links.append(el('a', copy.register, { href: `/register/?next=${encodeURIComponent(here)}`, ...target }), document.createTextNode(' · '),
+    el('a', copy.forgot, { href: '/forgot-password/', ...target }));
+  const form = el('form', undefined, { class: 'login-form' });
+  form.append(el('p', block.reason, { class: 'panel-title' }), identifier, password, submitButton, feedback, links);
+  panel.append(form);
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (submitButton.disabled) return;
+    submitButton.disabled = true; feedback.textContent = '';
+    try {
+      const response = await fetch(getPublicationApiBase() + '/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: identifier.value.trim(), password: password.value }) });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error?.message || payload?.message || copy.loginFailed);
+      await tokenSession.install(payload?.data ?? payload);
+      const user = await publicationRequest('/auth/me');
+      adoptAccount(user);
+      form.replaceWith(el('p', `✓ ${copy.signedIn}${user.firstName ? `, ${user.firstName}` : ''}.`, { class: 'success' }));
+      if (EMBED) window.parent.postMessage('guindi:signed-in', location.origin);
+      const pending = [...log].reverse().find(entry => entry.u)?.u;
+      if (pending) void submit(pending, { resume: true });
+    } catch (error) {
+      feedback.textContent = error.message || copy.loginFailed;
+      submitButton.disabled = false;
+    }
+  });
+  return attach(panel);
+}
+
+/** After signing in, the visitor's conversation becomes the account's conversation. */
+function adoptAccount(user) {
+  const previousKey = storeKey;
+  account = accountRoutes[user.role] || '/compte/';
+  storeKey = user?.id ? `pencmi_guindi_${user.id}` : null;
+  try { if (previousKey && previousKey !== storeKey) sessionStorage.removeItem(previousKey); } catch { /* optional */ }
+  persist();
+}
+
 function showTurn(turn) {
   if (turn.text) bubble(turn.text, 'assistant');
   for (const block of turn.blocks || []) {
     if (block.type === 'proposal') proposalBlock(block);
+    else if (block.type === 'login') loginBlock(block);
     else if (block.type === 'error') attach(el('div', `${block.label} : ${block.message}`, { class: 'bubble error', role: 'alert' }));
     else resultBlock(block);
   }
@@ -272,25 +332,26 @@ function resetConversation() {
   greet();
 }
 
-async function submit(message) {
+async function submit(message, { resume = false } = {}) {
   if (busy || !message) return;
   errorBox.textContent = '';
   suggestionsRow.hidden = true;
-  const mine = bubble(message, 'user');
+  // After signing in, the last request is sent again without repeating the user's bubble.
+  const mine = resume ? null : bubble(message, 'user');
   const dots = typing();
   input.value = ''; autoGrow();
   lock(true);
   scrollToEnd();
   try {
-    const turn = await publicationRequest('/assistant/chat', { method: 'POST', body: { message, history, consent: true } });
+    const turn = await api('/assistant/chat', { message: resume ? `${message} (je suis maintenant connecté)` : message, history, consent: true });
     dots.remove();
-    log.push({ u: message }, { t: turn });
+    if (resume) log.push({ t: turn }); else log.push({ u: message }, { t: turn });
     remember('user', message);
     remember('assistant', turn.memo || turn.text);
     showTurn(turn);
   } catch (error) {
-    dots.remove(); mine.remove();
-    input.value = message; autoGrow();
+    dots.remove(); mine?.remove();
+    if (!resume) { input.value = message; autoGrow(); }
     errorBox.textContent = error.message || copy.failure;
   } finally { lock(false); input.focus(); scrollToEnd(); }
 }
@@ -329,15 +390,20 @@ function buildSheet() {
 // ---------- Start ----------
 async function start() {
   try {
-    const user = await publicationRequest('/auth/me');
-    storeKey = user?.id ? `pencmi_guindi_${user.id}` : null;
+    if (signedIn()) {
+      const user = await publicationRequest('/auth/me');
+      storeKey = user?.id ? `pencmi_guindi_${user.id}` : null;
+      account = accountRoutes[user.role] || '/compte/';
+    } else {
+      storeKey = 'pencmi_guindi_visitor';
+      account = '/';
+    }
     if (storeKey) restore();
-    account = accountRoutes[user.role] || '/compte/';
     if (!EMBED) try {
       const previous = new URL(document.referrer);
       back.href = previous.origin === location.origin && !previous.pathname.startsWith('/assistant') ? previous.pathname + previous.search : account;
     } catch { back.href = account; }
-    const capabilities = await publicationRequest('/assistant/capabilities');
+    const capabilities = await api('/assistant/capabilities');
     if (!capabilities.enabled) { status.textContent = copy.disabled; return; }
     help = Array.isArray(capabilities.help) ? capabilities.help.filter(group => group.items?.length) : [];
     status.remove();
