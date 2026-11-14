@@ -371,16 +371,22 @@ describe('Real estate publication API', () => {
     await api('get', `/files/${uploaded.id}/content`).expect(200);
   });
 
-  it('does not expose a draft through public visit requests or ignore disabled visits', async () => {
+  it('requires an account for visits and rejects drafts or disabled visits', async () => {
     const created = await create(payload());
     await request(app.getHttpServer())
       .post(`/api/v1/immobilier/${created.id}/visit-requests`)
+      .send({})
+      .expect(401);
+    await request(app.getHttpServer())
+      .post(`/api/v1/immobilier/${created.id}/visit-requests`)
+      .set('Authorization', 'Bearer client')
       .send({})
       .expect(404);
     db.listings()[0].status = 'active';
     db.listings()[0].metadata.publication.contactPreferences.visitRequestEnabled = false;
     await request(app.getHttpServer())
       .post(`/api/v1/immobilier/${created.id}/visit-requests`)
+      .set('Authorization', 'Bearer client')
       .send({})
       .expect(400);
   });

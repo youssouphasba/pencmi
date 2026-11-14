@@ -95,15 +95,21 @@ describe('Hotel publication HTTP permissions and whitelist', () => {
     clientName: 'Client',
     clientEmail: 'client@example.test',
   };
-  it('keeps the public request distinct from protected owner management', async () => {
+  it('requires an account to send a request, separate from owner management', async () => {
     await request(app.getHttpServer())
       .post('/hotels/h/reservation-requests')
+      .send(requestBody)
+      .expect(401);
+    expect(reservations.createReservationRequest).not.toHaveBeenCalled();
+    await request(app.getHttpServer())
+      .post('/hotels/h/reservation-requests')
+      .set('Authorization', 'Bearer client')
       .send(requestBody)
       .expect(201);
     expect(reservations.createReservationRequest).toHaveBeenCalledWith(
       'h',
       requestBody,
-      undefined,
+      'authenticated-user',
     );
     await request(app.getHttpServer())
       .post('/hotels/h/stay-quote')
@@ -137,6 +143,7 @@ describe('Hotel publication HTTP permissions and whitelist', () => {
     async (key) => {
       await request(app.getHttpServer())
         .post('/hotels/h/reservation-requests')
+        .set('Authorization', 'Bearer client')
         .send({ ...requestBody, [key]: 'injected' })
         .expect(400);
       expect(reservations.createReservationRequest).not.toHaveBeenCalled();
@@ -156,6 +163,7 @@ describe('Hotel publication HTTP permissions and whitelist', () => {
   ])('rejects invalid reservation DTO %p', async (change) => {
     await request(app.getHttpServer())
       .post('/hotels/h/reservation-requests')
+      .set('Authorization', 'Bearer client')
       .send({ ...requestBody, ...change })
       .expect(400);
     expect(reservations.createReservationRequest).not.toHaveBeenCalled();

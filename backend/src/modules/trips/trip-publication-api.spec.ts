@@ -120,10 +120,16 @@ describe("Trip publication HTTP contracts and permissions", () => {
     };
     await request(app.getHttpServer())
       .post("/voyages/id/seat-requests")
+      .send({ ...dto, occurrenceId: "occ" })
+      .expect(401);
+    await request(app.getHttpServer())
+      .post("/voyages/id/seat-requests")
+      .set("Authorization", "Bearer client")
       .send(dto)
       .expect(400);
     await request(app.getHttpServer())
       .post("/voyages/id/seat-requests")
+      .set("Authorization", "Bearer client")
       .send({
         ...dto,
         occurrenceId: "occ",
@@ -132,6 +138,13 @@ describe("Trip publication HTTP contracts and permissions", () => {
       })
       .expect(400);
     expect(service.createSeatRequest).not.toHaveBeenCalled();
+    const valid = { ...dto, occurrenceId: "occ" };
+    await request(app.getHttpServer())
+      .post("/voyages/id/seat-requests")
+      .set("Authorization", "Bearer client")
+      .send(valid)
+      .expect(201);
+    expect(service.createSeatRequest).toHaveBeenCalledWith("id", valid, "authenticated-owner");
   });
   it.each(["client", "hotel"])(
     "refuses unrelated %s permissions",

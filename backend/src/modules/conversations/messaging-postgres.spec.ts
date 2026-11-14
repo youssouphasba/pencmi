@@ -9,6 +9,7 @@ const url = process.env.TEST_DATABASE_URL;
   let db: PrismaClient, service: ConversationsService, contacts: ContactsService;
   const run = randomUUID();
   const owner = `msg-owner-${run}`, client = `msg-client-${run}`, listingId = `msg-listing-${run}`;
+  const hotelier = `msg-hotelier-${run}`, propertyId = `msg-hotel-${run}`;
 
   beforeAll(async () => {
     expect(new URL(url as string).pathname).toMatch(/_test$/);
@@ -18,17 +19,20 @@ const url = process.env.TEST_DATABASE_URL;
     await db.user.createMany({ data: [
       { id: owner, role: "vehicle_dealer", firstName: "Ibra", email: `${owner}@example.test` },
       { id: client, role: "client", firstName: "Awa", email: `${client}@example.test` },
+      { id: hotelier, role: "hotel_manager", email: `${hotelier}@example.test` },
     ] });
     await db.vehicleListing.create({ data: { id: listingId, ownerUserId: owner, status: "active", slug: listingId, title: "Corolla", vehicleMode: "sale", city: "Dakar",
       metadata: { publication: { contactPreferences: { internalMessagingEnabled: true } } } } });
   });
   afterAll(async () => {
-    const ids = (await db.conversation.findMany({ where: { targetId: listingId }, select: { id: true } })).map((row) => row.id);
+    const ids = (await db.conversation.findMany({ where: { targetId: { in: [listingId, propertyId] } }, select: { id: true } })).map((row) => row.id);
     await db.message.deleteMany({ where: { conversationId: { in: ids } } });
     await db.conversation.deleteMany({ where: { id: { in: ids } } });
     await db.contactEvent.deleteMany({ where: { targetId: listingId } });
     await db.vehicleListing.deleteMany({ where: { id: listingId } });
-    await db.user.deleteMany({ where: { id: { in: [owner, client] } } });
+    await db.hotelReservationRequest.deleteMany({ where: { propertyId } });
+    await db.hotelProperty.deleteMany({ where: { id: propertyId } });
+    await db.user.deleteMany({ where: { id: { in: [owner, client, hotelier] } } });
     await db.$disconnect();
   });
 
@@ -52,5 +56,20 @@ const url = process.env.TEST_DATABASE_URL;
     const list = await contacts.findMine(owner, { module: "vehicles", page: 1, limit: 20 });
     expect(list.data[0]).toMatchObject({ source: "internal_message", details: { clientName: "Awa" } });
     expect((await contacts.findMine(client, { module: "vehicles", page: 1, limit: 20 })).meta.total).toBe(0);
+  });
+
+  it("delivers a hotelier's reply to the requesting client's inbox once", async () => {
+    await db.hotelProperty.create({ data: { id: propertyId, slug: propertyId, ownerUserId: hotelier,
+      name: "Hébergement", city: "Dakar", propertyType: "hotel", status: "active" } });
+    const reservation = await db.hotelReservationRequest.create({ data: { propertyId, clientUserId: client } });
+    const requestId = randomUUID(), body = "Quelle heure d’arrivée vous convient ?";
+    await expect(service.messageRequester(owner, "hotel", reservation.id, body, requestId)).rejects.toMatchObject({ status: 404 });
+    const sent = await service.messageRequester(hotelier, "hotel", reservation.id, body, requestId);
+    const retried = await service.messageRequester(hotelier, "hotel", reservation.id, body, requestId);
+    expect(retried.message.id).toBe(sent.message.id);
+    const inbox = await service.findMine(client, { scope: "client", module: "hotels", page: 1, limit: 20 });
+    expect(inbox.data).toEqual([expect.objectContaining({ id: sent.conversationId, unreadCount: 1 })]);
+    const thread = await service.findOne(sent.conversationId, client, { limit: 20 });
+    expect(thread.messages).toEqual([expect.objectContaining({ body, senderUserId: hotelier })]);
   });
 });

@@ -376,21 +376,11 @@ const url = process.env.TEST_DATABASE_URL;
         await http()
           .post('/api/v1' + paths[type])
           .send(body)
-          .expect(409);
-        const anonymousBody = payload(type);
-        const anonymous = await http()
-          .post('/api/v1' + paths[type])
-          .send(anonymousBody)
-          .expect(201);
+          .expect(401);
         await http()
           .post('/api/v1' + paths[type])
-          .set(headers())
-          .send(anonymousBody)
-          .expect(409);
-        await http()
-          .get(`/api/v1/compte/requests/${type}/${anonymous.body.data.id}`)
-          .set(headers())
-          .expect(404);
+          .send(payload(type))
+          .expect(401);
         expect(
           (
             await http()
@@ -475,20 +465,21 @@ const url = process.env.TEST_DATABASE_URL;
       };
       for (const type of CLIENT_REQUEST_TYPES) {
         const path = `/api/v1/dashboard/${routes[type]}/${receipts[type]}/status`;
+        const decision = { status: 'pending', ...(type === 'visit' ? { proposedDate: '2030-06-02', requestId: randomUUID() } : {}) };
         await http()
           .patch(path)
           .set(headers())
-          .send({ status: 'pending' })
+          .send(decision)
           .expect(403);
         await http()
           .patch(path)
           .set(headers(owner))
-          .send({ status: 'pending' })
+          .send(decision)
           .expect(200);
         await http()
           .patch(path)
           .set(headers(owner))
-          .send({ status: 'pending' })
+          .send(decision)
           .expect(200);
       }
       expect(
